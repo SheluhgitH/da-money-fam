@@ -1,0 +1,166 @@
+BUTTON FUNCTIONALITY CONFIGURATION
+==================================
+
+Last Updated: [1/23/2026]
+Version: 1.0
+
+========================================
+HERO SECTION BUTTONS
+========================================
+
+1. LISTEN NOW BUTTON
+   - Type: External Link
+   - URL: [https://youtu.be/3OHv8ZYsVb8?si=zVxqZL2KLAMHVKN-]
+   - Target: _blank (opens in new tab)
+   - Fallback: [https://m.soundcloud.com/yvng-lotto/emastered_lotto-devil-inside]
+   - Icon: [Optional: specify icon if different from default]
+
+2. LEARN MORE BUTTON
+   - Type: Scroll Navigation
+   - Target Section: [ #services]
+   - Scroll Offset: [ default: 80]
+   - Scroll Behavior: smooth
+
+========================================
+HERO VIDEO SECTION BUTTONS
+========================================
+
+3. WATCH SHOWREEL BUTTON
+   - Type: Video Playback
+   - Video Source: /videos/hero-video.mp4 (already configured)
+   - Auto-play: false (user-triggered)
+   - Notes: Already functional
+
+4. START YOUR PROJECT BUTTON
+   - Type: Modal/Contact Form
+   - Modal Title: [Start Your Animation Project]
+   - Form Fields: [name, email, phone]
+     - Name: required
+     - Email: required
+     - Phone: required
+     - Project Type: dropdown [Animation, Video Editing, Other]
+     - Message: text area required
+     - Budget Range: optional dropdown
+   - Submission Method: [email]
+   - Success Message: [Enter confirmation text]
+    - Email Recipient: [percy@damoneyfam.com]
+
+========================================
+ARTIST ROSTER BUTTONS
+========================================
+
+5. VIEW ALL ARTISTS BUTTON
+   - Type: [Expansion]
+   - If Navigation: URL: [Enter page URL, e.g., /artists]
+   - If Modal: Modal Title: [Enter title]
+   - If Expansion: Animation Type: [fade]
+   - Additional Artists: [RhyteHandP, JaleelDaGenesis ]
+
+========================================
+MUSIC PLAYER CONTROLS
+========================================
+
+6. MUSIC PLAYER
+   - Playlist: [Array of tracks]
+     Track 1:
+       - Title: [Fool in Here Ft JackPot]
+       - Artist: [Vlone Tr3]
+       - Source: [/audio/wok audio - Made with Clipchamp.m4a]
+       - Duration: [00:33]
+     Track 2:
+	- Title: [NoteBook]
+       - Artist: [JackPot]
+       - Source: [/audio/notebook audio for site.m4a]
+       - Duration: [00:36]
+     Track 2:
+	- Title: [Take Your Time Ft JackPot]
+       - Artist: [Vlone Tr3]
+       - Source: [\audio\Take Your Time Ft JackPot.m4a"]
+       - Duration: [00:26]
+
+
+   - Auto-play: [false]
+   - Loop: [true]
+   - Volume Default: [75]
+   - Show Playlist: [true]
+
+========================================
+NAVIGATION BUTTONS
+========================================
+
+7. LOGO/HOME BUTTON
+   - Type: Scroll to Top
+   - Scroll Behavior: smooth
+   - Animation Duration: [milliseconds]
+
+8. MOBILE MENU TOGGLE
+   - Type: Toggle Overlay
+   - Menu Items: [List navigation links]
+     - Home: /
+     - Services: #services
+     - Artists: #artists
+     - Contact: #contact
+   - Animation: [fade]
+   - Close on Click: true
+
+========================================
+FOOTER LINKS
+========================================
+
+9. SOCIAL MEDIA LINKS
+   - Instagram: [https://www.instagram.com/damoneyfam/]
+   - Twitter/X: [https://www.instagram.com/damoneyfam/]
+   - YouTube: [https://youtu.be/3OHv8ZYsVb8?si=zVxqZL2KLAMHVKN-]
+   - TikTok: [https://www.tiktok.com/@jackpotofficial?_r=1&_t=ZP-93KH1QM9PwM]
+   - Spotify: [URL]
+   - Apple Music: [URL]
+   - SoundCloud: [https://m.soundcloud.com/yvng-lotto/emastered_lotto-devil-inside]
+
+10. CONTACT INFORMATION
+    - Email: [leadalwayz22@gmail.com]
+    - Phone: [770-310-9558]
+    - Business Hours: [9am-5pm]
+
+========================================
+GENERAL SETTINGS
+========================================
+
+11. GLOBAL CONFIG
+    - Scroll Offset: [default pixel offset for fixed nav]
+    - Modal Animation: [fade]
+    - Button Hover Effect: [glow]
+    - Loading Spinner: [apple like siri animation/red white gradient]
+
+12. ANALYTICS/TRACKING
+    - Button Click Events: [true]
+    - Conversion Tracking: [Google Analytics/Event names]
+    - Form Submission Tracking: [true/false]
+
+========================================
+VALIDATION RULES
+========================================
+
+13. FORM VALIDATION
+    - Email Regex: [^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
+]
+    - Phone Regex: [^\+?1?\s*(?:\(\d{3}\)|\d{3})[\s.-]?\d{3}[\s.-]?\d{4}$
+]
+    - Required Field Indicator: $
+    - Error Messages:
+      - Email: "Plea$e enter a valid email addre$$"
+      - Required: "Thi$ field i$ required"
+      - Phone: "Plea$e enter a valid phone number"
+
+========================================
+FALLBACKS & ERROR HANDLING
+========================================
+
+14. ERROR MESSAGES
+    - Network Error: "Unable to connect. Please try again."
+    - Form Submission Error: "Message failed to send. Please try again or contact us directly."
+    - Video Load Error: "Video unavailable. Please try refreshing the page."
+    - Audio Load Error: "Audio file unavailable."
+
+15. BROWSER COMPATIBILITY
+    - Unsupported Browser Message: "Some features may not work in older browsers. Please update your browser for the best experience."
+    - Mobile Fallback: [simplified functionality for mobile]
