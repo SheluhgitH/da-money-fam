@@ -6,13 +6,69 @@ import { subscribeNewsletter } from '../app/actions/newsletter'
 import { scrollToSection } from '../utils/scrollToSection'
 
 const socialLinks = [
-  { name: 'Instagram', icon: '📷', href: 'https://www.instagram.com/damoneyfam/' },
-  { name: 'Twitter', icon: '🐦', href: 'https://www.instagram.com/damoneyfam/' },
-  { name: 'YouTube', icon: '▶️', href: 'https://youtu.be/3OHv8ZYsVb8?si=zVxqZL2KLAMHVKN-' },
-  { name: 'TikTok', icon: '🎵', href: 'https://www.tiktok.com/@jackpotofficial?_r=1&_t=ZP-93KH1QM9PwM' },
-  { name: 'Spotify', icon: '🎧', href: 'https://youtu.be/3OHv8ZYsVb8?si=zVxqZL2KLAMHVKN-' },
-  { name: 'Apple Music', icon: '🍎', href: 'https://youtu.be/3OHv8ZYsVb8?si=zVxqZL2KLAMHVKN-' },
-  { name: 'SoundCloud', icon: '☁️', href: 'https://m.soundcloud.com/yvng-lotto/emastered_lotto-devil-inside' },
+  {
+    name: 'Instagram',
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24">
+        <path fill="url(#gold-icon-grad)" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.981 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4.162 4.162 0 1 1 0-8.324A4.162 4.162 0 0 1 12 16zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z" />
+      </svg>
+    ),
+    href: 'https://www.instagram.com/damoneyfam/'
+  },
+  {
+    name: 'X',
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24">
+        <path fill="url(#gold-icon-grad)" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+      </svg>
+    ),
+    href: 'https://twitter.com/damoneyfam'
+  },
+  {
+    name: 'YouTube',
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24">
+        <path fill="url(#gold-icon-grad)" d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505a3.017 3.017 0 0 0-2.122 2.136C.302 8.068.302 12 .302 12s0 3.932.199 5.814a3.016 3.016 0 0 0 2.122 2.136c1.872.505 9.377.505 9.377.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C23.698 15.932 23.698 12 23.698 12s0-3.932-.2-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+      </svg>
+    ),
+    href: 'https://youtu.be/3OHv8ZYsVb8?si=zVxqZL2KLAMHVKN-'
+  },
+  {
+    name: 'TikTok',
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24">
+        <path fill="url(#gold-icon-grad)" d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.04-.1z" />
+      </svg>
+    ),
+    href: 'https://www.tiktok.com/@jackpotofficial?_r=1&_t=ZP-93KH1QM9PwM'
+  },
+  {
+    name: 'Spotify',
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24">
+        <path fill="url(#gold-icon-grad)" d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-2.101-.6 0-1.2.06-1.8.18-1.08.18-1.979 1.321-1.979 2.401 0 .42.36.72.78.72s.66-.24 1.02-.48c1.56-.96 3.24-1.5 4.68-1.5 3.42 0 6.18 2.281 6.42 2.521.24.239.66.12.899-.24.24-.36.12-.78-.24-1.02-.12-2.28-2.04-4.68-2.16-6.24-.06-.6-.42-1.02-1.02-1.02z" />
+      </svg>
+    ),
+    href: 'https://open.spotify.com/artist/3OHv8ZYsVb8'
+  },
+  {
+    name: 'Apple Music',
+    icon: (
+      <svg className="w-5 h-5" viewBox="0 0 24 24">
+        <path fill="url(#gold-icon-grad)" d="M12 2C6.477 2 2 6.477 2 12c0 5.523 4.477 10 10 10s10-4.477 10-10c0-5.523-4.477-10-10-10zm2.75 14H12.5V8.5h2.25V16zm0-8.5h-5.5v1.25h5.5V7.5zM12 12.5c-.828 0-1.5.672-1.5 1.5s.672 1.5 1.5 1.5 1.5-.672 1.5-1.5-.672-1.5-1.5-1.5z" />
+      </svg>
+    ),
+    href: 'https://music.apple.com/artist/damoneyfam'
+  },
+  {
+    name: 'SoundCloud',
+    icon: (
+      <svg className="w-6 h-6" viewBox="0 0 24 24">
+        <path fill="url(#gold-icon-grad)" d="M12 12h.01M8 21h8a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2zM12 12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zM12 7a2 2 0 1 1 0-4 2 2 0 0 1 0 4z" />
+      </svg>
+    ),
+    href: 'https://m.soundcloud.com/yvng-lotto/emastered_lotto-devil-inside'
+  },
 ]
 
 export default function Footer() {
@@ -67,15 +123,35 @@ export default function Footer() {
               Setting trends in music, fashion, and culture. Luxury hip-hop collective redefining the industry.
             </p>
             <div className="flex gap-4">
+              {/* Shared SVG Gradient Definition */}
+              <svg className="absolute w-0 h-0" aria-hidden="true">
+                <defs>
+                  <linearGradient id="gold-icon-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#D4AF37" />
+                    <stop offset="50%" stopColor="#E5C15D" />
+                    <stop offset="100%" stopColor="#B8962E" />
+                  </linearGradient>
+                </defs>
+              </svg>
+
               {socialLinks.map((link) => (
                 <motion.a
                   key={link.name}
                   href={link.href}
-                  whileHover={{ scale: 1.1, y: -3 }}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  whileHover={{
+                    scale: 1.2,
+                    y: -5,
+                    boxShadow: "0 0 15px rgba(212, 175, 55, 0.4)"
+                  }}
                   whileTap={{ scale: 0.9 }}
-                  className="w-10 h-10 glass rounded-full flex items-center justify-center text-xl hover:border-gold/50 transition-colors"
+                  className="w-12 h-12 glass rounded-full flex items-center justify-center text-gold hover:border-gold transition-all duration-300"
+                  style={{ fill: "url(#gold-icon-grad)" }}
                 >
-                  {link.icon}
+                  <div className="w-6 h-6 flex items-center justify-center">
+                    {link.icon}
+                  </div>
                 </motion.a>
               ))}
             </div>
@@ -107,28 +183,28 @@ export default function Footer() {
             <p className="text-gray-400 mb-4">
               Subscribe for exclusive releases, events, and updates
             </p>
-             <form action={handleSubmit} className="flex flex-col gap-2">
-               <div className="flex gap-2">
-                 <input
-                   name="email"
-                   type="email"
-                   placeholder="Enter your email"
-                   required
-                   className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gold/50 transition-colors"
-                 />
-                 <motion.button
-                   type="submit"
-                   disabled={isSubmitting}
-                   whileHover={{ scale: 1.05 }}
-                   whileTap={{ scale: 0.95 }}
-                   className="px-6 py-3 bg-gold text-black font-bold uppercase tracking-wider text-xs rounded-lg hover:bg-gold-light transition-colors disabled:opacity-50"
-                 >
-                   {isSubmitting ? 'Subscribing...' : 'Subscribe'}
-                 </motion.button>
-               </div>
-               {emailError && <p className="text-red-400 text-sm">{emailError}</p>}
-               {submitMessage && <p className="text-white mt-2">{submitMessage}</p>}
-             </form>
+            <form action={handleSubmit} className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                <input
+                  name="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  required
+                  className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gold/50 transition-colors"
+                />
+                <motion.button
+                  type="submit"
+                  disabled={isSubmitting}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-6 py-3 bg-gold text-black font-bold uppercase tracking-wider text-xs rounded-lg hover:bg-gold-light transition-colors disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Subscribing...' : 'Subscribe'}
+                </motion.button>
+              </div>
+              {emailError && <p className="text-red-400 text-sm">{emailError}</p>}
+              {submitMessage && <p className="text-white mt-2">{submitMessage}</p>}
+            </form>
           </div>
         </div>
 
