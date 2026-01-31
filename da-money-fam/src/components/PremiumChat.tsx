@@ -100,6 +100,8 @@ export default function PremiumChat() {
     const [previewCode, setPreviewCode] = useState<string | null>(null)
     const [isRecording, setIsRecording] = useState(false)
     const [isSpeaking, setIsSpeaking] = useState(false)
+    const [isFullscreen, setIsFullscreen] = useState(false)
+    const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200)
 
     const chatAreaRef = useRef<HTMLDivElement>(null)
 
@@ -161,6 +163,9 @@ export default function PremiumChat() {
 
     // --- Persistence & Initialization ---
     useEffect(() => {
+        const handleResize = () => setWindowWidth(window.innerWidth)
+        window.addEventListener('resize', handleResize)
+
         const savedChats = localStorage.getItem('dmf_multi_chats');
         const savedAuth = localStorage.getItem('dmf_chat_unlocked');
 
@@ -177,6 +182,8 @@ export default function PremiumChat() {
         } else {
             createNewChat();
         }
+
+        return () => window.removeEventListener('resize', handleResize)
     }, []);
 
     useEffect(() => {
@@ -296,7 +303,7 @@ export default function PremiumChat() {
             <motion.button
                 id="chat-trigger"
                 onClick={() => setIsOpen(!isOpen)}
-                className="fixed bottom-[30px] right-[30px] w-[70px] h-[70px] rounded-full z-[1000] flex items-center justify-center cursor-pointer shadow-[0_10px_30px_rgba(255,215,0,0.3)] border-none"
+                className="fixed bottom-[20px] right-[20px] md:bottom-[30px] md:right-[30px] w-[60px] h-[60px] md:w-[70px] md:h-[70px] rounded-full z-[1000] flex items-center justify-center cursor-pointer shadow-[0_10px_30px_rgba(255,215,0,0.3)] border-none"
                 style={{ background: 'linear-gradient(135deg, #FFD700, #B8860B)' }}
                 animate={{
                     boxShadow: [
@@ -318,7 +325,10 @@ export default function PremiumChat() {
                         initial={{ opacity: 0, y: 20, scale: 0.9 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 20, scale: 0.9 }}
-                        className="fixed bottom-[110px] right-[30px] w-[450px] h-[700px] z-[999] rounded-[24px] border border-[#FFD700] overflow-hidden flex flex-row shadow-[0_30px_60px_rgba(0,0,0,0.6)]"
+                        className={`fixed z-[999] overflow-hidden flex flex-row shadow-[0_30px_60px_rgba(0,0,0,0.6)] transition-all duration-300 ${isFullscreen
+                                ? 'inset-0 w-full h-full rounded-none'
+                                : 'bottom-[90px] md:bottom-[110px] right-4 left-4 md:left-auto md:right-[30px] md:w-[450px] md:h-[700px] w-auto h-[calc(100dvh-110px)] md:h-[700px] rounded-[24px] border border-[#FFD700]'
+                            }`}
                         style={{
                             background: 'rgba(10, 10, 10, 0.98)',
                             backdropFilter: 'blur(20px)',
@@ -330,9 +340,9 @@ export default function PremiumChat() {
                             {showHistory && (
                                 <motion.div
                                     initial={{ width: 0, opacity: 0 }}
-                                    animate={{ width: 200, opacity: 1 }}
+                                    animate={{ width: windowWidth < 768 ? 160 : 200, opacity: 1 }}
                                     exit={{ width: 0, opacity: 0 }}
-                                    className="h-full bg-black/50 border-r border-[#FFD700]/10 flex flex-col overflow-hidden"
+                                    className="h-full bg-black/50 border-r border-[#FFD700]/10 flex flex-col overflow-hidden shrink-0"
                                 >
                                     <div className="p-4 flex gap-2 border-b border-[#FFD700]/10">
                                         <button
@@ -383,9 +393,31 @@ export default function PremiumChat() {
                                                 Mute AI
                                             </button>
                                         )}
-                                        <h1 className="text-[#FFD700] text-sm font-bold tracking-[3px] m-0 uppercase flex-shrink-0">DMF PREMIUM</h1>
+                                        <h1 className="text-[#FFD700] text-xs md:text-sm font-bold tracking-[2px] md:tracking-[3px] m-0 uppercase flex-shrink-0">DMF PREMIUM</h1>
                                     </div>
                                     <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setIsFullscreen(!isFullscreen)}
+                                            className="bg-none border-none text-white/40 hover:text-gold transition-all p-1 md:block hidden"
+                                            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                                        >
+                                            {isFullscreen ? (
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v5H3M16 3v5h5M8 21v-5H3M16 21v-5h5" /></svg>
+                                            ) : (
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
+                                            )}
+                                        </button>
+                                        {/* Mobile Fullscreen Toggle - Always visible on small screens */}
+                                        <button
+                                            onClick={() => setIsFullscreen(!isFullscreen)}
+                                            className="bg-none border-none text-white/40 hover:text-gold transition-all p-1 md:hidden block"
+                                        >
+                                            {isFullscreen ? (
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3v5H3M16 3v5h5M8 21v-5H3M16 21v-5h5" /></svg>
+                                            ) : (
+                                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
+                                            )}
+                                        </button>
                                         <button
                                             onClick={() => setIsOpen(false)}
                                             className="bg-none border-none text-white text-2xl cursor-pointer opacity-40 hover:opacity-100 hover:text-[#FFD700] transition-all p-1"
@@ -447,7 +479,7 @@ export default function PremiumChat() {
                             {/* Chat Area */}
                             <div
                                 ref={chatAreaRef}
-                                className="grow p-6 overflow-y-auto flex flex-col gap-6 scrollbar-thin scrollbar-thumb-gold/20"
+                                className="grow p-4 md:p-6 overflow-y-auto flex flex-col gap-6 scrollbar-thin scrollbar-thumb-gold/20"
                             >
                                 {currentChat?.messages.map((msg, i) => (
                                     <div key={i} className={`flex flex-col gap-2 ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
@@ -520,7 +552,7 @@ export default function PremiumChat() {
                                 )}
 
                                 {/* Input Container */}
-                                <div className="p-6 flex gap-3 items-end">
+                                <div className="p-4 md:p-6 flex gap-3 items-end">
                                     <div className="grow relative bg-white/5 border border-white/10 rounded-[18px] transition-all focus-within:border-gold">
                                         <textarea
                                             placeholder="Consult DMF Premium..."
