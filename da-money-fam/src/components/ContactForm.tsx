@@ -1,6 +1,6 @@
-'use client';
 import { useState } from 'react';
-import { sendEmail } from '../app/actions/sendEmail';
+import { CONFIG } from '../config';
+
 
 interface ContactFormProps {
   onClose: () => void;
@@ -32,24 +32,47 @@ export default function ContactForm({ onClose }: ContactFormProps) {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!validateForm()) return;
 
+    const form = e.currentTarget;
     setIsSubmitting(true);
     setSubmitMessage('');
 
     try {
-      const data = new FormData();
-      Object.entries(formData).forEach(([key, value]) => {
-        data.append(key, value);
+      const data = new FormData(form);
+      data.append('_subject', 'New Project Inquiry');
+
+      const response = await fetch(CONFIG.FORMSPREE_URL, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json'
+        },
+        body: data
       });
 
-      await sendEmail(data);
-      setSubmitMessage('Thank you! We\'ll contact you soon.');
-      setTimeout(() => onClose(), 2000);
+      const result = await response.json();
+      if (response.ok) {
+        setSubmitMessage('Thank you! We\'ll contact you soon.');
+        setFormData({
+          name: '',
+          email: '',
+          phone: '',
+          projectType: '',
+          message: '',
+          budget: '',
+        });
+        setTimeout(() => onClose(), 2000);
+      } else {
+        if (Object.hasOwn(result, 'errors')) {
+          setSubmitMessage(result.errors.map((error: any) => error.message).join(', '));
+        } else {
+          setSubmitMessage(result.error || 'Failed to send message. Please try again.');
+        }
+      }
     } catch (error) {
-      setSubmitMessage('Failed to send message. Please try again.');
+      setSubmitMessage('Failed to send message. Please check your connection.');
     } finally {
       setIsSubmitting(false);
     }
@@ -141,6 +164,9 @@ export default function ContactForm({ onClose }: ContactFormProps) {
           <option value="Over $10,000">Over $10,000</option>
         </select>
       </div>
+
+      {/* Honeypot field for spam prevention */}
+      <input type="text" name="_gotcha" style={{ display: 'none' }} />
 
       <button
         type="submit"

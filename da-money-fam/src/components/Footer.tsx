@@ -2,8 +2,9 @@
 
 import { motion } from 'framer-motion'
 import { useState } from 'react'
-import { subscribeNewsletter } from '../app/actions/newsletter'
+import { CONFIG } from '../config'
 import { scrollToSection } from '../utils/scrollToSection'
+import PremiumChat from './PremiumChat'
 
 const socialLinks = [
   {
@@ -81,7 +82,10 @@ export default function Footer() {
     return regex.test(email)
   }
 
-  const handleSubmit = async (formData: FormData) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const form = e.currentTarget
+    const formData = new FormData(form)
     const email = formData.get('email') as string
     setEmailError('')
 
@@ -94,10 +98,29 @@ export default function Footer() {
     setSubmitMessage('')
 
     try {
-      await subscribeNewsletter(formData)
-      setSubmitMessage('Subscribed! Stay tuned for updates.')
+      const data = new FormData(form);
+
+      const response = await fetch(CONFIG.FORMSPREE_URL, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json'
+        },
+        body: data
+      });
+
+      const result = await response.json();
+      if (response.ok) {
+        setSubmitMessage('Subscribed! Stay tuned for updates.')
+        form.reset()
+      } else {
+        if (Object.hasOwn(result, 'errors')) {
+          setSubmitMessage(result.errors.map((error: any) => error.message).join(', '));
+        } else {
+          setSubmitMessage(result.error || 'Failed to subscribe. Please try again.');
+        }
+      }
     } catch (error) {
-      setSubmitMessage('Failed to subscribe. Please try again.')
+      setSubmitMessage('Failed to subscribe. Please check your connection.');
     } finally {
       setIsSubmitting(false)
     }
@@ -183,7 +206,7 @@ export default function Footer() {
             <p className="text-gray-400 mb-4">
               Subscribe for exclusive releases, events, and updates
             </p>
-            <form action={handleSubmit} className="flex flex-col gap-2">
+            <form onSubmit={handleSubmit} className="flex flex-col gap-2">
               <div className="flex gap-2">
                 <input
                   name="email"
@@ -202,6 +225,9 @@ export default function Footer() {
                   {isSubmitting ? 'Subscribing...' : 'Subscribe'}
                 </motion.button>
               </div>
+              {/* Formspree Configuration */}
+              <input type="hidden" name="_subject" value="New Newsletter Subscription" />
+              <input type="text" name="_gotcha" style={{ display: 'none' }} />
               {emailError && <p className="text-red-400 text-sm">{emailError}</p>}
               {submitMessage && <p className="text-white mt-2">{submitMessage}</p>}
             </form>
@@ -219,6 +245,7 @@ export default function Footer() {
           </div>
         </div>
       </motion.div>
+      <PremiumChat />
     </footer>
   )
 }
