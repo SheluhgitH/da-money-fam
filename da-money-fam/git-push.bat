@@ -25,8 +25,12 @@ if %errorlevel% neq 0 (
 
 echo [2/5] Checking repository status...
 if not exist ".git" (
-    echo Initializing new Git repository...
-    "%GIT_EXE%" init
+    if exist "..\.git" (
+        echo Found repository root in parent directory.
+    ) else (
+        echo Initializing new Git repository...
+        "%GIT_EXE%" init
+    )
 )
 
 :: Ensure the correct remote is set
