@@ -3,8 +3,24 @@
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import { scrollToSection } from '../utils/scrollToSection'
+import { useState, useEffect } from 'react'
+
+interface TakeoverConfig {
+  artistName: string;
+  tagline: string;
+  videoSrc: string;
+  active: boolean;
+}
+
+const activeTakeover: TakeoverConfig = {
+  artistName: "Vlone Tr3",
+  tagline: "Exclusive Takeover Day - Experience the Full Vlone Collection",
+  videoSrc: "/videos/background.mp4",
+  active: false // Toggle this for takeover
+}
 
 export default function HeroSection() {
+  const isTakeover = activeTakeover.active;
   return (
     <section id="home" className="relative h-screen flex items-center justify-center overflow-hidden">
       <div className="absolute inset-0 z-0">
@@ -15,10 +31,22 @@ export default function HeroSection() {
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
         >
-          <source src="/videos/background.mp4" type="video/mp4" />
+          <source src={isTakeover ? activeTakeover.videoSrc : "/videos/background.mp4"} type="video/mp4" />
         </video>
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-matte-black" />
+        <div className={`absolute inset-0 ${isTakeover ? 'bg-gradient-to-b from-red-900/40 via-black/60 to-matte-black' : 'bg-gradient-to-b from-black/60 via-black/40 to-matte-black'}`} />
       </div>
+
+      {isTakeover && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-20">
+          <motion.div
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="bg-red-600 text-white px-6 py-1 rounded-full text-[10px] font-bold uppercase tracking-[4px] animate-pulse"
+          >
+            LIVE ARTIST TAKEOVER
+          </motion.div>
+        </div>
+      )}
 
       <motion.div
         initial={{ opacity: 0, y: 30 }}
@@ -32,16 +60,16 @@ export default function HeroSection() {
           transition={{ duration: 1, delay: 0.5 }}
           className="text-gold uppercase tracking-[0.5em] text-sm md:text-base mb-4"
         >
-          Luxury Hip-Hop Collective
+          {isTakeover ? `Featuring ${activeTakeover.artistName}` : 'Luxury Hip-Hop Collective'}
         </motion.p>
 
         <motion.h1
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1.2, delay: 0.7 }}
-          className="font-serif text-5xl md:text-7xl lg:text-9xl font-bold mb-6 text-glow"
+          className={`font-serif text-5xl md:text-7xl lg:text-9xl font-bold mb-6 ${isTakeover ? 'text-white drop-shadow-[0_0_20px_rgba(255,0,0,0.5)]' : 'text-glow'}`}
         >
-          DA MONEY FAM
+          {isTakeover ? activeTakeover.artistName : 'DA MONEY FAM'}
         </motion.h1>
 
         <motion.p
@@ -50,7 +78,7 @@ export default function HeroSection() {
           transition={{ duration: 1, delay: 1 }}
           className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto mb-8"
         >
-          Setting trends in music, fashion, and culture since day one
+          {isTakeover ? activeTakeover.tagline : 'Setting trends in music, fashion, and culture since day one'}
         </motion.p>
 
         <motion.div
@@ -98,27 +126,38 @@ export default function HeroSection() {
         </motion.div>
       </motion.div>
 
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {[...Array(5)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 bg-gold rounded-full"
-            style={{
-              top: `${Math.random() * 100}%`,
-              left: `${Math.random() * 100}%`,
-            }}
-            animate={{
-              opacity: [0, 1, 0],
-              scale: [0, 1, 0],
-            }}
-            transition={{
-              duration: 3,
-              repeat: Infinity,
-              delay: i * 0.5,
-            }}
-          />
-        ))}
-      </div>
+      <ClientSideParticles />
     </section>
+  )
+}
+
+const ClientSideParticles = () => {
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  if (!mounted) return null
+
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {[...Array(5)].map((_, i) => (
+        <motion.div
+          key={i}
+          className="absolute w-1 h-1 bg-gold rounded-full"
+          style={{
+            top: `${Math.random() * 100}%`,
+            left: `${Math.random() * 100}%`,
+          }}
+          animate={{
+            opacity: [0, 1, 0],
+            scale: [0, 1, 0],
+          }}
+          transition={{
+            duration: 3,
+            repeat: Infinity,
+            delay: i * 0.5,
+          }}
+        />
+      ))}
+    </div>
   )
 }

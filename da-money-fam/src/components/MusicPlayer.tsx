@@ -130,7 +130,7 @@ export default function MusicPlayer() {
             <div className="flex-1 text-center md:text-left">
               <h3 className="font-serif text-3xl font-bold mb-2">{currentTrack.title}</h3>
               <p className="text-gold text-lg mb-4">{currentTrack.artist}</p>
-              
+
               <div className="mb-6">
                 <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
                   <motion.div
@@ -195,9 +195,8 @@ export default function MusicPlayer() {
                 audioRef.current.play()
               }
             }}
-            className={`glass rounded-xl p-6 cursor-pointer transition-all duration-300 ${
-              currentTrack.id === track.id ? 'border-gold neon-border' : 'border-white/10'
-            }`}
+            className={`glass rounded-xl p-6 cursor-pointer transition-all duration-300 ${currentTrack.id === track.id ? 'border-gold neon-border' : 'border-white/10'
+              }`}
           >
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 bg-gradient-to-br from-gold to-gold-dark rounded-lg flex items-center justify-center">
@@ -205,7 +204,7 @@ export default function MusicPlayer() {
                   <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
                 </svg>
               </div>
-              
+
               <div className="flex-1">
                 <h4 className="font-serif text-lg font-bold">{track.title}</h4>
                 <p className="text-gold text-sm">{track.artist}</p>
