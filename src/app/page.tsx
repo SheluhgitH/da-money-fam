@@ -14,6 +14,8 @@ import FloatingShapes from '@/components/FloatingShapes'
 import HeroVideoSection from '@/components/HeroVideoSection'
 import MerchStore from '@/components/MerchStore'
 import FanDashboard from '@/components/FanDashboard'
+import InteractiveVideo from '@/components/InteractiveVideo'
+import TheVault from '@/components/TheVault'
 
 
 export default function Home() {
@@ -32,6 +34,10 @@ export default function Home() {
 
       <section className="relative">
         <HeroVideoSection />
+      </section>
+
+      <section className="relative">
+        <InteractiveVideo />
       </section>
 
       <section className="relative py-20 px-4 md:px-8 lg:px-16">
@@ -56,6 +62,10 @@ export default function Home() {
 
       <section className="relative">
         <FanDashboard />
+      </section>
+
+      <section className="relative max-w-7xl mx-auto py-20 px-4">
+        <TheVault />
       </section>
 
       <section className="relative py-20 px-4 md:px-8 lg:px-16">

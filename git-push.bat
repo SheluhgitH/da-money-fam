@@ -45,25 +45,32 @@ echo [3/5] Staging changes...
 
 echo.
 echo [4/5] Preparing commit...
-set /p commit_msg="Enter commit message (default: Update site content): "
-if "!commit_msg!"=="" set "commit_msg=Update site content"
+echo Current changes: Integrated Artist Galleries, The Vault, and Interactive Live Video.
+set /p commit_msg="Enter commit message (default: Update site content and features): "
+if "!commit_msg!"=="" set "commit_msg=Update site content and features"
 
 "%GIT_EXE%" commit -m "!commit_msg!"
 
 echo.
 echo [5/5] Pushing to GitHub...
-echo Note: If this is your first push, you may be asked to sign in.
-"%GIT_EXE%" push -u origin main
+echo Note: Pushing to both repositories to ensure damoneyfam.com updates...
+
+echo.
+echo Pushing to: https://github.com/sheluhgitH/da-money-fam.git (origin)
+"%GIT_EXE%" push -u origin main || "%GIT_EXE%" push -u origin master
+
+echo.
+echo Pushing to: https://github.com/SheluhgitH/Site-2.git (live)
+"%GIT_EXE%" remote get-url live >nul 2>nul
 if %errorlevel% neq 0 (
-    echo.
-    echo Pushing to 'main' failed, trying 'master'...
-    "%GIT_EXE%" push -u origin master
+    "%GIT_EXE%" remote add live https://github.com/SheluhgitH/Site-2.git
 )
+"%GIT_EXE%" push -u live main || "%GIT_EXE%" push -u live master
 
 if %errorlevel% equ 0 (
     echo.
     echo ==========================================
-    echo SUCCESS: Changes pushed to GitHub!
+    echo SUCCESS: Changes pushed to both repositories!
     echo ==========================================
 ) else (
     echo.
