@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { scrollToSection } from '@/utils/scrollToSection'
 
 interface VaultItem {
     id: string;
@@ -124,7 +125,11 @@ export default function TheVault() {
                                 animate={{ opacity: 1 }}
                                 className="absolute inset-0 bg-gold/5 flex items-center justify-center backdrop-blur-[2px]"
                             >
-                                <button className="bg-gold text-black text-[10px] font-bold px-6 py-2 rounded-full uppercase tracking-tighter hover:bg-white transition-colors">
+                                <button
+                                    type="button"
+                                    onClick={() => scrollToSection('store')}
+                                    className="bg-gold text-black text-[10px] font-bold px-6 py-2 rounded-full uppercase tracking-tighter hover:bg-white transition-colors"
+                                >
                                     Access File
                                 </button>
                             </motion.div>
@@ -134,7 +139,11 @@ export default function TheVault() {
             </div>
 
             <div className="mt-8 flex justify-center">
-                <button className="text-[10px] text-gold/60 font-mono uppercase tracking-[4px] hover:text-gold transition-colors">
+                <button
+                    type="button"
+                    onClick={() => scrollToSection('music')}
+                    className="text-[10px] text-gold/60 font-mono uppercase tracking-[4px] hover:text-gold transition-colors"
+                >
                     View Archive [Archive_v2.0]
                 </button>
             </div>

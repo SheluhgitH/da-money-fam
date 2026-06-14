@@ -82,7 +82,7 @@ export async function upsertUserProfile(
 export async function ensureUserProfile(userId: string, email?: string): Promise<UserProfile> {
   console.log('ensureUserProfile called with userId:', userId, 'email:', email, 'isSupabaseConfigured:', isSupabaseConfigured());
   const existing = await getUserProfile(userId)
-  console.log('ensureUserProfile - existing profile:', existing);
+    console.log('ensureUserProfile - existing profile:', existing);
   if (existing) return existing
   const displayName = email ? email.split('@')[0] : 'Fan'
   console.log('ensureUserProfile - creating new profile with displayName:', displayName);

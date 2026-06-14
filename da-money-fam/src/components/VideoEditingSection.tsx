@@ -2,6 +2,7 @@
 
 import { motion, useInView } from 'framer-motion'
 import { useRef } from 'react'
+import { scrollToSection } from '@/utils/scrollToSection'
 
 const pricingPackages = [
   {
@@ -132,9 +133,18 @@ export default function VideoEditingSection() {
                 </div>
               </div>
 
-              <p className="text-gray-400 leading-relaxed">
+              <p className="text-gray-400 leading-relaxed mb-6">
                 {pkg.description}
               </p>
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => scrollToSection('services')}
+                className="px-5 py-2 bg-gold text-black text-xs font-bold uppercase tracking-widest rounded-full hover:bg-white transition-colors"
+              >
+                Book Now
+              </motion.button>
             </motion.div>
           ))}
         </motion.div>

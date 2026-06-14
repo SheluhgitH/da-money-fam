@@ -31,7 +31,7 @@ export default function HeroSection() {
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
         >
-          <source src={isTakeover ? activeTakeover.videoSrc : "/videos/background.mp4"} type="video/mp4" />
+          <source src={isTakeover ? activeTakeover.videoSrc : "/videos/jackpot-notebook-2.mp4"} type="video/mp4" />
         </video>
         <div className={`absolute inset-0 ${isTakeover ? 'bg-gradient-to-b from-red-900/40 via-black/60 to-matte-black' : 'bg-gradient-to-b from-black/60 via-black/40 to-matte-black'}`} />
       </div>

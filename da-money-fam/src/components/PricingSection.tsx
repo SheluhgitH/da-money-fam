@@ -2,6 +2,7 @@
 
 import { motion, useInView } from 'framer-motion'
 import { useRef } from 'react'
+import { scrollToSection } from '@/utils/scrollToSection'
 
 const pricingPackages = [
   {
@@ -79,7 +80,7 @@ export default function PricingSection() {
   }
 
   return (
-    <section id="pricing" className="max-w-7xl mx-auto py-20">
+    <section id="pricing" ref={ref} className="max-w-7xl mx-auto py-20">
       <div className="px-4 md:px-8 lg:px-16">
         <motion.div
         initial="hidden"
@@ -108,9 +109,18 @@ export default function PricingSection() {
               </div>
             </div>
 
-            <p className="text-gray-400 leading-relaxed">
+            <p className="text-gray-400 leading-relaxed mb-6">
               {pkg.description}
             </p>
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => scrollToSection('services')}
+              className="px-5 py-2 bg-gold text-black text-xs font-bold uppercase tracking-widest rounded-full hover:bg-white transition-colors"
+            >
+              Get Quote
+            </motion.button>
           </motion.div>
         ))}
       </motion.div>

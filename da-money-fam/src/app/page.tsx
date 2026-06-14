@@ -1,6 +1,5 @@
 'use client'
 
-import { motion } from 'framer-motion'
 import HeroSection from '@/components/HeroSection'
 import Navigation from '@/components/Navigation'
 import MusicPlayer from '@/components/MusicPlayer'
@@ -13,10 +12,8 @@ import Footer from '@/components/Footer'
 import FloatingShapes from '@/components/FloatingShapes'
 import HeroVideoSection from '@/components/HeroVideoSection'
 import MerchStore from '@/components/MerchStore'
-import FanDashboard from '@/components/FanDashboard'
-import InteractiveVideo from '@/components/InteractiveVideo'
-import TheVault from '@/components/TheVault'
-
+import DmfReputationCard from '@/components/DmfReputationCard'
+import SongStore from '@/components/store/SongStore'
 
 export default function Home() {
   return (
@@ -29,15 +26,11 @@ export default function Home() {
       </section>
 
       <section className="relative py-20 px-4 md:px-8 lg:px-16">
-        <MusicPlayer />
+        <SongStore />
       </section>
 
       <section className="relative">
         <HeroVideoSection />
-      </section>
-
-      <section className="relative">
-        <InteractiveVideo />
       </section>
 
       <section className="relative py-20 px-4 md:px-8 lg:px-16">
@@ -61,15 +54,15 @@ export default function Home() {
       </section>
 
       <section className="relative">
-        <FanDashboard />
-      </section>
-
-      <section className="relative max-w-7xl mx-auto py-20 px-4">
-        <TheVault />
+        <DmfReputationCard />
       </section>
 
       <section className="relative py-20 px-4 md:px-8 lg:px-16">
         <PricingSection />
+      </section>
+
+      <section className="relative py-20 px-4 md:px-8 lg:px-16">
+        <MusicPlayer />
       </section>
 
       <Footer />

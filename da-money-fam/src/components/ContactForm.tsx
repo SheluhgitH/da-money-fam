@@ -1,3 +1,5 @@
+'use client'
+
 import { useState } from 'react';
 import { CONFIG } from '../config';
 
@@ -83,85 +85,85 @@ export default function ContactForm({ onClose }: ContactFormProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4 p-6">
       <div>
-        <label className="block text-white mb-1">Name *</label>
+        <label className="block text-gray-200 mb-1">Name *</label>
         <input
           name="name"
           value={formData.name}
           onChange={handleChange}
-          className="w-full p-2 rounded bg-black/20 border border-white/20 text-white focus:border-gold outline-none"
+          className="w-full p-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:border-gold outline-none transition-colors"
           placeholder="Your name"
         />
-        {errors.name && <p className="text-red-400 text-sm">{errors.name}</p>}
+        {errors.name && <p className="text-red-400 text-sm mt-1">{errors.name}</p>}
       </div>
 
       <div>
-        <label className="block text-white mb-1">Email *</label>
+        <label className="block text-gray-200 mb-1">Email *</label>
         <input
           name="email"
           type="email"
           value={formData.email}
           onChange={handleChange}
-          className="w-full p-2 rounded bg-black/20 border border-white/20 text-white focus:border-gold outline-none"
+          className="w-full p-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:border-gold outline-none transition-colors"
           placeholder="your@email.com"
         />
-        {errors.email && <p className="text-red-400 text-sm">{errors.email}</p>}
+        {errors.email && <p className="text-red-400 text-sm mt-1">{errors.email}</p>}
       </div>
 
       <div>
-        <label className="block text-white mb-1">Phone *</label>
+        <label className="block text-gray-200 mb-1">Phone *</label>
         <input
           name="phone"
           value={formData.phone}
           onChange={handleChange}
-          className="w-full p-2 rounded bg-black/20 border border-white/20 text-white focus:border-gold outline-none"
+          className="w-full p-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:border-gold outline-none transition-colors"
           placeholder="(123) 456-7890"
         />
-        {errors.phone && <p className="text-red-400 text-sm">{errors.phone}</p>}
+        {errors.phone && <p className="text-red-400 text-sm mt-1">{errors.phone}</p>}
       </div>
 
       <div>
-        <label className="block text-white mb-1">Project Type *</label>
+        <label className="block text-gray-200 mb-1">Project Type *</label>
         <select
           name="projectType"
           value={formData.projectType}
           onChange={handleChange}
-          className="w-full p-2 rounded bg-black/20 border border-white/20 text-white focus:border-gold outline-none"
+          className="w-full p-3 rounded-lg bg-white/10 border border-white/20 text-white focus:border-gold outline-none appearance-none pr-8 transition-colors"
         >
-          <option value="">Select type</option>
-          <option value="Animation">Animation</option>
-          <option value="Video Editing">Video Editing</option>
-          <option value="Other">Other</option>
+          <option value="" className="bg-matte-black text-gray-300">Select type</option>
+          <option value="Animation" className="bg-matte-black text-gray-300">Animation</option>
+          <option value="Video Editing" className="bg-matte-black text-gray-300">Video Editing</option>
+          <option value="Other" className="bg-matte-black text-gray-300">Other</option>
         </select>
-        {errors.projectType && <p className="text-red-400 text-sm">{errors.projectType}</p>}
+        {errors.projectType && <p className="text-red-400 text-sm mt-1">{errors.projectType}</p>}
       </div>
 
       <div>
-        <label className="block text-white mb-1">Message *</label>
+        <label className="block text-gray-200 mb-1">Message *</label>
         <textarea
           name="message"
           value={formData.message}
           onChange={handleChange}
-          className="w-full p-2 rounded bg-black/20 border border-white/20 text-white focus:border-gold outline-none h-24"
+          className="w-full p-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:border-gold outline-none h-28 resize-none transition-colors"
           placeholder="Tell us about your project"
         />
-        {errors.message && <p className="text-red-400 text-sm">{errors.message}</p>}
+        {errors.message && <p className="text-red-400 text-sm mt-1">{errors.message}</p>}
       </div>
 
       <div>
-        <label className="block text-white mb-1">Budget Range</label>
+        <label className="block text-gray-200 mb-1">Budget Range</label>
         <select
           name="budget"
           value={formData.budget}
           onChange={handleChange}
-          className="w-full p-2 rounded bg-black/20 border border-white/20 text-white focus:border-gold outline-none"
+          className="w-full p-3 rounded-lg bg-white/10 border border-white/20 text-white focus:border-gold outline-none appearance-none pr-8 transition-colors"
         >
-          <option value="">Select budget</option>
-          <option value="Under $1,000">Under $1,000</option>
-          <option value="$1,000 - $5,000">$1,000 - $5,000</option>
-          <option value="$5,000 - $10,000">$5,000 - $10,000</option>
-          <option value="Over $10,000">Over $10,000</option>
+          <option value="" className="bg-matte-black text-gray-300">Select budget</option>
+          <option value="Under $1,000" className="bg-matte-black text-gray-300">Under $1,000</option>
+          <option value="$1,000 - $5,000" className="bg-matte-black text-gray-300">$1,000 - $5,000</option>
+          <option value="$5,000 - $10,000" className="bg-matte-black text-gray-300">$5,000 - $10,000</option>
+          <option value="Over $10,000" className="bg-matte-black text-gray-300">Over $10,000</option>
         </select>
       </div>
 
@@ -171,12 +173,12 @@ export default function ContactForm({ onClose }: ContactFormProps) {
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full py-2 bg-gold text-black font-bold rounded hover:bg-gold/80 transition-colors disabled:opacity-50"
+        className="w-full py-3 bg-gold text-matte-black font-bold rounded-lg hover:bg-white transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isSubmitting ? 'Sending...' : 'Send Message'}
       </button>
 
-      {submitMessage && <p className="text-center text-white">{submitMessage}</p>}
+      {submitMessage && <p className="text-center text-green-400 text-sm mt-3">{submitMessage}</p>}
     </form>
   );
 }

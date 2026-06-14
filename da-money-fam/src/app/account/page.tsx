@@ -1,0 +1,136 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/contexts/AuthProvider'
+
+export default function AccountPage() {
+  const { user, signOut, loading: authLoading } = useAuth()
+  const router = useRouter()
+  const [displayName, setDisplayName] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState('')
+  const [email, setEmail] = useState('')
+  const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) return
+
+    fetch('/api/user/profile')
+      .then(async (r) => {
+        const text = await r.text();
+        console.log('AccountPage: Raw response from /api/user/profile:', text);
+        if (!r.ok) {
+          throw new Error(`HTTP error! status: ${r.status}, body: ${text}`);
+        }
+        return JSON.parse(text);
+      })
+  }, [user, authLoading])
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setMessage('')
+
+    const res = await fetch('/api/user/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ display_name: displayName, avatar_url: avatarUrl }),
+    })
+
+    if (res.ok) {
+      setMessage('Profile updated!')
+    } else {
+      setMessage('Failed to update profile')
+    }
+    setSaving(false)
+  }
+
+  const handleSignOut = async () => {
+    await signOut()
+    router.push('/')
+    router.refresh()
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-matte-black flex items-center justify-center text-gray-500">
+        Loading...
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-matte-black py-24 px-4">
+      <div className="max-w-lg mx-auto glass-gold rounded-2xl p-8">
+        <h1 className="font-serif text-3xl gold-gradient mb-2">Your Account</h1>
+        <p className="text-gray-400 text-sm mb-8">Manage your profile and preferences</p>
+
+        <form onSubmit={handleSave} className="space-y-4">
+          <div>
+            <label className="text-xs text-gray-500 uppercase tracking-wider">Email</label>
+            <input
+              type="email"
+              value={email}
+              readOnly
+              className="w-full mt-1 bg-black/30 border border-white/5 rounded-lg px-4 py-3 text-gray-400 cursor-not-allowed"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 uppercase tracking-wider">Display Name</label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              className="w-full mt-1 bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-white"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 uppercase tracking-wider">Avatar URL</label>
+            <input
+              type="url"
+              value={avatarUrl}
+              onChange={(e) => setAvatarUrl(e.target.value)}
+              placeholder="https://..."
+              className="w-full mt-1 bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-white"
+            />
+          </div>
+
+          {message && <p className="text-gold text-sm">{message}</p>}
+
+          <button
+            type="submit"
+            disabled={saving}
+            className="w-full bg-gold text-black font-bold py-3 rounded-full uppercase tracking-wider hover:bg-white transition-colors disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Save Profile'}
+          </button>
+        </form>
+
+        <div className="mt-8 pt-8 border-t border-white/10 space-y-3">
+          <Link
+            href="/library"
+            className="block text-center py-3 border border-gold/30 text-gold rounded-full text-xs font-bold uppercase tracking-wider hover:bg-gold/10 transition-colors"
+          >
+            My Library
+          </Link>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="w-full py-3 text-gray-400 text-xs uppercase tracking-wider hover:text-red-400 transition-colors"
+          >
+            Sign Out
+          </button>
+        </div>
+
+        <p className="text-center mt-6">
+          <Link href="/" className="text-gold text-sm hover:underline">
+            Back to home
+          </Link>
+        </p>
+      </div>
+    </div>
+  )
+}

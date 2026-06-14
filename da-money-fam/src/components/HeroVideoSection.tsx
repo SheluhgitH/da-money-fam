@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { motion, useInView } from 'framer-motion'
+import FallingObjects from './FallingObjects'
 
 import Modal from './Modal'
 import ContactForm from './ContactForm'
@@ -100,7 +101,7 @@ export default function HeroVideoSection() {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setIsModalOpen(true)}
-            className="px-8 py-4 glass text-white font-bold uppercase tracking-widest text-sm hover:bg-white/10 transition-colors duration-300 border border-gold/50 neon-border"
+            className="px-8 py-4 bg-black/70 backdrop-blur-md text-white font-bold uppercase tracking-widest text-sm hover:bg-black/85 transition-colors duration-300 border border-gold/50 neon-border"
           >
             Start Your Animation Project
           </motion.button>
@@ -128,27 +129,6 @@ export default function HeroVideoSection() {
         </motion.div>
       </motion.div>
 
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        {[...Array(5)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 bg-gold rounded-full"
-            style={{
-              top: `${Math.random() * 100}%`,
-              left: `${Math.random() * 100}%`,
-            }}
-            animate={{
-              opacity: [0, 1, 0],
-              scale: [0, 1, 0],
-            }}
-            transition={{
-              duration: 3,
-              repeat: Infinity,
-              delay: i * 0.5,
-            }}
-          />
-        ))}
-      </div>
     </section>
   )
 }

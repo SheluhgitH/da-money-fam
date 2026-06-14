@@ -1,9 +1,13 @@
 'use client'
 
 import Image from 'next/image'
-import { useState, useEffect, useRef, createContext, useContext, ReactNode } from 'react'
+import { useState, useEffect, useRef, createContext, useContext, ReactNode, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PublicSong } from '@/types/store'
+import { PREVIEW_DURATION_SEC } from '@/lib/audio-constants'
+
+const FADE_DURATION_MS = 1000 // 1 second fade
+const FADE_INTERVAL_MS = 50 // Update every 50ms
 
 interface AudioPlayerContextType {
   currentSong: PublicSong | null
@@ -22,34 +26,62 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
   const [volume, setVolume] = useState(0.75)
   const audioRef = useRef<HTMLAudioElement>(null)
 
+  // Helper for fading audio
+  const fadeAudio = useCallback((audio: HTMLAudioElement, startVolume: number, endVolume: number, duration: number) => {
+    const volumeChange = endVolume - startVolume;
+    const steps = duration / FADE_INTERVAL_MS;
+    let currentStep = 0;
+
+    return new Promise<void>((resolve) => {
+      const fadeInterval = setInterval(() => {
+        currentStep++;
+        const newVolume = startVolume + (volumeChange * (currentStep / steps));
+        audio.volume = Math.max(0, Math.min(1, newVolume)); // Clamp volume between 0 and 1
+
+        if (currentStep >= steps) {
+          clearInterval(fadeInterval);
+          audio.volume = Math.max(0, Math.min(1, endVolume)); // Ensure final volume is exact
+          resolve();
+        }
+      }, FADE_INTERVAL_MS);
+    });
+  }, []);
+
   useEffect(() => {
     const audio = audioRef.current
     if (audio) {
       audio.volume = volume
       audio.loop = false
 
-      const onEnded = () => {
-        setIsPlaying(false)
-        // Potentially trigger next song here if a queue is implemented globally
+      const onTimeUpdate = () => {
+        if (audio.currentTime >= PREVIEW_DURATION_SEC) {
+          audio.pause()
+          audio.currentTime = PREVIEW_DURATION_SEC
+          setIsPlaying(false)
+        }
       }
 
+      const onEnded = () => {
+        setIsPlaying(false)
+      }
+
+      audio.addEventListener('timeupdate', onTimeUpdate)
       audio.addEventListener('ended', onEnded)
 
       return () => {
+        audio.removeEventListener('timeupdate', onTimeUpdate)
         audio.removeEventListener('ended', onEnded)
       }
     }
   }, [volume])
 
-  const playSong = (song: PublicSong) => {
-    console.log('GlobalAudioPlayer: playSong', song.id, song.title)
+  const playSong = async (song: PublicSong) => {
     setCurrentSong(song)
     if (audioRef.current) {
-      audioRef.current.src = `/api/preview/${song.id}`
-      audioRef.current.load()
-      audioRef.current.play().catch((err) => {
-        console.error('GlobalAudioPlayer: play failed', err)
-      })
+      const audio = audioRef.current
+      audio.src = `/api/preview/${song.id}`
+      audio.load()
+      audio.play().then(() => fadeAudio(audio, 0, volume, FADE_DURATION_MS)).catch(() => {})
       setIsPlaying(true)
     }
   }
@@ -58,13 +90,14 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
     const audio = audioRef.current
     if (audio) {
       if (isPlaying) {
-        audio.pause()
-      } else {
-        audio.play().catch((err) => {
-          console.error('GlobalAudioPlayer: toggle play failed', err)
+        fadeAudio(audio, audio.volume, 0, FADE_DURATION_MS).then(() => {
+          audio.pause()
+          setIsPlaying(false)
         })
+      } else {
+        audio.play().then(() => fadeAudio(audio, audio.volume, volume, FADE_DURATION_MS)).catch(() => {})
+        setIsPlaying(true)
       }
-      setIsPlaying(!isPlaying)
     }
   }
 
@@ -80,7 +113,7 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
       }}
     >
       {children}
-      <audio ref={audioRef} />
+      <audio ref={audioRef} preload="none" controlsList="nodownload noplaybackrate" onContextMenu={(e) => e.preventDefault()} />
       <AnimatePresence>
         {currentSong && (
           <motion.div

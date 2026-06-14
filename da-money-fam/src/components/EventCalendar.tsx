@@ -2,6 +2,7 @@
 
 import { motion, useInView } from 'framer-motion'
 import { useRef } from 'react'
+import { CONFIG } from '@/config'
 
 const events = [
   {
@@ -36,6 +37,11 @@ const events = [
 export default function EventCalendar() {
   const ref = useRef(null)
   const isInView = useInView(ref, { once: false, amount: 0.3 })
+
+  const getTicketUrl = (event: (typeof events)[0]) =>
+    `mailto:${CONFIG.CONTACT_EMAIL}?subject=${encodeURIComponent(`Tickets: ${event.title}`)}&body=${encodeURIComponent(
+      `Hi Da Money Fam,\n\nI'd like tickets for:\n\nEvent: ${event.title}\nDate: ${event.date}\nLocation: ${event.location}\nTime: ${event.time}\nPrice range: ${event.price}\n\nThanks!`
+    )}`
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -153,13 +159,14 @@ export default function EventCalendar() {
                       {event.status}
                     </span>
 
-                    <motion.button
+                    <motion.a
+                      href={getTicketUrl(event)}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      className="px-6 py-2 bg-gold text-matte-black font-bold uppercase tracking-widest text-xs hover:bg-gold-light transition-colors duration-300"
+                      className="px-6 py-2 bg-gold text-matte-black font-bold uppercase tracking-widest text-xs hover:bg-gold-light transition-colors duration-300 inline-block"
                     >
                       Get Tickets
-                    </motion.button>
+                    </motion.a>
                   </div>
                 </div>
               </motion.div>

@@ -199,7 +199,7 @@ export default function Footer() {
             </ul>
           </div>
 
-          <div>
+          <div id="contact">
             <h4 className="font-serif text-xl font-bold text-gold mb-6">
               Newsletter
             </h4>
@@ -239,9 +239,25 @@ export default function Footer() {
             © 2026 Da Money Fam. All rights reserved.
           </p>
           <div className="flex gap-6 text-sm text-gray-500">
-            <a href="#" className="hover:text-gold transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-gold transition-colors">Terms of Service</a>
-            <a href="#" className="hover:text-gold transition-colors">Contact</a>
+            <a
+              href={`mailto:${CONFIG.CONTACT_EMAIL}?subject=${encodeURIComponent('Privacy Policy Inquiry')}`}
+              className="hover:text-gold transition-colors"
+            >
+              Privacy Policy
+            </a>
+            <a
+              href={`mailto:${CONFIG.CONTACT_EMAIL}?subject=${encodeURIComponent('Terms of Service Inquiry')}`}
+              className="hover:text-gold transition-colors"
+            >
+              Terms of Service
+            </a>
+            <button
+              type="button"
+              onClick={() => scrollToSection('contact')}
+              className="hover:text-gold transition-colors"
+            >
+              Contact
+            </button>
           </div>
         </div>
       </motion.div>

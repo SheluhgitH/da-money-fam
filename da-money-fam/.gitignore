@@ -27,6 +27,11 @@ yarn-error.log*
 .env.local
 .env
 
+# private audio (full tracks — not served publicly)
+/data/private-audio/
+/public/store/audio/
+/public/audio/
+
 # vercel
 .vercel
 

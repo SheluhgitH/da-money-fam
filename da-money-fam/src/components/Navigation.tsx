@@ -4,10 +4,14 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { scrollToSection } from '../utils/scrollToSection'
+import { useAuth } from '@/contexts/AuthProvider'
+import { useSiteSettings } from '@/contexts/SiteSettingsProvider'
 
 export default function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const { user, loading, signOut } = useAuth()
+  const { showAnimations, toggleAnimations } = useSiteSettings()
 
   useEffect(() => {
     const handleScroll = () => {
@@ -20,6 +24,7 @@ export default function Navigation() {
   const navLinks = [
     { name: 'Home', href: '#home' },
     { name: 'Music', href: '#music' },
+    { name: 'Store', href: '#store' },
     { name: 'Artists', href: '#artists' },
     { name: 'Services', href: '#services' },
     { name: 'Contact', href: '#contact' },
@@ -39,21 +44,50 @@ export default function Navigation() {
           Da Money Fam
         </button>
 
-        <div className="hidden md:flex items-center space-x-8">
-          {navLinks.map((link) => (
-            <button
-              key={link.name}
-              onClick={() => scrollToSection(link.href.slice(1))}
-              className="text-sm uppercase tracking-widest text-gray-300 hover:text-gold transition-colors duration-300 relative group"
-            >
-              {link.name}
-              <motion.span
-                className="absolute bottom-0 left-0 w-0 h-px bg-gold"
-                whileHover={{ width: '100%' }}
-                transition={{ duration: 0.3 }}
-              />
-            </button>
-          ))}
+        <div className="hidden md:flex items-center space-x-6">
+              {navLinks.map((link) => (
+                <button
+                  key={link.name}
+                  onClick={() => scrollToSection(link.href.slice(1))}
+                  className="text-sm uppercase tracking-widest text-gray-300 hover:text-gold transition-colors duration-300 relative group"
+                >
+                  {link.name}
+                </button>
+              ))}
+
+              {!loading && (
+                user ? (
+                  <div className="flex items-center gap-3 ml-2">
+                    <Link href="/library" className="text-xs uppercase tracking-widest text-gold hover:text-white transition-colors">
+                      Library
+                    </Link>
+                    <Link href="/coin-wallet" className="text-xs uppercase tracking-widest text-gold hover:text-white transition-colors">
+                      Coinz
+                    </Link>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs uppercase tracking-widest text-gray-300">Animations</span>
+                      <label className="inline-flex relative items-center cursor-pointer">
+                        <input type="checkbox" value="" className="sr-only peer" checked={showAnimations} onChange={toggleAnimations} />
+                        <div className="w-9 h-5 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-gold" />
+                      </label>
+                    </div>
+                    <Link
+                      href="/account"
+                      className="w-9 h-9 rounded-full bg-gold/20 border border-gold/40 flex items-center justify-center text-gold text-xs font-bold hover:bg-gold hover:text-black transition-colors"
+                      title="Account"
+                    >
+                      {user.email?.[0]?.toUpperCase() || 'U'}
+                    </Link>
+                  </div>
+                ) : (
+                  <Link
+                    href="/login"
+                    className="ml-2 px-4 py-2 bg-gold text-black text-xs font-bold uppercase tracking-widest rounded-full hover:bg-white transition-colors"
+                  >
+                    Sign In
+                  </Link>
+                )
+              )}
         </div>
 
         <button
@@ -88,6 +122,38 @@ export default function Navigation() {
                   {link.name}
                 </button>
               ))}
+              {!loading && (
+                user ? (
+                  <>
+                    <Link href="/library" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
+                      Library
+                    </Link>
+                    <Link href="/coin-wallet" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
+                      Coinz
+                    </Link>
+                    <Link href="/account" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
+                      Account
+                    </Link>
+                    <div className="flex items-center justify-between text-lg uppercase tracking-widest text-gray-300">
+                      <span>Animations</span>
+                      <label className="inline-flex relative items-center cursor-pointer">
+                        <input type="checkbox" value="" className="sr-only peer" checked={showAnimations} onChange={toggleAnimations} />
+                        <div className="w-11 h-6 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gold" />
+                      </label>
+                    </div>
+                    <button
+                      onClick={async () => { await signOut(); setIsMenuOpen(false) }}
+                      className="text-lg uppercase tracking-widest text-gray-400"
+                    >
+                      Sign Out
+                    </button>
+                  </>
+                ) : (
+                  <Link href="/login" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
+                    Sign In
+                  </Link>
+                )
+              )}
             </div>
           </motion.div>
         )}

@@ -1,7 +1,15 @@
 'use client'
 
+import Image from 'next/image'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
+import { CONFIG } from '@/config'
+
+function merchInquiryUrl(productName: string, price: string) {
+  return `mailto:${CONFIG.CONTACT_EMAIL}?subject=${encodeURIComponent(`Merch: ${productName}`)}&body=${encodeURIComponent(
+    `Hi Da Money Fam,\n\nI'm interested in purchasing:\n\nItem: ${productName}\nPrice: ${price}\n\nPlease send availability and shipping details.\n\nThanks!`
+  )}`
+}
 
 interface Product {
     id: number;
@@ -22,7 +30,7 @@ const products: Product[] = [
         category: "DMF APPAREL",
         image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=800&auto=format&fit=crop",
         price: "$120.00",
-        link: "#",
+        link: merchInquiryUrl("Custom DMF Spray Hoodie", "$120.00"),
         rotate: -5,
         top: "10%",
         left: "15%"
@@ -33,7 +41,7 @@ const products: Product[] = [
         category: "HAND-CRAFTED",
         image: "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=800&auto=format&fit=crop",
         price: "$185.00",
-        link: "#",
+        link: merchInquiryUrl("Bleached Luxury Sweater", "$185.00"),
         rotate: 8,
         top: "15%",
         left: "65%"
@@ -44,7 +52,7 @@ const products: Product[] = [
         category: "DESIGNER DENIM",
         image: "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?q=80&w=800&auto=format&fit=crop",
         price: "$250.00",
-        link: "#",
+        link: merchInquiryUrl("Custom Sprayed Jeans", "$250.00"),
         rotate: -12,
         top: "55%",
         left: "35%"
@@ -55,7 +63,7 @@ const products: Product[] = [
         category: "ESSENTIALS",
         image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=800&auto=format&fit=crop",
         price: "$85.00",
-        link: "#",
+        link: merchInquiryUrl("DMF Gold Chain Tee", "$85.00"),
         rotate: 5,
         top: "60%",
         left: "75%"
@@ -125,9 +133,11 @@ const FloatingProduct = ({ product }: { product: Product }) => {
 
                 {/* Product Card */}
                 <div className="relative w-64 md:w-80 aspect-[3/4] rounded-2xl overflow-hidden border border-white/10 bg-zinc-900/40 backdrop-blur-xl shadow-2xl transition-transform duration-500 group-hover:scale-105 group-hover:border-gold/50">
-                    <img
+                    <Image
                         src={product.image}
                         alt={product.name}
+                        width={256} // w-64, aspect-[3/4] -> 256 / 3 * 4 = 341.33
+                        height={341}
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-70 group-hover:opacity-100"
                     />
 
@@ -212,7 +222,7 @@ export default function MerchStore() {
                             className="relative group"
                         >
                             <a href={product.link} className="block aspect-[3/4] rounded-2xl overflow-hidden border border-white/10 bg-zinc-900/40">
-                                <img src={product.image} alt={product.name} className="w-full h-full object-cover opacity-80" />
+                                <Image src={product.image} alt={product.name} className="w-full h-full object-cover opacity-80" width={300} height={400} />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black p-6 flex flex-col justify-end">
                                     <span className="text-gold text-[8px] font-bold tracking-[2px] uppercase">{product.category}</span>
                                     <h3 className="text-white text-lg font-bold">{product.name}</h3>
