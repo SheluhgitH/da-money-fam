@@ -1,1 +1,21 @@
-/.env.local
+# Local env
+.env.local
+.env
+
+# IDE / debug
+.cursor/
+
+# Source media — upload tracks via admin to server private-audio only
+*.mp3
+*.m4a
+*.wav
+*.flac
+*.aac
+*.ogg
+
+dmf site songs/
+Dmf site pics/
+
+# Next.js
+da-money-fam/.next/
+da-money-fam/node_modules/

@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "cd da-money-fam && npm install",
+  "buildCommand": "cd da-money-fam && npm run build",
+  "devCommand": "cd da-money-fam && npm run dev -- -p 3005",
+  "outputDirectory": "da-money-fam/.next",
+  "framework": "nextjs"
+}

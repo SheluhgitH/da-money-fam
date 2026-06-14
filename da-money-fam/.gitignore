@@ -32,6 +32,14 @@ yarn-error.log*
 /public/store/audio/
 /public/audio/
 
+# never commit audio at repo root level either
+*.mp3
+*.m4a
+*.wav
+*.flac
+*.aac
+*.ogg
+
 # vercel
 .vercel
 
