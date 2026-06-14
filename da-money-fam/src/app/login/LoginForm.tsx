@@ -26,6 +26,12 @@ export default function LoginForm() {
     setLoading(true)
     setError('')
 
+    if (!supabase) {
+      setError('Supabase client could not be initialized.')
+      setLoading(false)
+      return
+    }
+
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
     if (authError) {
       setError(authError.message)
@@ -41,6 +47,11 @@ export default function LoginForm() {
     if (!isSupabaseConfigured()) {
       setError('Supabase environment variables are not configured. Please check your .env.local file.')
       setLoading(false)
+      return
+    }
+
+    if (!supabase) {
+      setError('Supabase client could not be initialized.')
       return
     }
 

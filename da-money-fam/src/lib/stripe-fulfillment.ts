@@ -1,5 +1,10 @@
 import Stripe from 'stripe'
-import { createStripeOrder, generateDownloadToken, getOrderByStripeSession } from '@/lib/store'
+import {
+  createStripeOrder,
+  generateDownloadToken,
+  getOrderByStripeSession,
+  getSongById,
+} from '@/lib/store'
 import { creditUserCoins } from '@/lib/user-store'
 
 export async function fulfillStripeSession(session: Stripe.Checkout.Session) {
@@ -17,18 +22,6 @@ export async function fulfillStripeSession(session: Stripe.Checkout.Session) {
     return { success: true, type: 'coin_purchase' }
   }
 
-  // Existing song purchase logic
-  const { type, song_id, coin_amount, user_id } = session.metadata || {}
-
-  if (type === 'coin_purchase') {
-    if (!user_id || !coin_amount) {
-      throw new Error('Missing metadata for coin purchase')
-    }
-    await creditUserCoins(user_id, parseInt(coin_amount, 10))
-    return { success: true, type: 'coin_purchase' }
-  }
-
-  // Existing song purchase logic
   if (!song_id) {
     throw new Error('Missing song metadata')
   }
@@ -54,7 +47,7 @@ export async function fulfillStripeSession(session: Stripe.Checkout.Session) {
   const buyerName = session.customer_details?.name || 'Stripe Customer'
 
   const order = await createStripeOrder({
-    song_id: song_id,
+    song_id,
     song_title: song.title,
     buyer_email: buyerEmail,
     buyer_name: buyerName,

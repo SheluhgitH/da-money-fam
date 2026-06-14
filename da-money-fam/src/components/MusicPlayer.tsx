@@ -66,7 +66,7 @@ export default function MusicPlayer() {
     if (transitioningRef.current) return
     transitioningRef.current = true
 
-    const next = pickRandomSong(songsRef.current, currentSongIdRef.current)
+    const next = pickRandomSong(songsRef.current, currentSongIdRef.current ?? undefined)
     if (next) {
       setProgress(0)
       setCurrentSong(next)
@@ -118,7 +118,7 @@ export default function MusicPlayer() {
       if (transitioningRef.current) return
       transitioningRef.current = true
       await fadeAudio(audio, audio.volume, 0, FADE_DURATION_MS)
-      const next = pickRandomSong(songsRef.current, currentSongIdRef.current)
+      const next = pickRandomSong(songsRef.current, currentSongIdRef.current ?? undefined)
       if (next) {
         setProgress(0)
         setCurrentSong(next)

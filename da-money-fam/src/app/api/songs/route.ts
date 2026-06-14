@@ -4,6 +4,8 @@ import { getCurrentUser } from '@/lib/auth/user'
 import { getUserFavorites, getUserOwnedSongIds } from '@/lib/user-store'
 import { getRecommendations } from '@/lib/recommendations'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const songs = await getPublishedSongs()

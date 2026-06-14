@@ -28,6 +28,12 @@ export default function SignupForm() {
     setError('')
     setMessage('')
 
+    if (!supabase) {
+      setError('Supabase client could not be initialized.')
+      setLoading(false)
+      return
+    }
+
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
     const { data, error: authError } = await supabase.auth.signUp({
       email,
@@ -56,6 +62,11 @@ export default function SignupForm() {
   const handleOAuth = async (provider: 'google') => {
     if (!isSupabaseConfigured()) {
       setError('Supabase environment variables are not configured. Please check your .env.local file.')
+      return
+    }
+
+    if (!supabase) {
+      setError('Supabase client could not be initialized.')
       return
     }
 
