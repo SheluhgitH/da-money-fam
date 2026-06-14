@@ -18,6 +18,8 @@ Or run [`git-push.bat`](git-push.bat) from the `da-money-fam` folder.
 
 Dashboard: [vercel.com](https://vercel.com) → **da-money-fam** project
 
+> **If deploys fail:** open the latest deployment log. Common fixes are Root Directory = `da-money-fam` and ensuring `npm run build` passes locally.
+
 | Setting | Value |
 |---------|-------|
 | Git Repository | `SheluhgitH/da-money-fam` |
