@@ -1,48 +1,125 @@
-'use client'
-
-import { useState, useEffect } from 'react'
-import { motion, useInView } from 'framer-motion'
+import Image from 'next/image'
+import { useState, useEffect, useCallback } from 'react'
+import { motion, useInView, AnimatePresence } from 'framer-motion'
 import { useRef } from 'react'
+import SongBidding from './SongBidding'
+import type { PublicSong } from '@/types/store'
 
-const tracks = [
-  { id: 2, title: 'NoteBook', artist: 'JackPot', src: '/audio/notebook audio for site.m4a', duration: '0:36' },
-  { id: 3, title: 'Take Your Time Ft JackPot', artist: 'JackPot & Vlone Tr3', src: '/audio/Take Your Time Ft JackPot.m4a', duration: '0:26' },
-  { id: 1, title: 'Fool in Here Ft JackPot', artist: 'Vlone Tr3', src: '/audio/wok audio - Made with Clipchamp.m4a', duration: '0:33' },
-]
+const BID_WINDOW_START_SEC = 10 // Start bidding 10 seconds before song ends
+const BID_WINDOW_END_SEC = 10 // Bidding continues 10 seconds after song ends
 
 export default function MusicPlayer() {
-  const [currentTrack, setCurrentTrack] = useState(tracks[0])
+  const [currentSong, setCurrentSong] = useState<PublicSong | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [volume, setVolume] = useState(0.75)
+  const [biddingState, setBiddingState] = useState<{
+    current_song: PublicSong | null
+    bidding_active: boolean
+    bidding_ends_at: number | null
+    bids: { song_id: string; amount: number }[]
+    all_songs: PublicSong[]
+  } | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const ref = useRef(null)
   const isInView = useInView(ref, { once: false, amount: 0.3 })
 
+  const fetchBiddingState = useCallback(async () => {
+    try {
+      const res = await fetch('/api/bidding')
+      const data = await res.json()
+      if (res.ok) {
+        console.log('MusicPlayer: bidding state refreshed', data)
+        setBiddingState(data)
+        setCurrentSong(data.current_song)
+      } else {
+        console.error('Failed to fetch bidding state:', data.error)
+      }
+    } catch (err) {
+      console.error('Error fetching bidding state:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchBiddingState()
+    const interval = setInterval(fetchBiddingState, 5000) // Poll every 5 seconds
+    return () => clearInterval(interval)
+  }, [fetchBiddingState])
+
   useEffect(() => {
     const audio = audioRef.current
     if (audio) {
       audio.volume = volume
-      audio.loop = true
+      audio.loop = false // No loop for continuous queue
 
       const updateProgress = () => {
-        if (audio.duration) {
-          setProgress((audio.currentTime / audio.duration) * 100)
+        if (audio.duration && currentSong) {
+          const totalDuration = audio.duration
+          const currentTime = audio.currentTime
+          setProgress((currentTime / totalDuration) * 100)
+
+          // Handle bidding window logic
+          if (totalDuration - currentTime <= BID_WINDOW_START_SEC && !biddingState?.bidding_active) {
+            // Activate bidding (if not already active)
+            // This logic is mostly handled server-side now, client just reacts
+          }
         }
       }
 
-      audio.addEventListener('timeupdate', updateProgress)
-      audio.addEventListener('ended', () => setIsPlaying(false))
-      audio.addEventListener('error', () => alert('Audio file unavailable.'))
+      const onEnded = () => {
+        setIsPlaying(false)
+        // Trigger server to advance song, then refetch bidding state
+        // The server-side interval is responsible for this, client just re-polls
+      }
 
+      audio.addEventListener('timeupdate', updateProgress)
+      audio.addEventListener('ended', onEnded)
       return () => {
         audio.removeEventListener('timeupdate', updateProgress)
-        audio.removeEventListener('ended', () => setIsPlaying(false))
-        audio.removeEventListener('error', () => alert('Audio file unavailable.'))
+        audio.removeEventListener('ended', onEnded)
       }
     }
-  }, [currentTrack, volume])
+  }, [currentSong, volume, biddingState])
+
+  useEffect(() => {
+    if (currentSong && audioRef.current) {
+      console.log('MusicPlayer: loading song', currentSong.id, currentSong.title)
+      audioRef.current.load() // Load new song
+      if (isPlaying) {
+        audioRef.current.play().catch((err) => {
+          console.error('MusicPlayer: autoplay failed', err)
+        }) // Autoplay if already playing
+      }
+    }
+  }, [currentSong, isPlaying])
+
+  const togglePlay = () => {
+    const audio = audioRef.current
+    if (audio) {
+      if (isPlaying) {
+        audio.pause()
+      } else {
+        audio.play().catch((err) => {
+          console.error('MusicPlayer: play failed', err)
+        })
+      }
+      setIsPlaying(!isPlaying)
+    }
+  }
+
+  const playNext = () => {
+    // This should trigger the server to advance the song
+    // For now, it will be handled by the server's interval
+  }
+
+  const playPrev = () => {
+    // Previous track logic needs to interact with the bidding queue or a history
+    // For now, we will not implement a prev track for the dynamic queue
+  }
 
   const containerVariants = {
     hidden: { opacity: 0, y: 50 },
@@ -60,36 +137,9 @@ export default function MusicPlayer() {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0 },
   }
-
-  const togglePlay = () => {
-    const audio = audioRef.current
-    if (audio) {
-      if (isPlaying) {
-        audio.pause()
-      } else {
-        audio.play()
-      }
-      setIsPlaying(!isPlaying)
-    }
-  }
-
-  const nextTrack = () => {
-    const currentIndex = tracks.findIndex(t => t.id === currentTrack.id)
-    const nextIndex = (currentIndex + 1) % tracks.length
-    setCurrentTrack(tracks[nextIndex])
-    setProgress(0)
-  }
-
-  const prevTrack = () => {
-    const currentIndex = tracks.findIndex(t => t.id === currentTrack.id)
-    const prevIndex = currentIndex === 0 ? tracks.length - 1 : currentIndex - 1
-    setCurrentTrack(tracks[prevIndex])
-    setProgress(0)
-  }
-
   return (
     <section id="music" ref={ref} className="max-w-7xl mx-auto">
-      <audio ref={audioRef} src={currentTrack.src} preload="metadata" />
+      <audio ref={audioRef} src={currentSong ? `/api/preview/${currentSong.id}` : ''} preload="metadata" />
       <motion.div
         initial="hidden"
         animate={isInView ? "visible" : "hidden"}
@@ -100,13 +150,13 @@ export default function MusicPlayer() {
           variants={itemVariants}
           className="font-serif text-4xl md:text-6xl font-bold mb-4 gold-gradient"
         >
-          Latest Releases
+          Live Queue & Bidding
         </motion.h2>
         <motion.p
           variants={itemVariants}
           className="text-gray-400 text-lg"
         >
-          Experience the sound of luxury
+          Influence the next track with your DMF Coinz!
         </motion.p>
       </motion.div>
 
@@ -121,15 +171,19 @@ export default function MusicPlayer() {
           className="glass-gold rounded-2xl p-8 md:p-12 max-w-4xl mx-auto"
         >
           <div className="flex flex-col md:flex-row items-center gap-8">
-            <div className="w-64 h-64 bg-gradient-to-br from-gold to-gold-dark rounded-xl flex items-center justify-center neon-border">
-              <svg className="w-24 h-24 text-black" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-              </svg>
+            <div className="w-64 h-64 bg-gradient-to-br from-gold to-gold-dark rounded-xl flex items-center justify-center neon-border relative overflow-hidden">
+              {currentSong?.album_cover_path ? (
+                <Image src={currentSong.album_cover_path} alt={currentSong.title} className="w-full h-full object-cover" width={256} height={256} />
+              ) : (
+                <svg className="w-24 h-24 text-black" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                </svg>
+              )}
             </div>
 
             <div className="flex-1 text-center md:text-left">
-              <h3 className="font-serif text-3xl font-bold mb-2">{currentTrack.title}</h3>
-              <p className="text-gold text-lg mb-4">{currentTrack.artist}</p>
+              <h3 className="font-serif text-3xl font-bold mb-2">{currentSong?.title || 'No song playing'}</h3>
+              <p className="text-gold text-lg mb-4">{currentSong?.artist || ''}</p>
 
               <div className="mb-6">
                 <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
@@ -142,12 +196,7 @@ export default function MusicPlayer() {
               </div>
 
               <div className="flex items-center justify-center md:justify-start gap-6">
-                <button onClick={prevTrack} className="text-white hover:text-gold transition-colors">
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
-                  </svg>
-                </button>
-
+                {/* Previous button removed for dynamic queue */}
                 <motion.button
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
@@ -165,11 +214,7 @@ export default function MusicPlayer() {
                   )}
                 </motion.button>
 
-                <button onClick={nextTrack} className="text-white hover:text-gold transition-colors">
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
-                  </svg>
-                </button>
+                {/* Next button removed for dynamic queue */}
               </div>
             </div>
           </div>
@@ -180,51 +225,13 @@ export default function MusicPlayer() {
         initial="hidden"
         animate={isInView ? "visible" : "hidden"}
         variants={containerVariants}
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+        className="grid grid-cols-1 gap-6"
       >
-        {tracks.map((track, index) => (
-          <motion.div
-            key={track.id}
-            variants={itemVariants}
-            whileHover={{ scale: 1.02 }}
-            onClick={() => {
-              setCurrentTrack(track)
-              setProgress(0)
-              if (isPlaying && audioRef.current) {
-                audioRef.current.load()
-                audioRef.current.play()
-              }
-            }}
-            className={`glass rounded-xl p-6 cursor-pointer transition-all duration-300 ${currentTrack.id === track.id ? 'border-gold neon-border' : 'border-white/10'
-              }`}
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-gold to-gold-dark rounded-lg flex items-center justify-center">
-                <svg className="w-8 h-8 text-black" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                </svg>
-              </div>
-
-              <div className="flex-1">
-                <h4 className="font-serif text-lg font-bold">{track.title}</h4>
-                <p className="text-gold text-sm">{track.artist}</p>
-                <p className="text-gray-500 text-xs">{track.duration}</p>
-              </div>
-
-              {currentTrack.id === track.id && isPlaying && (
-                <motion.div
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ duration: 0.5, repeat: Infinity }}
-                  className="text-gold"
-                >
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                  </svg>
-                </motion.div>
-              )}
-            </div>
-          </motion.div>
-        ))}
+        {loading ? (
+          <p className="text-center text-gray-500">Loading bidding state...</p>
+        ) : (
+          <SongBidding onBidSuccess={fetchBiddingState} />
+        )}
       </motion.div>
     </section>
   )
