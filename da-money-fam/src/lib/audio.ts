@@ -1,11 +1,13 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { PREVIEW_MAX_BYTES } from '@/lib/audio-constants'
+import { createServiceClient } from '@/lib/supabase/server'
 
 export { PREVIEW_DURATION_SEC, PREVIEW_MAX_BYTES } from '@/lib/audio-constants'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 const PRIVATE_AUDIO_DIR = path.join(DATA_DIR, 'private-audio')
+const STORAGE_BUCKET = 'store-audio'
 
 export function getContentType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase()
@@ -13,6 +15,30 @@ export function getContentType(filePath: string): string {
   if (ext === '.m4a') return 'audio/mp4'
   if (ext === '.wav') return 'audio/wav'
   return 'application/octet-stream'
+}
+
+function getStorageObjectKey(internalPath: string): string | null {
+  const normalized = internalPath.replace(/^\//, '')
+
+  if (normalized.startsWith('private-audio/')) {
+    return normalized.slice('private-audio/'.length)
+  }
+
+  if (normalized.startsWith('store/audio/')) {
+    return path.basename(normalized)
+  }
+
+  return null
+}
+
+async function downloadFromSupabase(objectKey: string): Promise<Buffer | null> {
+  const supabase = createServiceClient()
+  if (!supabase) return null
+
+  const { data, error } = await supabase.storage.from(STORAGE_BUCKET).download(objectKey)
+  if (error || !data) return null
+
+  return Buffer.from(await data.arrayBuffer())
 }
 
 /** Resolve internal song path to absolute filesystem path */
@@ -52,6 +78,65 @@ export async function resolveAudioAbsolutePath(internalPath: string): Promise<st
   return null
 }
 
+export type AudioSource = {
+  contentType: string
+  size: number
+  readFull: () => Promise<Buffer>
+  readRange: (start: number, end: number) => Promise<Buffer>
+}
+
+let remoteBufferCache: Map<string, Promise<Buffer | null>> | null = null
+
+function getRemoteBuffer(objectKey: string): Promise<Buffer | null> {
+  if (!remoteBufferCache) remoteBufferCache = new Map()
+  const existing = remoteBufferCache.get(objectKey)
+  if (existing) return existing
+
+  const pending = downloadFromSupabase(objectKey)
+  remoteBufferCache.set(objectKey, pending)
+  return pending
+}
+
+/** Open audio from local disk or Supabase Storage (for Vercel production). */
+export async function openAudioSource(internalPath: string): Promise<AudioSource | null> {
+  const absolutePath = await resolveAudioAbsolutePath(internalPath)
+  if (absolutePath) {
+    const contentType = getContentType(absolutePath)
+    const stats = await fs.stat(absolutePath)
+
+    return {
+      contentType,
+      size: stats.size,
+      readFull: () => fs.readFile(absolutePath),
+      readRange: async (start, end) => {
+        const length = end - start + 1
+        const buffer = Buffer.alloc(length)
+        const fd = await fs.open(absolutePath, 'r')
+        try {
+          await fd.read(buffer, 0, length, start)
+        } finally {
+          await fd.close()
+        }
+        return buffer
+      },
+    }
+  }
+
+  const objectKey = getStorageObjectKey(internalPath)
+  if (!objectKey) return null
+
+  const buffer = await getRemoteBuffer(objectKey)
+  if (!buffer) return null
+
+  const contentType = getContentType(objectKey)
+  return {
+    contentType,
+    size: buffer.length,
+    readFull: async () => buffer,
+    readRange: async (start, end) => buffer.subarray(start, end + 1),
+  }
+}
+
 export async function readPreviewBuffer(absolutePath: string): Promise<Buffer> {
   const fileBuffer = await fs.readFile(absolutePath)
   return fileBuffer.subarray(0, Math.min(fileBuffer.length, PREVIEW_MAX_BYTES))
@@ -84,4 +169,20 @@ export async function readFullAudioBuffer(absolutePath: string): Promise<Buffer>
 
 export function getPrivateAudioDir(): string {
   return PRIVATE_AUDIO_DIR
+}
+
+export async function uploadAudioToStorage(
+  filename: string,
+  buffer: Buffer,
+  contentType: string
+): Promise<boolean> {
+  const supabase = createServiceClient()
+  if (!supabase) return false
+
+  const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(filename, buffer, {
+    upsert: true,
+    contentType,
+  })
+
+  return !error
 }

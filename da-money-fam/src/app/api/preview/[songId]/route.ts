@@ -1,19 +1,10 @@
 import { NextResponse } from 'next/server'
-import { promises as fs } from 'fs'
 import { isAdminAuthenticated } from '@/lib/auth'
 import { getSongById } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/user'
 import { userOwnsSong } from '@/lib/user-store'
 import { checkRateLimit } from '@/lib/rate-limit'
-import {
-  resolveAudioAbsolutePath,
-  readPreviewBuffer,
-  readPreviewRange,
-  readFullAudioBuffer,
-  getPreviewByteLength,
-  getContentType,
-  PREVIEW_MAX_BYTES,
-} from '@/lib/audio'
+import { openAudioSource, PREVIEW_MAX_BYTES } from '@/lib/audio'
 import { PREVIEW_DURATION_SEC } from '@/lib/audio-constants'
 
 export async function GET(
@@ -38,16 +29,12 @@ export async function GET(
     const serveFull = owns || isAdmin
 
     const internalPath = song.preview_path || song.mp3_file_path
-    const absolutePath = await resolveAudioAbsolutePath(internalPath)
-    if (!absolutePath) {
+    const source = await openAudioSource(internalPath)
+    if (!source) {
       return NextResponse.json({ error: 'Preview unavailable' }, { status: 404 })
     }
 
-    const contentType = getContentType(absolutePath)
-    const fileStats = await fs.stat(absolutePath)
-    const effectiveSize = serveFull
-      ? fileStats.size
-      : await getPreviewByteLength(absolutePath)
+    const effectiveSize = serveFull ? source.size : Math.min(source.size, PREVIEW_MAX_BYTES)
 
     const rangeHeader = req.headers.get('range')
     if (rangeHeader) {
@@ -67,12 +54,12 @@ export async function GET(
         }
         end = Math.min(end, effectiveSize - 1)
 
-        const chunk = await readPreviewRange(absolutePath, start, end)
+        const chunk = await source.readRange(start, end)
 
         return new NextResponse(new Uint8Array(chunk), {
           status: 206,
           headers: {
-            'Content-Type': contentType,
+            'Content-Type': source.contentType,
             'Content-Length': String(chunk.length),
             'Content-Range': `bytes ${start}-${end}/${effectiveSize}`,
             'Accept-Ranges': 'bytes',
@@ -84,12 +71,12 @@ export async function GET(
     }
 
     const buffer = serveFull
-      ? await readFullAudioBuffer(absolutePath)
-      : await readPreviewBuffer(absolutePath)
+      ? await source.readFull()
+      : (await source.readFull()).subarray(0, effectiveSize)
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
-        'Content-Type': contentType,
+        'Content-Type': source.contentType,
         'Content-Length': String(buffer.length),
         'Accept-Ranges': 'bytes',
         'Cache-Control': 'private, no-store',

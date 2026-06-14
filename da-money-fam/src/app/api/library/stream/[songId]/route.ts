@@ -3,11 +3,8 @@ import { getCurrentUser } from '@/lib/auth/user'
 import { userOwnsSong } from '@/lib/user-store'
 import { getSongById } from '@/lib/store'
 import { checkRateLimit } from '@/lib/rate-limit'
-import {
-  resolveAudioAbsolutePath,
-  readFullAudioBuffer,
-  getContentType,
-} from '@/lib/audio'
+import { openAudioSource } from '@/lib/audio'
+import path from 'path'
 
 export async function GET(
   req: Request,
@@ -35,17 +32,17 @@ export async function GET(
       return NextResponse.json({ error: 'Song not found' }, { status: 404 })
     }
 
-    const absolutePath = await resolveAudioAbsolutePath(song.mp3_file_path)
-    if (!absolutePath) {
+    const source = await openAudioSource(song.mp3_file_path)
+    if (!source) {
       return NextResponse.json({ error: 'Audio unavailable' }, { status: 404 })
     }
 
-    const buffer = await readFullAudioBuffer(absolutePath)
-    const ext = absolutePath.split('.').pop() || 'mp3'
+    const buffer = await source.readFull()
+    const ext = path.extname(song.mp3_file_path).replace('.', '') || 'mp3'
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
-        'Content-Type': getContentType(absolutePath),
+        'Content-Type': source.contentType,
         'Content-Disposition': `inline; filename="${song.title}.${ext}"`,
         'Cache-Control': 'private, no-store',
       },

@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getOrderByToken, getSongById } from '@/lib/store'
 import { checkRateLimit } from '@/lib/rate-limit'
-import {
-  resolveAudioAbsolutePath,
-  readFullAudioBuffer,
-  getContentType,
-} from '@/lib/audio'
+import { openAudioSource } from '@/lib/audio'
 import path from 'path'
 
 export async function GET(
@@ -30,18 +26,18 @@ export async function GET(
       return NextResponse.json({ error: 'Song not found' }, { status: 404 })
     }
 
-    const absolutePath = await resolveAudioAbsolutePath(song.mp3_file_path)
-    if (!absolutePath) {
+    const source = await openAudioSource(song.mp3_file_path)
+    if (!source) {
       return NextResponse.json({ error: 'Audio file unavailable' }, { status: 404 })
     }
 
-    const fileBuffer = await readFullAudioBuffer(absolutePath)
-    const ext = path.extname(absolutePath).toLowerCase()
+    const fileBuffer = await source.readFull()
+    const ext = path.extname(song.mp3_file_path).toLowerCase() || '.mp3'
     const safeTitle = song.title.replace(/[^\w\s.-]/g, '').trim() || 'track'
 
     return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
-        'Content-Type': getContentType(absolutePath),
+        'Content-Type': source.contentType,
         'Content-Disposition': `attachment; filename="${safeTitle}${ext}"`,
         'Cache-Control': 'no-store, private',
         'X-Content-Type-Options': 'nosniff',

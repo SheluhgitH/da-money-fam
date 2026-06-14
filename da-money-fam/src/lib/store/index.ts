@@ -3,7 +3,7 @@ import path from 'path'
 import { randomUUID, createHash, timingSafeEqual } from 'crypto'
 import type { PaymentSettings, PurchaseOrder, Song, PublicSong, UserProfile, UserStats } from '@/types/store'
 import { createServiceClient } from '@/lib/supabase/server'
-import { getPrivateAudioDir } from '@/lib/audio'
+import { getPrivateAudioDir, getContentType, uploadAudioToStorage } from '@/lib/audio'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 
@@ -77,7 +77,7 @@ export async function getPublishedSongs(): Promise<Song[]> {
       .eq('is_published', true)
       .order('created_at', { ascending: false })
 
-    if (!error && data) return data.map(mapSupabaseSong)
+    if (!error && data?.length) return data.map(mapSupabaseSong)
   }
 
   const songs = await readJsonFile<Song[]>('songs.json', [])
@@ -92,7 +92,7 @@ export async function getAllSongs(): Promise<Song[]> {
       .select('*')
       .order('created_at', { ascending: false })
 
-    if (!error && data) return data.map(mapSupabaseSong)
+    if (!error && data?.length) return data.map(mapSupabaseSong)
   }
 
   return readJsonFile<Song[]>('songs.json', [])
@@ -452,6 +452,7 @@ export async function saveUploadedFile(
     const absolutePath = path.join(getPrivateAudioDir(), filename)
     await fs.mkdir(path.dirname(absolutePath), { recursive: true })
     await fs.writeFile(absolutePath, buffer)
+    await uploadAudioToStorage(filename, buffer, getContentType(filename))
     return `private-audio/${filename}`
   }
 
