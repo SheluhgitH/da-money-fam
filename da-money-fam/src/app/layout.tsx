@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import { Playfair_Display, Inter } from 'next/font/google'
+import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider } from '@/contexts/AuthProvider'
 import { SiteSettingsProvider } from '@/contexts/SiteSettingsProvider'
 import { AudioPlayerProvider } from '@/components/GlobalAudioPlayer'
 import FallingObjects from '@/components/FallingObjects'
+import GoogleAnalytics from '@/components/GoogleAnalytics'
 import './globals.css'
 
 const playfair = Playfair_Display({
@@ -40,6 +42,8 @@ export default function RootLayout({
           </AuthProvider>
           <FallingObjects />
         </SiteSettingsProvider>
+        <GoogleAnalytics />
+        <Analytics />
       </body>
     </html>
   )

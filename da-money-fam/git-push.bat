@@ -34,7 +34,7 @@ if not exist ".git" (
 )
 
 :: Ensure the correct remote is set
-set "REMOTE_URL=https://github.com/sheluhgitH/da-money-fam.git"
+set "REMOTE_URL=https://github.com/SheluhgitH/da-money-fam.git"
 "%GIT_EXE%" remote get-url origin >nul 2>nul
 if %errorlevel% neq 0 (
     echo Adding remote origin: %REMOTE_URL%
@@ -57,10 +57,9 @@ if "!commit_msg!"=="" set "commit_msg=Update site content and features"
 
 echo.
 echo [5/5] Pushing to GitHub...
-echo Note: Pushing to both repositories to ensure damoneyfam.com updates...
-
+echo IMPORTANT: Vercel (damoneyfam.com) watches ORIGIN — both pushes are required.
 echo.
-echo Pushing to: https://github.com/sheluhgitH/da-money-fam.git (origin)
+echo Pushing to: https://github.com/SheluhgitH/da-money-fam.git (origin - Vercel deploys from this)
 "%GIT_EXE%" push -u origin main || "%GIT_EXE%" push -u origin master
 
 echo.
