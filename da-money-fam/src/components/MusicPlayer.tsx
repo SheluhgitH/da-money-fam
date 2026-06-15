@@ -4,7 +4,8 @@ import Image from 'next/image'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, useInView } from 'framer-motion'
 import type { PublicSong } from '@/types/store'
-import { PREVIEW_DURATION_SEC } from '@/lib/audio-constants'
+import { PREVIEW_DURATION_SEC, pauseAllExceptAudio } from '@/lib/audio-constants'
+import { scrollRevealInView } from '@/lib/motion'
 
 const FADE_DURATION_MS = 1000
 const FADE_INTERVAL_MS = 50
@@ -24,8 +25,8 @@ export default function MusicPlayer() {
   const [loading, setLoading] = useState(true)
 
   const audioRef = useRef<HTMLAudioElement>(null)
-  const sectionRef = useRef(null)
-  const isInView = useInView(sectionRef, { once: false, amount: 0.3 })
+  const headerRef = useRef(null)
+  const isInView = useInView(headerRef, scrollRevealInView)
   const volumeRef = useRef(volume)
   const songsRef = useRef<PublicSong[]>([])
   const currentSongIdRef = useRef<string | null>(null)
@@ -158,25 +159,33 @@ export default function MusicPlayer() {
     if (!currentSong || !audio) return
 
     let cancelled = false
+    let playbackStarted = false
 
     const startPlayback = () => {
-      if (cancelled) return
+      if (cancelled || playbackStarted) return
+      playbackStarted = true
+      pauseAllExceptAudio(audio)
       audio.play().catch(() => {
         if (!cancelled) setIsPlaying(false)
       })
     }
 
+    audio.pause()
+    audio.currentTime = 0
     audio.src = `/api/preview/${currentSong.id}`
-    audio.addEventListener('canplay', startPlayback, { once: true })
+
+    const onCanPlay = () => startPlayback()
+    audio.addEventListener('canplay', onCanPlay, { once: true })
     audio.load()
 
     if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      audio.removeEventListener('canplay', onCanPlay)
       startPlayback()
     }
 
     return () => {
       cancelled = true
-      audio.removeEventListener('canplay', startPlayback)
+      audio.removeEventListener('canplay', onCanPlay)
     }
   }, [currentSong])
 
@@ -190,6 +199,7 @@ export default function MusicPlayer() {
         setIsPlaying(false)
       })
     } else {
+      pauseAllExceptAudio(audio)
       audio.play().catch(console.error)
     }
   }
@@ -213,21 +223,22 @@ export default function MusicPlayer() {
   }
 
   return (
-    <section id="music" ref={sectionRef} className="max-w-7xl mx-auto">
+    <section id="music" className="max-w-7xl mx-auto">
       <audio ref={audioRef} preload="auto" controlsList="nodownload noplaybackrate" onContextMenu={(e) => e.preventDefault()} />
       <motion.div
+        ref={headerRef}
         initial="hidden"
         animate={isInView ? 'visible' : 'hidden'}
         variants={containerVariants}
-        className="text-center mb-16"
+        className="text-center mb-8 md:mb-12 lg:mb-16"
       >
         <motion.h2
           variants={itemVariants}
-          className="font-serif text-4xl md:text-6xl font-bold mb-4 gold-gradient"
+          className="font-serif text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold mb-3 md:mb-4 gold-gradient"
         >
           Now Playing
         </motion.h2>
-        <motion.p variants={itemVariants} className="text-gray-400 text-lg">
+        <motion.p variants={itemVariants} className="text-gray-400 text-sm sm:text-base md:text-lg">
           {PREVIEW_DURATION_SEC}s previews — purchase to unlock full tracks
         </motion.p>
       </motion.div>
@@ -236,17 +247,17 @@ export default function MusicPlayer() {
         initial="hidden"
         animate={isInView ? 'visible' : 'hidden'}
         variants={containerVariants}
-        className="mb-12"
+        className="mb-8 md:mb-12"
       >
         <motion.div
           variants={itemVariants}
-          className="glass-gold rounded-2xl p-8 md:p-12 max-w-4xl mx-auto"
+          className="glass-gold rounded-2xl p-4 sm:p-6 md:p-10 lg:p-12 max-w-4xl mx-auto"
         >
           {loading ? (
             <p className="text-center text-gray-500">Loading...</p>
           ) : (
-            <div className="flex flex-col md:flex-row items-center gap-8">
-              <div className="w-64 h-64 bg-gradient-to-br from-gold to-gold-dark rounded-xl flex items-center justify-center neon-border relative overflow-hidden">
+            <div className="flex flex-col md:flex-row items-center gap-4 sm:gap-6 md:gap-8">
+              <div className="w-40 h-40 sm:w-48 sm:h-48 md:w-64 md:h-64 bg-gradient-to-br from-gold to-gold-dark rounded-xl flex items-center justify-center neon-border relative overflow-hidden shrink-0">
                 {currentSong?.album_cover_path ? (
                   <Image
                     src={currentSong.album_cover_path}
@@ -263,10 +274,10 @@ export default function MusicPlayer() {
               </div>
 
               <div className="flex-1 text-center md:text-left">
-                <h3 className="font-serif text-3xl font-bold mb-2">
+                <h3 className="font-serif text-xl sm:text-2xl md:text-3xl font-bold mb-1 md:mb-2">
                   {currentSong?.title || 'No song playing'}
                 </h3>
-                <p className="text-gold text-lg mb-4">{currentSong?.artist || ''}</p>
+                <p className="text-gold text-sm sm:text-base md:text-lg mb-3 md:mb-4">{currentSong?.artist || ''}</p>
 
                 <div className="mb-6">
                   <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
@@ -283,7 +294,7 @@ export default function MusicPlayer() {
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={togglePlay}
-                    className="w-16 h-16 bg-gold rounded-full flex items-center justify-center neon-border"
+                    className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gold rounded-full flex items-center justify-center neon-border"
                   >
                     {isPlaying ? (
                       <svg className="w-8 h-8 text-black" fill="currentColor" viewBox="0 0 24 24">

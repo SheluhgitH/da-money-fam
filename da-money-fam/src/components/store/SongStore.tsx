@@ -6,7 +6,10 @@ import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import type { PublicSong } from '@/types/store'
 import PreviewPlayer from './PreviewPlayer'
+import SongComments from './SongComments'
+import SongShare from './SongShare'
 import { useAuth } from '@/contexts/AuthProvider'
+import { scrollRevealViewport, scrollRevealInView } from '@/lib/motion'
 
 const PromotedAlbumAnimation = dynamic(() => import('./PromotedAlbumAnimation'), {
   ssr: false,
@@ -31,16 +34,17 @@ function SongCard({
   return (
     <motion.div
       layout
+      id={`song-${song.id}`}
       initial={{ opacity: 0, y: 30 }}
       whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
+      viewport={scrollRevealViewport}
       whileHover={{ y: -8 }}
       onHoverStart={() => setIsHovered(true)}
       onHoverEnd={() => setIsHovered(false)}
-      className={`relative overflow-hidden rounded-2xl border transition-all duration-500 ${
+      className={`relative overflow-hidden rounded-2xl border transition-all duration-500 backdrop-blur-sm ${
         isFeatured
-          ? 'border-gold/50 bg-gradient-to-br from-gold/10 to-black/60 md:col-span-2 lg:col-span-2'
-          : 'border-white/10 bg-black/40'
+          ? 'border-gold/50 bg-gradient-to-br from-gold/10 via-black/50 to-black/70 md:col-span-2 lg:col-span-2 shadow-[0_0_40px_rgba(212,175,55,0.08)]'
+          : 'border-white/10 bg-black/50 hover:border-gold/30 hover:shadow-[0_8px_30px_rgba(0,0,0,0.35)]'
       } ${song.is_promoted ? 'neon-border' : ''}`}
     >
       {song.is_promoted && (
@@ -77,7 +81,7 @@ function SongCard({
         </div>
       )}
 
-      <div className={`relative ${isFeatured ? 'h-72 md:h-96' : 'h-56'}`}>
+      <div className={`relative ${isFeatured ? 'h-44 sm:h-56 md:h-72 lg:h-96' : 'h-44 sm:h-48 md:h-56'}`}>
         {song.is_promoted && isHovered && (
           <PromotedAlbumAnimation coverUrl={song.album_cover_path} />
         )}
@@ -109,7 +113,9 @@ function SongCard({
           ) : (
             <span className="text-purple-300 text-xs font-bold uppercase tracking-wider">Preview Only</span>
           )}
-          {song.owned ? (
+          <div className="flex items-center gap-2">
+            <SongShare song={song} />
+            {song.owned ? (
             <Link
               href="/library"
               className="bg-white/10 text-gold text-xs font-bold px-5 py-2 rounded-full uppercase tracking-wider hover:bg-gold hover:text-black transition-colors"
@@ -129,7 +135,10 @@ function SongCard({
               Exclusive
             </span>
           )}
+          </div>
         </div>
+
+        <SongComments songId={song.id} initialCount={song.comment_count} />
       </div>
 
       {song.is_promoted && (
@@ -150,8 +159,8 @@ export default function SongStore() {
   const [purchasingId, setPurchasingId] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-  const ref = useRef(null)
-  const isInView = useInView(ref, { once: true, amount: 0.2 })
+  const headerRef = useRef(null)
+  const isInView = useInView(headerRef, scrollRevealInView)
 
   const loadSongs = () => {
     fetch('/api/songs')
@@ -166,6 +175,15 @@ export default function SongStore() {
 
   useEffect(() => {
     loadSongs()
+
+    const params = new URLSearchParams(window.location.search)
+    const songId = params.get('song')
+    if (songId) {
+      setTimeout(() => {
+        const el = document.getElementById(`song-${songId}`)
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 600)
+    }
   }, [user])
 
   const handlePurchase = async (song: PublicSong) => {
@@ -214,18 +232,19 @@ export default function SongStore() {
   const regular = songs.filter((s) => !s.is_promoted)
 
   return (
-    <section id="store" ref={ref} className="max-w-7xl mx-auto">
+    <section id="store" className="max-w-7xl mx-auto">
       <motion.div
-        initial={{ opacity: 0, y: 40 }}
+        ref={headerRef}
+        initial={{ opacity: 0, y: 24 }}
         animate={isInView ? { opacity: 1, y: 0 } : {}}
-        transition={{ duration: 0.8 }}
-        className="text-center mb-16"
+        transition={{ duration: 0.6 }}
+        className="text-center mb-8 md:mb-12 lg:mb-16"
       >
-        <span className="text-gold text-xs font-bold tracking-[5px] uppercase">New Drops</span>
-        <h2 className="font-serif text-4xl md:text-6xl font-bold mt-4 gold-gradient">
+        <span className="text-gold text-[10px] sm:text-xs font-bold tracking-[3px] sm:tracking-[5px] uppercase">New Drops</span>
+        <h2 className="font-serif text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold mt-3 md:mt-4 gold-gradient">
           Buy The Music
         </h2>
-        <p className="text-gray-400 text-lg mt-4 max-w-2xl mx-auto">
+        <p className="text-gray-400 text-sm sm:text-base md:text-lg mt-3 md:mt-4 max-w-2xl mx-auto px-2">
           Preview 25 seconds free. Sign in to save favorites and unlock your library after purchase.
         </p>
       </motion.div>

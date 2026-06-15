@@ -1,5 +1,7 @@
 'use client'
 
+import { scrollRevealViewport } from '@/lib/motion'
+
 import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { CONFIG } from '../config'
@@ -126,20 +128,20 @@ export default function Footer() {
     }
   }
   return (
-    <footer className="relative py-20 px-4 md:px-8 lg:px-16 overflow-hidden">
+    <footer className="relative py-12 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16 overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-t from-black to-transparent" />
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gold to-transparent" />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.8 }}
+        viewport={scrollRevealViewport}
+        transition={{ duration: 0.5 }}
         className="max-w-7xl mx-auto relative z-10"
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12 mb-8 md:mb-12 lg:mb-16">
           <div>
-            <h3 className="font-serif text-3xl font-bold gold-gradient mb-4">
+            <h3 className="font-serif text-xl sm:text-2xl md:text-3xl font-bold gold-gradient mb-3 md:mb-4">
               DA MONEY FAM
             </h3>
             <p className="text-gray-400 mb-6">

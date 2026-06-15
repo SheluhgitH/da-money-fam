@@ -3,6 +3,7 @@
 import { motion, useInView } from 'framer-motion'
 import { useRef } from 'react'
 import { scrollToSection } from '@/utils/scrollToSection'
+import { scrollRevealInView } from '@/lib/motion'
 
 const pricingPackages = [
   {
@@ -55,8 +56,8 @@ const pricingPackages = [
 ]
 
 export default function PricingSection() {
-  const ref = useRef(null)
-  const isInView = useInView(ref, { once: false, amount: 0.3 })
+  const gridRef = useRef(null)
+  const isInView = useInView(gridRef, scrollRevealInView)
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -80,30 +81,31 @@ export default function PricingSection() {
   }
 
   return (
-    <section id="pricing" ref={ref} className="max-w-7xl mx-auto py-20">
+    <section id="pricing" className="max-w-7xl mx-auto py-10 md:py-16 lg:py-20">
       <div className="px-4 md:px-8 lg:px-16">
         <motion.div
+        ref={gridRef}
         initial="hidden"
         animate={isInView ? "visible" : "hidden"}
         variants={containerVariants}
-        className="grid grid-cols-1 md:grid-cols-2 gap-8"
+        className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 lg:gap-8"
       >
         {pricingPackages.map((pkg) => (
           <motion.div
             key={pkg.id}
             variants={itemVariants}
             whileHover={{ y: -5 }}
-            className="glass rounded-2xl p-8 transition-all duration-500 hover:border-gold/50 hover:neon-border"
+            className="glass rounded-2xl p-4 sm:p-6 md:p-8 transition-all duration-500 hover:border-gold/50 hover:neon-border"
           >
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-gold to-gold-dark rounded-xl flex items-center justify-center neon-border text-black">
+            <div className="flex items-center gap-3 md:gap-4 mb-4 md:mb-6">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-gold to-gold-dark rounded-xl flex items-center justify-center neon-border text-black shrink-0">
                 {pkg.icon}
               </div>
-              <div>
-                <h3 className="font-serif text-2xl font-bold mb-1">
+              <div className="min-w-0">
+                <h3 className="font-serif text-lg sm:text-xl md:text-2xl font-bold mb-1">
                   {pkg.title}
                 </h3>
-                <p className="text-gold font-bold text-xl">
+                <p className="text-gold font-bold text-base sm:text-lg md:text-xl">
                   {pkg.price}
                 </p>
               </div>

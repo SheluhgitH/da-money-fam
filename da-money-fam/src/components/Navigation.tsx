@@ -6,12 +6,15 @@ import Link from 'next/link'
 import { scrollToSection } from '../utils/scrollToSection'
 import { useAuth } from '@/contexts/AuthProvider'
 import { useSiteSettings } from '@/contexts/SiteSettingsProvider'
+import UserAvatar from '@/components/UserAvatar'
+import type { UserProfile } from '@/types/store'
 
 export default function Navigation() {
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { user, loading, signOut } = useAuth()
   const { showAnimations, toggleAnimations } = useSiteSettings()
+  const [profile, setProfile] = useState<UserProfile | null>(null)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -20,6 +23,18 @@ export default function Navigation() {
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  useEffect(() => {
+    if (!user) {
+      setProfile(null)
+      return
+    }
+
+    fetch('/api/user/profile')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setProfile(data?.profile || null))
+      .catch(() => setProfile(null))
+  }, [user])
 
   const navLinks = [
     { name: 'Home', href: '#home' },
@@ -36,11 +51,11 @@ export default function Navigation() {
       animate={{ y: 0 }}
       transition={{ duration: 0.8, ease: 'easeOut' }}
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-        isScrolled ? 'glass py-4' : 'bg-transparent py-6'
+        isScrolled ? 'glass py-3 md:py-4' : 'bg-transparent py-4 md:py-6'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 md:px-8 flex justify-between items-center">
-        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-2xl font-serif font-bold gold-gradient">
+        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-lg sm:text-xl md:text-2xl font-serif font-bold gold-gradient">
           Da Money Fam
         </button>
 
@@ -72,11 +87,16 @@ export default function Navigation() {
                       </label>
                     </div>
                     <Link
-                      href="/account"
-                      className="w-9 h-9 rounded-full bg-gold/20 border border-gold/40 flex items-center justify-center text-gold text-xs font-bold hover:bg-gold hover:text-black transition-colors"
-                      title="Account"
+                      href="/account/profile"
+                      className="hover:opacity-90 transition-opacity"
+                      title={profile?.display_name || 'Account'}
                     >
-                      {user.email?.[0]?.toUpperCase() || 'U'}
+                      <UserAvatar
+                        avatarUrl={profile?.avatar_url}
+                        displayName={profile?.display_name}
+                        email={user.email}
+                        size="md"
+                      />
                     </Link>
                   </div>
                 ) : (
@@ -131,8 +151,17 @@ export default function Navigation() {
                     <Link href="/coin-wallet" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
                       Coinz
                     </Link>
-                    <Link href="/account" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
-                      Account
+                    <Link href="/account/profile" className="flex items-center gap-3 text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
+                      <UserAvatar
+                        avatarUrl={profile?.avatar_url}
+                        displayName={profile?.display_name}
+                        email={user.email}
+                        size="sm"
+                      />
+                      <span>{profile?.display_name || 'Profile'}</span>
+                    </Link>
+                    <Link href="/account" className="text-lg uppercase tracking-widest text-gray-400" onClick={() => setIsMenuOpen(false)}>
+                      Account Settings
                     </Link>
                     <div className="flex items-center justify-between text-lg uppercase tracking-widest text-gray-300">
                       <span>Animations</span>

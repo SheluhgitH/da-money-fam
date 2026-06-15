@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { createServiceClient } from '@/lib/supabase/server'
-import type { UserProfile, UserStats, LibraryItem } from '@/types/store'
+import type { UserProfile, UserStats, LibraryItem, SongComment } from '@/types/store'
 import { getAllOrders, getSongById } from '@/lib/store'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
@@ -308,4 +308,137 @@ export async function unlockAchievement(userId: string, achievementId: string): 
   if (!list.includes(achievementId)) list.push(achievementId)
   all[userId] = list
   await writeJsonFile('user-achievements.json', all)
+}
+
+export async function getSongComments(songId: string): Promise<SongComment[]> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('song_comments')
+      .select('id, song_id, user_id, comment_text, created_at')
+      .eq('song_id', songId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    if (error) throw new Error(error.message)
+
+    const userIds = [...new Set((data || []).map((row) => String(row.user_id)))]
+    const profileMap = new Map<string, UserProfile>()
+
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, display_name, avatar_url')
+        .in('id', userIds)
+
+      for (const profile of profiles || []) {
+        profileMap.set(String(profile.id), {
+          id: String(profile.id),
+          display_name: profile.display_name ? String(profile.display_name) : null,
+          avatar_url: profile.avatar_url ? String(profile.avatar_url) : null,
+          created_at: '',
+        })
+      }
+    }
+
+    return (data || []).map((row) => {
+      const profile = profileMap.get(String(row.user_id))
+      return {
+        id: String(row.id),
+        song_id: String(row.song_id),
+        user_id: String(row.user_id),
+        comment_text: String(row.comment_text),
+        created_at: String(row.created_at),
+        display_name: profile?.display_name ?? null,
+        avatar_url: profile?.avatar_url ?? null,
+      }
+    })
+  }
+
+  const comments = await readJsonFile<SongComment[]>('song-comments.json', [])
+  const profiles = await readJsonFile<UserProfile[]>('user-profiles.json', [])
+  return comments
+    .filter((c) => c.song_id === songId)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .map((c) => {
+      const profile = profiles.find((p) => p.id === c.user_id)
+      return {
+        ...c,
+        display_name: profile?.display_name ?? c.display_name ?? null,
+        avatar_url: profile?.avatar_url ?? c.avatar_url ?? null,
+      }
+    })
+}
+
+export async function addSongComment(
+  userId: string,
+  songId: string,
+  commentText: string
+): Promise<SongComment> {
+  const trimmed = commentText.trim()
+  if (!trimmed || trimmed.length > 500) {
+    throw new Error('Comment must be between 1 and 500 characters')
+  }
+
+  const now = new Date().toISOString()
+
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('song_comments')
+      .insert({ song_id: songId, user_id: userId, comment_text: trimmed })
+      .select('id, song_id, user_id, comment_text, created_at')
+      .single()
+    if (error) throw new Error(error.message)
+
+    const profile = await getUserProfile(userId)
+    return {
+      id: String(data.id),
+      song_id: String(data.song_id),
+      user_id: String(data.user_id),
+      comment_text: String(data.comment_text),
+      created_at: String(data.created_at),
+      display_name: profile?.display_name ?? null,
+      avatar_url: profile?.avatar_url ?? null,
+    }
+  }
+
+  const comments = await readJsonFile<SongComment[]>('song-comments.json', [])
+  const profile = await getUserProfile(userId)
+  const comment: SongComment = {
+    id: `comment-${Date.now()}`,
+    song_id: songId,
+    user_id: userId,
+    comment_text: trimmed,
+    created_at: now,
+    display_name: profile?.display_name ?? null,
+    avatar_url: profile?.avatar_url ?? null,
+  }
+  comments.push(comment)
+  await writeJsonFile('song-comments.json', comments)
+  return comment
+}
+
+export async function getSongCommentCounts(songIds: string[]): Promise<Record<string, number>> {
+  if (songIds.length === 0) return {}
+
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data } = await supabase.from('song_comments').select('song_id').in('song_id', songIds)
+    const counts: Record<string, number> = {}
+    for (const row of data || []) {
+      const id = String(row.song_id)
+      counts[id] = (counts[id] || 0) + 1
+    }
+    return counts
+  }
+
+  const comments = await readJsonFile<SongComment[]>('song-comments.json', [])
+  const counts: Record<string, number> = {}
+  for (const comment of comments) {
+    if (songIds.includes(comment.song_id)) {
+      counts[comment.song_id] = (counts[comment.song_id] || 0) + 1
+    }
+  }
+  return counts
 }

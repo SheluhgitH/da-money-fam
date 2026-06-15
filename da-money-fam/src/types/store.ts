@@ -32,6 +32,17 @@ export interface PublicSong {
   preview_available: boolean
   owned?: boolean
   is_favorited?: boolean
+  comment_count?: number
+}
+
+export interface SongComment {
+  id: string
+  song_id: string
+  user_id: string
+  comment_text: string
+  created_at: string
+  display_name: string | null
+  avatar_url: string | null
 }
 
 export interface PurchaseOrder {

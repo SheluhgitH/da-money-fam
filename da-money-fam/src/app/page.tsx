@@ -25,7 +25,7 @@ export default function Home() {
         <HeroSection />
       </section>
 
-      <section className="relative py-20 px-4 md:px-8 lg:px-16">
+      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
         <SongStore />
       </section>
 
@@ -33,11 +33,19 @@ export default function Home() {
         <HeroVideoSection />
       </section>
 
-      <section className="relative py-20 px-4 md:px-8 lg:px-16">
+      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
         <ArtistRoster />
       </section>
 
-      <section className="relative py-20 px-4 md:px-8 lg:px-16">
+      <section className="relative">
+        <MerchStore />
+      </section>
+
+      <section className="relative px-4 md:px-8 lg:px-16 py-10 md:py-16">
+        <DmfReputationCard />
+      </section>
+
+      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
         <EventCalendar />
       </section>
 
@@ -45,23 +53,15 @@ export default function Home() {
         <PricingVideoSection />
       </section>
 
-      <section className="relative py-20 px-4 md:px-8 lg:px-16">
+      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
         <VideoEditingSection />
       </section>
 
-      <section className="relative">
-        <MerchStore />
-      </section>
-
-      <section className="relative">
-        <DmfReputationCard />
-      </section>
-
-      <section className="relative py-20 px-4 md:px-8 lg:px-16">
+      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
         <PricingSection />
       </section>
 
-      <section className="relative py-20 px-4 md:px-8 lg:px-16">
+      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
         <MusicPlayer />
       </section>
 

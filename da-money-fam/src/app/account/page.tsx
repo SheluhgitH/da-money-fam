@@ -20,13 +20,17 @@ export default function AccountPage() {
 
     fetch('/api/user/profile')
       .then(async (r) => {
-        const text = await r.text();
-        console.log('AccountPage: Raw response from /api/user/profile:', text);
-        if (!r.ok) {
-          throw new Error(`HTTP error! status: ${r.status}, body: ${text}`);
-        }
-        return JSON.parse(text);
+        if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`)
+        return r.json()
       })
+      .then((data) => {
+        setEmail(data.email || user.email || '')
+        if (data.profile) {
+          setDisplayName(data.profile.display_name || '')
+          setAvatarUrl(data.profile.avatar_url || '')
+        }
+      })
+      .catch(console.error)
   }, [user, authLoading])
 
   const handleSave = async (e: React.FormEvent) => {
@@ -67,6 +71,22 @@ export default function AccountPage() {
       <div className="max-w-lg mx-auto glass-gold rounded-2xl p-8">
         <h1 className="font-serif text-3xl gold-gradient mb-2">Your Account</h1>
         <p className="text-gray-400 text-sm mb-8">Manage your profile and preferences</p>
+
+        <div className="flex justify-center mb-6">
+          <div className="relative">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Avatar preview"
+                className="w-20 h-20 rounded-full object-cover border-2 border-gold/40"
+              />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-gold/20 border-2 border-gold/40 flex items-center justify-center text-gold text-2xl font-bold">
+                {displayName?.[0]?.toUpperCase() || email?.[0]?.toUpperCase() || 'U'}
+              </div>
+            )}
+          </div>
+        </div>
 
         <form onSubmit={handleSave} className="space-y-4">
           <div>
@@ -110,6 +130,12 @@ export default function AccountPage() {
         </form>
 
         <div className="mt-8 pt-8 border-t border-white/10 space-y-3">
+          <Link
+            href="/account/profile"
+            className="block text-center py-3 border border-gold/30 text-gold rounded-full text-xs font-bold uppercase tracking-wider hover:bg-gold/10 transition-colors"
+          >
+            View Profile Dashboard
+          </Link>
           <Link
             href="/library"
             className="block text-center py-3 border border-gold/30 text-gold rounded-full text-xs font-bold uppercase tracking-wider hover:bg-gold/10 transition-colors"

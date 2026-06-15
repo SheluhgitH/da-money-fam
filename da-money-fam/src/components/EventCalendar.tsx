@@ -3,6 +3,7 @@
 import { motion, useInView } from 'framer-motion'
 import { useRef } from 'react'
 import { CONFIG } from '@/config'
+import { scrollRevealInView } from '@/lib/motion'
 
 const events = [
   {
@@ -35,8 +36,8 @@ const events = [
 ]
 
 export default function EventCalendar() {
-  const ref = useRef(null)
-  const isInView = useInView(ref, { once: false, amount: 0.3 })
+  const headerRef = useRef(null)
+  const isInView = useInView(headerRef, scrollRevealInView)
 
   const getTicketUrl = (event: (typeof events)[0]) =>
     `mailto:${CONFIG.CONTACT_EMAIL}?subject=${encodeURIComponent(`Tickets: ${event.title}`)}&body=${encodeURIComponent(
@@ -65,22 +66,23 @@ export default function EventCalendar() {
   }
 
   return (
-    <section id="events" ref={ref} className="max-w-7xl mx-auto">
+    <section id="events" className="max-w-7xl mx-auto">
       <motion.div
+        ref={headerRef}
         initial="hidden"
         animate={isInView ? "visible" : "hidden"}
         variants={containerVariants}
-        className="text-center mb-16"
+        className="text-center mb-8 md:mb-12 lg:mb-16"
       >
         <motion.h2
           variants={itemVariants}
-          className="font-serif text-4xl md:text-6xl font-bold mb-4 gold-gradient"
+          className="font-serif text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold mb-3 md:mb-4 gold-gradient"
         >
           Upcoming Events
         </motion.h2>
         <motion.p
           variants={itemVariants}
-          className="text-gray-400 text-lg"
+          className="text-gray-400 text-sm sm:text-base md:text-lg"
         >
           Experience Da Money Fam live
         </motion.p>
@@ -94,7 +96,7 @@ export default function EventCalendar() {
       >
         <div className="absolute left-8 md:left-1/2 top-0 bottom-0 w-px bg-gradient-to-b from-gold via-gold-dark to-transparent" />
         
-        <div className="space-y-12">
+        <div className="space-y-6 md:space-y-12">
           {events.map((event, index) => (
             <motion.div
               key={event.id}
@@ -107,7 +109,7 @@ export default function EventCalendar() {
                 className={`w-full md:w-1/2 ${index % 2 === 0 ? 'md:pr-16 md:text-right' : 'md:pl-16'}`}
                 whileHover={{ x: index % 2 === 0 ? 5 : -5 }}
               >
-                <div className="glass rounded-2xl p-8 transition-all duration-500 hover:border-gold/50 hover:neon-border">
+                <div className="glass rounded-2xl p-4 sm:p-6 md:p-8 transition-all duration-500 hover:border-gold/50 hover:neon-border bg-black/30 backdrop-blur-md border border-white/5 shadow-[0_10px_40px_rgba(0,0,0,0.25)]">
                   <div className="flex items-center gap-4 mb-4 md:justify-start">
                     <div className={`flex flex-col items-center md:flex-row ${index % 2 === 0 ? 'md:flex-row-reverse' : ''}`}>
                       <div className="w-16 h-16 bg-gradient-to-br from-gold to-gold-dark rounded-xl flex items-center justify-center neon-border">

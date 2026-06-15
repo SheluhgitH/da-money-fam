@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getPublishedSongs, toPublicSong } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/user'
-import { getUserFavorites, getUserOwnedSongIds } from '@/lib/user-store'
+import { getUserFavorites, getUserOwnedSongIds, getSongCommentCounts } from '@/lib/user-store'
 import { getRecommendations } from '@/lib/recommendations'
 
 export const dynamic = 'force-dynamic'
@@ -26,12 +26,18 @@ export async function GET() {
       })
     )
 
+    const commentCounts = await getSongCommentCounts(publicSongs.map((s) => s.id))
+    const songsWithCounts = publicSongs.map((song) => ({
+      ...song,
+      comment_count: commentCounts[song.id] || 0,
+    }))
+
     const recommendations =
-      user && publicSongs.length > 0
-        ? getRecommendations(publicSongs, favoriteIds, ownedIds)
+      user && songsWithCounts.length > 0
+        ? getRecommendations(songsWithCounts, favoriteIds, ownedIds)
         : []
 
-    return NextResponse.json({ songs: publicSongs, recommendations })
+    return NextResponse.json({ songs: songsWithCounts, recommendations })
   } catch (error) {
     console.error('GET /api/songs error:', error)
     return NextResponse.json({ error: 'Failed to load songs' }, { status: 500 })

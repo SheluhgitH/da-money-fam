@@ -4,70 +4,75 @@ import Image from 'next/image'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { useState, useRef } from 'react'
 import { CONFIG } from '@/config'
+import { scrollRevealViewport } from '@/lib/motion'
 
-function merchInquiryUrl(productName: string, price: string) {
-  return `mailto:${CONFIG.CONTACT_EMAIL}?subject=${encodeURIComponent(`Merch: ${productName}`)}&body=${encodeURIComponent(
-    `Hi Da Money Fam,\n\nI'm interested in purchasing:\n\nItem: ${productName}\nPrice: ${price}\n\nPlease send availability and shipping details.\n\nThanks!`
-  )}`
+type ClothingType = 't-shirt' | 'sweater' | 'hoodie' | 'jeans'
+
+const MERCH_PRICES: Record<ClothingType, number> = {
+  't-shirt': 75,
+  sweater: 120,
+  hoodie: 175,
+  jeans: 150,
+}
+
+function formatPrice(amount: number) {
+  return `$${amount.toFixed(2)}`
+}
+
+function merchInquiryUrl() {
+  return 'https://checkout.stripe.com/c/pay/cs_live_a1fBCMfT05xPb71sCnwnGQNOTP553I3vh8J6ja1Qtwqx1XVovN6TWDGXkS#fidnandhYHdWcXxpYCc%2FJ2FgY2RwaXEnKSdicGRmZGhqaWBTZHdsZGtxJz8nZmprcXdqaScpJ2R1bE5gfCc%2FJ3VuWmlsc2BaMDRWcXI9SENHVmNVNURxPGd3d3V2QEhgTzdPcDA9f2R9aVF%2Fc2JzdU9wVnEzREJQPUlpM1xTaEdEajE8aG98MzM8NUNtUTVdRnVsUnJfVHBEYTVtUVxOb2Q1NWJSVklKTENsJyknY3dqaFZgd3Ngdyc%2FcXdwYCknZ2RmbmJ3anBrYUZqaWp3Jz8nJmNjY2NjYycpJ2lkfGpwcVF8dWAnPyd2bGtiaWBabHFgaCcpJ2BrZGdpYFVpZGZgbWppYWB3dic%2FcXdwYHgl'
 }
 
 interface Product {
-    id: number;
-    name: string;
-    category: string;
-    image: string;
-    price: string;
-    link: string;
-    rotate: number;
-    top: string;
-    left: string;
+  id: number
+  name: string
+  category: string
+  type: ClothingType
+  image: string
+  price: string
+  link: string
+  rotate: number
+  top: string
+  left: string
 }
 
 const products: Product[] = [
-    {
-        id: 1,
-        name: "Custom DMF Spray Hoodie",
-        category: "DMF APPAREL",
-        image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=800&auto=format&fit=crop",
-        price: "$120.00",
-        link: merchInquiryUrl("Custom DMF Spray Hoodie", "$120.00"),
-        rotate: -5,
-        top: "10%",
-        left: "15%"
-    },
-    {
-        id: 2,
-        name: "Bleached Luxury Sweater",
-        category: "HAND-CRAFTED",
-        image: "https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?q=80&w=800&auto=format&fit=crop",
-        price: "$185.00",
-        link: merchInquiryUrl("Bleached Luxury Sweater", "$185.00"),
-        rotate: 8,
-        top: "15%",
-        left: "65%"
-    },
-    {
-        id: 3,
-        name: "Custom Sprayed Jeans",
-        category: "DESIGNER DENIM",
-        image: "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?q=80&w=800&auto=format&fit=crop",
-        price: "$250.00",
-        link: merchInquiryUrl("Custom Sprayed Jeans", "$250.00"),
-        rotate: -12,
-        top: "55%",
-        left: "35%"
-    },
-    {
-        id: 4,
-        name: "DMF Gold Chain Tee",
-        category: "ESSENTIALS",
-        image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?q=80&w=800&auto=format&fit=crop",
-        price: "$85.00",
-        link: merchInquiryUrl("DMF Gold Chain Tee", "$85.00"),
-        rotate: 5,
-        top: "60%",
-        left: "75%"
-    }
+  {
+    id: 1,
+    name: 'Custom 1of1 DMF T-Shirt',
+    category: 'T-SHIRT',
+    type: 't-shirt',
+    image: '/store/merch/custom-dmf-t-shirt.png',
+    price: formatPrice(MERCH_PRICES['t-shirt']),
+    link: merchInquiryUrl(),
+    rotate: -6,
+    top: '14%',
+    left: '12%',
+  },
+  {
+    id: 2,
+    name: 'DMF 1of1 Sweater — Style 1',
+    category: 'SWEATER',
+    type: 'sweater',
+    image: '/store/merch/dmf-sweater-1.png',
+    price: formatPrice(MERCH_PRICES.sweater),
+    link: merchInquiryUrl(),
+    rotate: 8,
+    top: '12%',
+    left: '58%',
+  },
+  {
+    id: 3,
+    name: 'DMF 1of1 Sweater — Style 2',
+    category: 'SWEATER',
+    type: 'sweater',
+    image: '/store/merch/dmf-sweater-2.png',
+    price: formatPrice(MERCH_PRICES.sweater),
+    link: merchInquiryUrl(),
+    rotate: -10,
+    top: '52%',
+    left: '34%',
+  },
 ]
 
 const FloatingProduct = ({ product }: { product: Product }) => {
@@ -118,12 +123,12 @@ const FloatingProduct = ({ product }: { product: Product }) => {
             }}
             initial={{ y: 0 }}
             animate={{
-                y: [0, -20, 0],
-                rotate: [product.rotate, product.rotate + 2, product.rotate]
+                y: [0, -12, 0],
+                rotate: [product.rotate, product.rotate + 1.5, product.rotate]
             }}
             transition={{
-                y: { duration: 4, repeat: Infinity, ease: "easeInOut" },
-                rotate: { duration: 5, repeat: Infinity, ease: "easeInOut" }
+                y: { duration: 5, repeat: Infinity, ease: "easeInOut" },
+                rotate: { duration: 6, repeat: Infinity, ease: "easeInOut" }
             }}
             className="absolute z-10 cursor-pointer group"
         >
@@ -132,32 +137,22 @@ const FloatingProduct = ({ product }: { product: Product }) => {
                 <div className="absolute -inset-4 bg-gold/20 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                 {/* Product Card */}
-                <div className="relative w-64 md:w-80 aspect-[3/4] rounded-2xl overflow-hidden border border-white/10 bg-zinc-900/40 backdrop-blur-xl shadow-2xl transition-transform duration-500 group-hover:scale-105 group-hover:border-gold/50">
-                    <Image
-                        src={product.image}
-                        alt={product.name}
-                        width={256} // w-64, aspect-[3/4] -> 256 / 3 * 4 = 341.33
-                        height={341}
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-70 group-hover:opacity-100"
-                    />
+                <div className="relative w-64 md:w-80 aspect-[3/4] rounded-2xl transition-transform duration-500 group-hover:scale-105 group-hover:border-gold/50">
+                        <Image
+                            src={product.image}
+                            alt={product.name}
+                            width={256} // w-64, aspect-[3/4] -> 256 / 3 * 4 = 341.33
+                            height={341}
+                            className="w-full h-full object-contain transition-transform duration-700 opacity-100 group-hover:scale-100"
+                        />
 
                     {/* Content Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent flex flex-col justify-end p-6">
+                    <div className="absolute inset-0 flex flex-col justify-end p-6">
                         <span className="text-gold text-[10px] font-bold tracking-[3px] uppercase mb-1">{product.category}</span>
                         <h3 className="text-white text-xl font-bold mb-1">{product.name}</h3>
                         <p className="text-gold/80 font-mono text-lg">{product.price}</p>
                     </div>
 
-                    {/* Quick Buy Button Overlay */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: isHovered ? 1 : 0, y: isHovered ? 0 : 20 }}
-                        className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-sm"
-                    >
-                        <div className="bg-white text-black px-6 py-3 rounded-full font-bold uppercase tracking-widest text-xs hover:bg-gold transition-colors">
-                            Purchase Now
-                        </div>
-                    </motion.div>
                 </div>
             </a>
         </motion.div>
@@ -166,7 +161,7 @@ const FloatingProduct = ({ product }: { product: Product }) => {
 
 export default function MerchStore() {
     return (
-        <section id="merch" className="relative h-[120vh] w-full bg-matte-black overflow-hidden py-24">
+        <section id="merch" className="relative min-h-0 md:min-h-[100dvh] lg:h-[120vh] w-full bg-matte-black py-12 md:py-24 pb-20 md:pb-32">
             {/* Background Texture/Particles */}
             <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(212,175,55,0.05),transparent_70%)]" />
@@ -179,7 +174,7 @@ export default function MerchStore() {
                     <motion.span
                         initial={{ opacity: 0, y: 20 }}
                         whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
+                        viewport={scrollRevealViewport}
                         className="text-gold font-bold tracking-[5px] uppercase text-sm mb-4"
                     >
                         Exclusive Collection
@@ -187,20 +182,20 @@ export default function MerchStore() {
                     <motion.h2
                         initial={{ opacity: 0, y: 20 }}
                         whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
+                        viewport={scrollRevealViewport}
                         transition={{ delay: 0.1 }}
-                        className="text-5xl md:text-7xl font-serif text-white mb-6 uppercase tracking-tighter"
+                        className="text-2xl sm:text-3xl md:text-5xl lg:text-7xl font-serif text-white mb-4 md:mb-6 uppercase tracking-tighter"
                     >
                         Luxury <span className="text-gold italic">Merchandise</span>
                     </motion.h2>
                     <motion.p
                         initial={{ opacity: 0, y: 20 }}
                         whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
+                        viewport={scrollRevealViewport}
                         transition={{ delay: 0.2 }}
-                        className="max-w-2xl text-white/50 text-lg leading-relaxed mb-12"
+                        className="max-w-2xl text-white/50 text-sm sm:text-base md:text-lg leading-relaxed mb-8 md:mb-12 px-2"
                     >
-                        Hand-crafted, spray-painted, and bleached essentials. Each piece is a unique 1-of-1 masterpiece designed by The Money Family.
+                        Hand-crafted 1-of-1 DMF pieces. T-shirts from {formatPrice(MERCH_PRICES['t-shirt'])}, sweaters from {formatPrice(MERCH_PRICES.sweater)} — each piece is unique.
                     </motion.p>
                 </div>
 
@@ -212,18 +207,18 @@ export default function MerchStore() {
                 </div>
 
                 {/* Mobile Grid Layout (since floating absolute doesn't work well on mobile) */}
-                <div className="md:hidden grid grid-cols-1 gap-8 mt-12">
+                <div className="md:hidden grid grid-cols-1 sm:grid-cols-2 gap-6 mt-12">
                     {products.map((product) => (
                         <motion.div
                             key={product.id}
                             initial={{ opacity: 0, scale: 0.9 }}
                             whileInView={{ opacity: 1, scale: 1 }}
-                            viewport={{ once: true }}
+                            viewport={scrollRevealViewport}
                             className="relative group"
                         >
-                            <a href={product.link} className="block aspect-[3/4] rounded-2xl overflow-hidden border border-white/10 bg-zinc-900/40">
-                                <Image src={product.image} alt={product.name} className="w-full h-full object-cover opacity-80" width={300} height={400} />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black p-6 flex flex-col justify-end">
+                            <a href={product.link} className="block aspect-[3/4]">
+                                <Image src={product.image} alt={product.name} className="w-full h-full object-contain" width={300} height={400} />
+                                <div className="absolute inset-0 p-6 flex flex-col justify-end">
                                     <span className="text-gold text-[8px] font-bold tracking-[2px] uppercase">{product.category}</span>
                                     <h3 className="text-white text-lg font-bold">{product.name}</h3>
                                     <p className="text-gold font-mono">{product.price}</p>

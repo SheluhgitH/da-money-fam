@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect } from 'react'
-import { PREVIEW_DURATION_SEC } from '@/lib/audio-constants'
+import { PREVIEW_DURATION_SEC, pauseAllExceptAudio } from '@/lib/audio-constants'
 
 interface PreviewPlayerProps {
   songId: string
@@ -62,6 +62,7 @@ export default function PreviewPlayer({ songId, owned, className = '' }: Preview
       setIsPlaying(false)
     } else {
       try {
+        pauseAllExceptAudio(audio)
         await audio.play()
         setIsPlaying(true)
       } catch {

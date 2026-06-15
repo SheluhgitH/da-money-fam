@@ -70,14 +70,17 @@ alter table songs enable row level security;
 alter table purchase_orders enable row level security;
 alter table payment_settings enable row level security;
 
+drop policy if exists "Public can read published songs" on songs;
 create policy "Public can read published songs"
   on songs for select
   using (is_published = true);
 
+drop policy if exists "Anyone can create orders" on purchase_orders;
 create policy "Anyone can create orders"
   on purchase_orders for insert
   with check (true);
 
+drop policy if exists "Public can read payment settings" on payment_settings;
 create policy "Public can read payment settings"
   on payment_settings for select
   using (true);
@@ -108,6 +111,17 @@ create table if not exists user_favorites (
   primary key (user_id, song_id)
 );
 
+create table if not exists song_comments (
+  id uuid primary key default gen_random_uuid(),
+  song_id text not null,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  comment_text text not null check (char_length(comment_text) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_song_comments_song_id
+  on song_comments (song_id, created_at desc);
+
 create table if not exists user_achievements (
   user_id uuid not null references auth.users(id) on delete cascade,
   achievement_id text not null,
@@ -124,35 +138,58 @@ create index if not exists idx_purchase_orders_user_song
 alter table profiles enable row level security;
 alter table user_stats enable row level security;
 alter table user_favorites enable row level security;
+alter table song_comments enable row level security;
 alter table user_achievements enable row level security;
 
+drop policy if exists "Users can read own profile" on profiles;
 create policy "Users can read own profile"
   on profiles for select using (auth.uid() = id);
 
+drop policy if exists "Users can update own profile" on profiles;
 create policy "Users can update own profile"
   on profiles for update using (auth.uid() = id);
 
+drop policy if exists "Users can insert own profile" on profiles;
 create policy "Users can insert own profile"
   on profiles for insert with check (auth.uid() = id);
 
+drop policy if exists "Users can read own stats" on user_stats;
 create policy "Users can read own stats"
   on user_stats for select using (auth.uid() = user_id);
 
+drop policy if exists "Users can update own stats" on user_stats;
 create policy "Users can update own stats"
   on user_stats for update using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert own stats" on user_stats;
 create policy "Users can insert own stats"
   on user_stats for insert with check (auth.uid() = user_id);
 
+drop policy if exists "Users can manage own favorites" on user_favorites;
 create policy "Users can manage own favorites"
   on user_favorites for all using (auth.uid() = user_id);
 
+drop policy if exists "Anyone can read song comments" on song_comments;
+create policy "Anyone can read song comments"
+  on song_comments for select using (true);
+
+drop policy if exists "Users can insert own comments" on song_comments;
+create policy "Users can insert own comments"
+  on song_comments for insert with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete own comments" on song_comments;
+create policy "Users can delete own comments"
+  on song_comments for delete using (auth.uid() = user_id);
+
+drop policy if exists "Users can read own achievements" on user_achievements;
 create policy "Users can read own achievements"
   on user_achievements for select using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert own achievements" on user_achievements;
 create policy "Users can insert own achievements"
   on user_achievements for insert with check (auth.uid() = user_id);
 
+drop policy if exists "Users can read own orders" on purchase_orders;
 create policy "Users can read own orders"
   on purchase_orders for select using (auth.uid() = user_id);
 
@@ -180,12 +217,15 @@ create table if not exists user_coins (
 
 alter table user_coins enable row level security;
 
+drop policy if exists "Users can read own coins" on user_coins;
 create policy "Users can read own coins"
   on user_coins for select using (auth.uid() = user_id);
 
+drop policy if exists "Users can update own coins" on user_coins;
 create policy "Users can update own coins"
   on user_coins for update using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert own coins" on user_coins;
 create policy "Users can insert own coins"
   on user_coins for insert with check (auth.uid() = user_id);
 

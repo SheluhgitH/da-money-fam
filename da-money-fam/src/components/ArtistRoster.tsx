@@ -3,6 +3,7 @@
 import { motion, useInView } from 'framer-motion'
 import { useRef, useState } from 'react'
 import ArtistGallery from './ArtistGallery'
+import { scrollRevealInView } from '@/lib/motion'
 
 const allArtists = [
   {
@@ -74,8 +75,8 @@ const allArtists = [
 export default function ArtistRoster() {
   const [expanded, setExpanded] = useState(false)
   const [activeGallery, setActiveGallery] = useState<string | null>(null)
-  const ref = useRef(null)
-  const isInView = useInView(ref, { once: false, amount: 0.3 })
+  const headerRef = useRef(null)
+  const isInView = useInView(headerRef, scrollRevealInView)
 
   const artists = expanded ? allArtists : allArtists.slice(0, 4)
 
@@ -107,22 +108,23 @@ export default function ArtistRoster() {
   }
 
   return (
-    <section id="artists" ref={ref} className="max-w-7xl mx-auto">
+    <section id="artists" className="max-w-7xl mx-auto">
       <motion.div
+        ref={headerRef}
         initial="hidden"
         animate={isInView ? "visible" : "hidden"}
         variants={containerVariants}
-        className="text-center mb-16"
+        className="text-center mb-8 md:mb-12 lg:mb-16"
       >
         <motion.h2
           variants={itemVariants}
-          className="font-serif text-4xl md:text-6xl font-bold mb-4 gold-gradient"
+          className="font-serif text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-bold mb-3 md:mb-4 gold-gradient"
         >
           The Collective
         </motion.h2>
         <motion.p
           variants={itemVariants}
-          className="text-gray-400 text-lg"
+          className="text-gray-400 text-sm sm:text-base md:text-lg"
         >
           Meet the visionaries behind the movement
         </motion.p>
@@ -132,19 +134,19 @@ export default function ArtistRoster() {
         initial="hidden"
         animate={isInView ? "visible" : "hidden"}
         variants={containerVariants}
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 lg:gap-8"
       >
         {artists.map((artist) => (
           <motion.div
             key={artist.id}
             variants={itemVariants}
-            whileHover={{ y: -10 }}
+            whileHover={{ y: -8, scale: 1.02 }}
             className="group"
             onClick={() => handleCardClick(artist)}
             style={artist.gallery.length > 0 ? { cursor: 'pointer' } : undefined}
           >
             <motion.div
-              className="glass rounded-2xl overflow-hidden transition-all duration-500 group-hover:border-gold/50 group-hover:neon-border"
+              className="glass rounded-2xl overflow-hidden transition-all duration-500 group-hover:border-gold/50 group-hover:neon-border bg-black/30 backdrop-blur-sm border border-white/5"
             >
               <div className="relative aspect-square overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-gold/20 to-gold-dark/20" />
@@ -168,8 +170,8 @@ export default function ArtistRoster() {
                  </motion.div>
               </div>
 
-              <div className="p-6">
-                <h3 className="font-serif text-2xl font-bold mb-1 group-hover:text-gold transition-colors duration-300">
+              <div className="p-4 sm:p-5 md:p-6">
+                <h3 className="font-serif text-lg sm:text-xl md:text-2xl font-bold mb-1 group-hover:text-gold transition-colors duration-300">
                   {artist.name}
                 </h3>
                 <p className="text-gold text-sm uppercase tracking-wider mb-3">

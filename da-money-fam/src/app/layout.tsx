@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Playfair_Display, Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider } from '@/contexts/AuthProvider'
@@ -24,6 +24,12 @@ export const metadata: Metadata = {
   title: 'Da Money Fam | Luxury Hip-Hop Collective',
   description: 'Award-winning luxury hip-hop collective setting trends in music, fashion, and culture.',
   keywords: ['hip-hop', 'music', 'collective', 'luxury', 'DMF'],
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({

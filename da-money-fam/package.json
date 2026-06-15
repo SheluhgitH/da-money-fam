@@ -11,6 +11,7 @@
     "seed:songs": "node scripts/seed-songs-to-supabase.mjs"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.10",
     "@react-three/drei": "^9.96.0",
     "@react-three/fiber": "^8.15.0",
     "@supabase/ssr": "^0.12.0",

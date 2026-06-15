@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { useState, useEffect, useRef, createContext, useContext, ReactNode, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { PublicSong } from '@/types/store'
-import { PREVIEW_DURATION_SEC } from '@/lib/audio-constants'
+import { PREVIEW_DURATION_SEC, pauseAllExceptAudio } from '@/lib/audio-constants'
 
 const FADE_DURATION_MS = 1000 // 1 second fade
 const FADE_INTERVAL_MS = 50 // Update every 50ms
@@ -79,6 +79,7 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
     setCurrentSong(song)
     if (audioRef.current) {
       const audio = audioRef.current
+      pauseAllExceptAudio(audio)
       audio.src = `/api/preview/${song.id}`
       audio.load()
       audio.play().then(() => fadeAudio(audio, 0, volume, FADE_DURATION_MS)).catch(() => {})
@@ -95,6 +96,7 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
           setIsPlaying(false)
         })
       } else {
+        pauseAllExceptAudio(audio)
         audio.play().then(() => fadeAudio(audio, audio.volume, volume, FADE_DURATION_MS)).catch(() => {})
         setIsPlaying(true)
       }
@@ -121,7 +123,8 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 100, damping: 20 }}
-            className="fixed bottom-4 right-4 z-50 glass-gold rounded-xl p-4 flex items-center shadow-lg"
+            className="fixed bottom-0 left-0 right-0 sm:bottom-4 sm:left-auto sm:right-4 z-50 glass-gold rounded-none sm:rounded-xl p-3 sm:p-4 flex items-center shadow-lg max-w-full sm:max-w-md"
+            style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
           >
             <Image
               src={currentSong.album_cover_path || '/path/to/default-cover.png'}
@@ -130,7 +133,7 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
               width={48}
               height={48}
             />
-            <div className="flex-1 text-white text-sm mr-4">
+            <div className="flex-1 min-w-0 text-white text-sm mr-2 sm:mr-4">
               <p className="font-bold truncate">{currentSong.title}</p>
               <p className="text-gray-300 truncate">{currentSong.artist}</p>
             </div>
@@ -153,7 +156,7 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
                 step="0.01"
                 value={volume}
                 onChange={(e) => setVolume(parseFloat(e.target.value))}
-                className="w-24 h-1 appearance-none rounded-full bg-gray-700 outline-none focus:outline-none focus:ring-2 focus:ring-gold accent-gold"
+                className="hidden sm:block w-24 h-1 appearance-none rounded-full bg-gray-700 outline-none focus:outline-none focus:ring-2 focus:ring-gold accent-gold"
               />
             </div>
           </motion.div>

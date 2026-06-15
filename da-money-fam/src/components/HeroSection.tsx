@@ -1,39 +1,36 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import Image from 'next/image'
 import { scrollToSection } from '../utils/scrollToSection'
 import { useState, useEffect } from 'react'
+import BackgroundVideo from './BackgroundVideo'
 
 interface TakeoverConfig {
-  artistName: string;
-  tagline: string;
-  videoSrc: string;
-  active: boolean;
+  artistName: string
+  tagline: string
+  videoSrc: string
+  active: boolean
 }
 
 const activeTakeover: TakeoverConfig = {
-  artistName: "Vlone Tr3",
-  tagline: "Exclusive Takeover Day - Experience the Full Vlone Collection",
-  videoSrc: "/videos/background.mp4",
-  active: false // Toggle this for takeover
+  artistName: 'Vlone Tr3',
+  tagline: 'Exclusive Takeover Day - Experience the Full Vlone Collection',
+  videoSrc: '/videos/background.mp4',
+  active: false,
 }
 
 export default function HeroSection() {
-  const isTakeover = activeTakeover.active;
+  const isTakeover = activeTakeover.active
+
   return (
-    <section id="home" className="relative h-screen flex items-center justify-center overflow-hidden">
+    <section id="home" className="relative min-h-[85dvh] sm:min-h-[100dvh] flex items-center justify-center overflow-hidden">
       <div className="absolute inset-0 z-0">
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover"
-        >
-          <source src={isTakeover ? activeTakeover.videoSrc : "/videos/jackpot-notebook-2.mp4"} type="video/mp4" />
-        </video>
-        <div className={`absolute inset-0 ${isTakeover ? 'bg-gradient-to-b from-red-900/40 via-black/60 to-matte-black' : 'bg-gradient-to-b from-black/60 via-black/40 to-matte-black'}`} />
+        <BackgroundVideo
+          src={isTakeover ? activeTakeover.videoSrc : '/videos/jackpot-notebook-2.mp4'}
+        />
+        <div
+          className={`absolute inset-0 ${isTakeover ? 'bg-gradient-to-b from-red-900/40 via-black/60 to-matte-black' : 'bg-gradient-to-b from-black/60 via-black/40 to-matte-black'}`}
+        />
       </div>
 
       {isTakeover && (
@@ -52,13 +49,13 @@ export default function HeroSection() {
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1.2, delay: 0.3 }}
-        className="relative z-10 text-center px-4"
+        className="relative z-10 text-center px-4 max-w-4xl mx-auto"
       >
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 1, delay: 0.5 }}
-          className="text-gold uppercase tracking-[0.5em] text-sm md:text-base mb-4"
+          className="text-gold uppercase tracking-[0.3em] sm:tracking-[0.5em] text-xs sm:text-sm md:text-base mb-4"
         >
           {isTakeover ? `Featuring ${activeTakeover.artistName}` : 'Luxury Hip-Hop Collective'}
         </motion.p>
@@ -67,7 +64,7 @@ export default function HeroSection() {
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 1.2, delay: 0.7 }}
-          className={`font-serif text-5xl md:text-7xl lg:text-9xl font-bold mb-6 ${isTakeover ? 'text-white drop-shadow-[0_0_20px_rgba(255,0,0,0.5)]' : 'text-glow'}`}
+          className={`font-serif text-3xl sm:text-4xl md:text-6xl lg:text-8xl font-bold mb-4 sm:mb-6 ${isTakeover ? 'text-white drop-shadow-[0_0_20px_rgba(255,0,0,0.5)]' : 'text-glow'}`}
         >
           {isTakeover ? activeTakeover.artistName : 'DA MONEY FAM'}
         </motion.h1>
@@ -76,7 +73,7 @@ export default function HeroSection() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 1, delay: 1 }}
-          className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto mb-8"
+          className="text-gray-400 text-base sm:text-lg md:text-xl max-w-2xl mx-auto mb-8 px-2"
         >
           {isTakeover ? activeTakeover.tagline : 'Setting trends in music, fashion, and culture since day one'}
         </motion.p>
@@ -85,7 +82,7 @@ export default function HeroSection() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, delay: 1.2 }}
-          className="flex flex-col md:flex-row gap-4 justify-center items-center"
+          className="flex flex-col sm:flex-row gap-4 justify-center items-center"
         >
           <motion.a
             href="https://youtu.be/3OHv8ZYsVb8?si=zVxqZL2KLAMHVKN-"
@@ -93,7 +90,7 @@ export default function HeroSection() {
             rel="noopener noreferrer"
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="px-8 py-4 bg-gold text-matte-black font-bold uppercase tracking-widest text-sm hover:bg-gold-light transition-colors duration-300 neon-border"
+            className="w-full sm:w-auto px-8 py-4 bg-gold text-matte-black font-bold uppercase tracking-widest text-sm hover:bg-gold-light transition-colors duration-300 neon-border text-center"
           >
             Listen Now
           </motion.a>
@@ -102,7 +99,7 @@ export default function HeroSection() {
             onClick={() => scrollToSection('services')}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="px-8 py-4 glass text-white font-bold uppercase tracking-widest text-sm hover:bg-white/10 transition-colors duration-300 border border-gold/50"
+            className="w-full sm:w-auto px-8 py-4 glass text-white font-bold uppercase tracking-widest text-sm hover:bg-white/10 transition-colors duration-300 border border-gold/50"
           >
             Learn More
           </motion.button>
@@ -112,7 +109,7 @@ export default function HeroSection() {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 1, delay: 1.5 }}
+        transition={{ duration: 1, delay: 1.5, ease: 'easeOut' }}
         className="absolute bottom-8 left-1/2 transform -translate-x-1/2"
       >
         <motion.div

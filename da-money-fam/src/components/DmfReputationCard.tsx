@@ -98,16 +98,16 @@ export default function DmfReputationCard() {
     }
 
     return (
-        <div className="bg-zinc-900/40 border border-gold/20 backdrop-blur-xl p-6 rounded-2xl flex items-center gap-6 group hover:border-gold/50 transition-all">
-            <div className="relative">
-                <div className="w-16 h-16 rounded-full border-2 border-gold flex items-center justify-center text-3xl">
+        <div className="bg-zinc-900/40 border border-gold/20 backdrop-blur-xl p-4 sm:p-6 rounded-2xl flex flex-col sm:flex-row items-center gap-4 sm:gap-6 group hover:border-gold/50 transition-all max-w-3xl mx-auto">
+            <div className="relative shrink-0">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-2 border-gold flex items-center justify-center text-2xl sm:text-3xl">
                     🎖️
                 </div>
                 <div className="absolute -bottom-1 -right-1 bg-gold text-black text-[10px] font-extrabold px-2 py-0.5 rounded-full">
                     LVL {level}
                 </div>
             </div>
-            <div className="grow">
+            <div className="grow w-full text-center sm:text-left">
                 <div className="flex justify-between text-[10px] text-zinc-500 font-bold uppercase mb-1">
                     <span>DMF REPUTATION</span>
                     <span>{Math.floor(xp)} XP</span>

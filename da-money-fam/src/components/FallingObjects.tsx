@@ -38,11 +38,14 @@ export default function FallingObjects() {
 
   const viewportWidth = window.innerWidth
   const viewportHeight = window.innerHeight
+  const isMobile = viewportWidth < 640
+  const sizeScale = isMobile ? 0.55 : 1
+  const countScale = isMobile ? 0.5 : 1
 
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden z-50">
       {FALLING_OBJECTS.map((objectType) =>
-        Array.from({ length: objectType.amount * 2 }).map((_, i) => (
+        Array.from({ length: Math.max(1, Math.round(objectType.amount * 2 * countScale)) }).map((_, i) => (
           <motion.div
             key={`${objectType.id}-${i}`}
             initial={{
@@ -52,7 +55,7 @@ export default function FallingObjects() {
               scale: Math.random() * 0.5 + 0.5,
             }}
             animate={{
-              y: [null, viewportHeight + objectType.size],
+              y: [null, viewportHeight + objectType.size * sizeScale],
               x: [null, Math.random() * viewportWidth],
               opacity: [0, 1, 1, 0],
               rotate: Math.random() * 360,
@@ -65,11 +68,11 @@ export default function FallingObjects() {
             }}
             className="absolute"
             style={{
-              width: objectType.size,
-              height: objectType.size,
+              width: objectType.size * sizeScale,
+              height: objectType.size * sizeScale,
             }}
           >
-            <Image src={objectType.src} alt={objectType.alt} fill className="object-contain" sizes={`${objectType.size}px`} />
+            <Image src={objectType.src} alt={objectType.alt} fill className="object-contain" sizes={`${Math.round(objectType.size * sizeScale)}px`} />
           </motion.div>
         ))
       )}
