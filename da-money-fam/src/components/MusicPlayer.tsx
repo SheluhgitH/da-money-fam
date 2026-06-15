@@ -109,17 +109,21 @@ export default function MusicPlayer() {
     audio.loop = false
 
     const updateProgress = () => {
-      const maxTime = Math.min(audio.duration || PREVIEW_DURATION_SEC, PREVIEW_DURATION_SEC)
+      const previewEnd = Math.min(
+        Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : PREVIEW_DURATION_SEC,
+        PREVIEW_DURATION_SEC
+      )
 
-      if (audio.currentTime >= PREVIEW_DURATION_SEC - 0.15) {
+      if (audio.currentTime >= previewEnd - 0.1) {
         if (!previewEndedRef.current) {
           previewEndedRef.current = true
           void advanceToNext()
         }
+        setProgress(100)
         return
       }
 
-      setProgress((audio.currentTime / maxTime) * 100)
+      setProgress((audio.currentTime / previewEnd) * 100)
     }
 
     const onPlay = () => {
@@ -128,7 +132,11 @@ export default function MusicPlayer() {
     }
 
     const onEnded = () => {
-      void advanceToNext()
+      // Only advance here if the byte stream ended before our time cap fired
+      if (!previewEndedRef.current) {
+        previewEndedRef.current = true
+        void advanceToNext()
+      }
     }
 
     audio.addEventListener('timeupdate', updateProgress)
