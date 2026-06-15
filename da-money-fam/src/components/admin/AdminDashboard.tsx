@@ -40,6 +40,7 @@ export default function AdminDashboard() {
 
   const loadData = async () => {
     setLoading(true)
+    setMessage('')
     try {
       const [songsRes, ordersRes, settingsRes] = await Promise.all([
         fetch('/api/admin/songs'),
@@ -47,9 +48,19 @@ export default function AdminDashboard() {
         fetch('/api/admin/payment-settings'),
       ])
 
+      if (songsRes.status === 401 || ordersRes.status === 401) {
+        setMessage('Session expired. Please log in again.')
+        window.location.href = '/admin/login'
+        return
+      }
+
       const songsData = await songsRes.json()
       const ordersData = await ordersRes.json()
       const settingsData = await settingsRes.json()
+
+      if (!songsRes.ok) {
+        setMessage(songsData.error || 'Failed to load songs')
+      }
 
       setSongs(songsData.songs || [])
       setOrders(ordersData.orders || [])
@@ -97,24 +108,30 @@ export default function AdminDashboard() {
     setMessage('')
   }
 
-  const toggleSong = async (song: Song, field: 'is_published' | 'is_promoted') => {
+  const toggleSong = async (song: Song, field: 'is_published' | 'is_promoted' | 'for_sale') => {
     const res = await fetch('/api/admin/songs', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: song.id, [field]: !song[field] }),
     })
+    const data = await res.json().catch(() => ({}))
     if (res.ok) {
       setMessage(`Updated ${song.title}`)
       loadData()
+    } else {
+      setMessage(data.error || `Failed to update ${song.title}`)
     }
   }
 
   const deleteSong = async (id: string) => {
     if (!confirm('Delete this song permanently?')) return
     const res = await fetch(`/api/admin/songs?id=${id}`, { method: 'DELETE' })
+    const data = await res.json().catch(() => ({}))
     if (res.ok) {
       setMessage('Song deleted')
       loadData()
+    } else {
+      setMessage(data.error || 'Failed to delete song')
     }
   }
 
@@ -304,7 +321,7 @@ export default function AdminDashboard() {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold truncate">{song.title}</h3>
                   <p className="text-gold text-sm">
-                    {song.artist} · ${song.price.toFixed(2)}
+                    {song.artist} · {song.for_sale ? `$${song.price.toFixed(2)}` : 'Exclusive'}
                     {song.genre ? ` · ${song.genre}` : ''}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
@@ -318,6 +335,12 @@ export default function AdminDashboard() {
                     className="text-xs px-3 py-1 rounded-full bg-gold/20 text-gold hover:bg-gold/30"
                   >
                     Edit
+                  </button>
+                  <button
+                    onClick={() => toggleSong(song, 'for_sale')}
+                    className={`text-xs px-3 py-1 rounded-full ${song.for_sale ? 'bg-white/10' : 'bg-purple-500/30 text-purple-200'}`}
+                  >
+                    {song.for_sale ? 'For Sale' : 'Exclusive'}
                   </button>
                   <button
                     onClick={() => toggleSong(song, 'is_promoted')}

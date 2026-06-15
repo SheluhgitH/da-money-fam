@@ -17,6 +17,7 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
   const [error, setError] = useState('')
   const [isPromoted, setIsPromoted] = useState(song.is_promoted)
   const [isPublished, setIsPublished] = useState(song.is_published)
+  const [forSale, setForSale] = useState(song.for_sale !== false)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -29,6 +30,7 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
       formData.set('id', song.id)
       formData.set('is_promoted', isPromoted ? 'true' : 'false')
       formData.set('is_published', isPublished ? 'true' : 'false')
+      formData.set('for_sale', forSale ? 'true' : 'false')
 
       const res = await fetch('/api/admin/songs', {
         method: 'PATCH',
@@ -133,6 +135,15 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
         <label className="text-sm text-gray-400 block mb-2">Replace audio file (optional)</label>
         <input name="mp3" type="file" accept="audio/*" className="w-full text-sm text-gray-300" />
       </div>
+
+      <label className="flex items-center gap-2 text-sm text-gray-300">
+        <input
+          type="checkbox"
+          checked={forSale}
+          onChange={(e) => setForSale(e.target.checked)}
+        />
+        Available for purchase (uncheck for exclusive preview-only)
+      </label>
 
       <label className="flex items-center gap-2 text-sm text-gray-300">
         <input

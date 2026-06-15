@@ -41,6 +41,10 @@ export async function fulfillStripeSession(session: Stripe.Checkout.Session) {
     throw new Error('Song not found')
   }
 
+  if (song.for_sale === false) {
+    throw new Error('Song is not available for purchase')
+  }
+
   const downloadToken = generateDownloadToken()
   const buyerEmail =
     session.customer_details?.email || session.customer_email || 'customer@stripe.com'

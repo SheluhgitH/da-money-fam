@@ -9,6 +9,7 @@ export interface Song {
   preview_path?: string
   price: number
   is_promoted: boolean
+  for_sale: boolean
   genre?: string
   release_date?: string
   description?: string
@@ -24,6 +25,7 @@ export interface PublicSong {
   album_cover_path: string
   price: number
   is_promoted: boolean
+  for_sale: boolean
   genre?: string
   release_date?: string
   description?: string

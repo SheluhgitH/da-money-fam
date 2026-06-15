@@ -27,8 +27,18 @@ async function readJsonFile<T>(filename: string, fallback: T): Promise<T> {
 
 async function writeJsonFile<T>(filename: string, data: T): Promise<void> {
   const filePath = path.join(DATA_DIR, filename)
-  await fs.mkdir(DATA_DIR, { recursive: true })
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8')
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true })
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8')
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code
+    if (code === 'EROFS' || code === 'EACCES' || code === 'ENOENT') {
+      throw new Error(
+        'Cannot save on production without Supabase tables. Run supabase/schema.sql in the Supabase SQL Editor, then npm run seed:songs.'
+      )
+    }
+    throw error
+  }
 }
 
 function mapSupabaseSong(row: Record<string, unknown>): Song {
@@ -41,6 +51,7 @@ function mapSupabaseSong(row: Record<string, unknown>): Song {
     preview_path: row.preview_path ? String(row.preview_path) : undefined,
     price: Number(row.price),
     is_promoted: Boolean(row.is_promoted),
+    for_sale: row.for_sale !== false,
     genre: row.genre ? String(row.genre) : undefined,
     release_date: row.release_date ? String(row.release_date) : undefined,
     description: row.description ? String(row.description) : undefined,
@@ -69,6 +80,10 @@ function mapSupabaseOrder(row: Record<string, unknown>, songTitle?: string): Pur
   }
 }
 
+function normalizeSong(song: Song): Song {
+  return { ...song, for_sale: song.for_sale !== false }
+}
+
 export async function getPublishedSongs(): Promise<Song[]> {
   if (isSupabaseConfigured()) {
     const supabase = createServiceClient()!
@@ -83,7 +98,7 @@ export async function getPublishedSongs(): Promise<Song[]> {
   }
 
   const songs = await readJsonFile<Song[]>('songs.json', [])
-  return songs.filter((song) => song.is_published)
+  return songs.filter((song) => song.is_published).map(normalizeSong)
 }
 
 export async function getAllSongs(): Promise<Song[]> {
@@ -98,7 +113,7 @@ export async function getAllSongs(): Promise<Song[]> {
     if (error && !isMissingSupabaseTable(error)) console.error('getAllSongs:', error.message)
   }
 
-  return readJsonFile<Song[]>('songs.json', [])
+  return (await readJsonFile<Song[]>('songs.json', [])).map(normalizeSong)
 }
 
 export async function getSongById(id: string): Promise<Song | null> {
@@ -115,7 +130,8 @@ export async function getSongById(id: string): Promise<Song | null> {
   }
 
   const songs = await readJsonFile<Song[]>('songs.json', [])
-  return songs.find((song) => song.id === id) || null
+  const found = songs.find((song) => song.id === id)
+  return found ? normalizeSong(found) : null
 }
 
 export function toPublicSong(
@@ -129,6 +145,7 @@ export function toPublicSong(
     album_cover_path: song.album_cover_path,
     price: song.price,
     is_promoted: song.is_promoted,
+    for_sale: song.for_sale !== false,
     genre: song.genre,
     release_date: song.release_date,
     description: song.description,

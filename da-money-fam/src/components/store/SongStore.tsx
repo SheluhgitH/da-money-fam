@@ -51,6 +51,14 @@ function SongCard({
         </div>
       )}
 
+      {!song.for_sale && (
+        <div className="absolute top-4 right-4 z-20">
+          <span className="bg-purple-600/90 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider border border-purple-300/40">
+            Exclusive
+          </span>
+        </div>
+      )}
+
       <button
         type="button"
         onClick={() => onToggleFavorite(song)}
@@ -96,7 +104,11 @@ function SongCard({
           <p className="text-gray-400 text-sm mb-4 line-clamp-2">{song.description}</p>
         )}
         <div className="flex items-center justify-between">
-          <span className="text-gold font-mono text-lg">${song.price.toFixed(2)}</span>
+          {song.for_sale ? (
+            <span className="text-gold font-mono text-lg">${song.price.toFixed(2)}</span>
+          ) : (
+            <span className="text-purple-300 text-xs font-bold uppercase tracking-wider">Preview Only</span>
+          )}
           {song.owned ? (
             <Link
               href="/library"
@@ -104,7 +116,7 @@ function SongCard({
             >
               In Library
             </Link>
-          ) : (
+          ) : song.for_sale ? (
             <button
               onClick={() => onPurchase(song)}
               disabled={isPurchasing}
@@ -112,6 +124,10 @@ function SongCard({
             >
               {isPurchasing ? 'Redirecting...' : 'Purchase'}
             </button>
+          ) : (
+            <span className="bg-purple-500/20 text-purple-200 border border-purple-400/30 text-xs font-bold px-5 py-2 rounded-full uppercase tracking-wider">
+              Exclusive
+            </span>
           )}
         </div>
       </div>

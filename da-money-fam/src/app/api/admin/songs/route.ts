@@ -45,6 +45,7 @@ export async function POST(req: Request) {
       description: String(formData.get('description') || ''),
       is_promoted: formData.get('is_promoted') === 'true',
       is_published: formData.get('is_published') !== 'false',
+      for_sale: formData.get('for_sale') !== 'false',
     }
 
     await songSchema.validate(payload)
@@ -75,6 +76,7 @@ export async function POST(req: Request) {
       preview_path: mp3Path,
       price: payload.price,
       is_promoted: payload.is_promoted,
+      for_sale: payload.for_sale,
       genre: payload.genre || undefined,
       release_date: payload.release_date || undefined,
       description: payload.description || undefined,
@@ -121,6 +123,7 @@ export async function PATCH(req: Request) {
         description: String(formData.get('description') || ''),
         is_promoted: formData.get('is_promoted') === 'true',
         is_published: formData.get('is_published') === 'true',
+        for_sale: formData.get('for_sale') !== 'false',
       }
 
       await songUpdateSchema.validate(payload)
@@ -131,6 +134,7 @@ export async function PATCH(req: Request) {
         price: payload.price,
         is_promoted: payload.is_promoted,
         is_published: payload.is_published,
+        for_sale: payload.for_sale,
         genre: payload.genre || undefined,
         release_date: payload.release_date || undefined,
         description: payload.description || undefined,

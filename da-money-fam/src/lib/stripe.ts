@@ -4,6 +4,7 @@ const PLACEHOLDER_KEYS = [
   'your_stripe_secret_key_here',
   'your_new_stripe_secret_key_here',
   'your_stripe_publishable_key_here',
+  'your_stripe_webhook_secret_here',
 ]
 
 export function isStripeConfigured(): boolean {
@@ -13,8 +14,16 @@ export function isStripeConfigured(): boolean {
   return key.startsWith('sk_')
 }
 
+export function isStripeLiveMode(): boolean {
+  const key = process.env.STRIPE_SECRET_KEY
+  return Boolean(key?.startsWith('sk_live_'))
+}
+
 export function getStripeConfigError(): string {
-  return 'Payments are temporarily unavailable. Add valid Stripe test keys to .env.local and restart the dev server.'
+  if (isStripeLiveMode()) {
+    return 'Payments are temporarily unavailable. Check live Stripe keys and webhook on Vercel.'
+  }
+  return 'Payments are temporarily unavailable. Add valid Stripe keys to .env.local (or Vercel env) and restart.'
 }
 
 export function getStripe(): Stripe {

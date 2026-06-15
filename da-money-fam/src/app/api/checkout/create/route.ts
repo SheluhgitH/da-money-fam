@@ -24,6 +24,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Song not found' }, { status: 404 })
     }
 
+    if (song.for_sale === false) {
+      return NextResponse.json({ error: 'This track is exclusive and not available for purchase yet' }, { status: 403 })
+    }
+
     const user = await getCurrentUser()
     const stripe = getStripe()
     const siteUrl = getSiteUrl()
@@ -39,7 +43,6 @@ export async function POST(req: Request) {
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      payment_method_types: ['card'],
       customer_email: user?.email ?? undefined,
       line_items: [
         {

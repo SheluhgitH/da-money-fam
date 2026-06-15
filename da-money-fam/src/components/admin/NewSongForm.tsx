@@ -54,6 +54,11 @@ export default function NewSongForm({ onCreated }: { onCreated: () => void }) {
       </div>
 
       <label className="flex items-center gap-2 text-sm">
+        <input name="for_sale" type="checkbox" value="true" defaultChecked />
+        Available for purchase
+      </label>
+
+      <label className="flex items-center gap-2 text-sm">
         <input name="is_promoted" type="checkbox" value="true" defaultChecked />
         Promote on homepage
       </label>

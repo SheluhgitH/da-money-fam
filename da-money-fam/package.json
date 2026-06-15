@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "sync:audio": "node scripts/sync-store-audio.mjs"
+    "sync:audio": "node scripts/sync-store-audio.mjs",
+    "seed:songs": "node scripts/seed-songs-to-supabase.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.96.0",

@@ -9,6 +9,7 @@ export const songSchema = yup.object({
   description: yup.string().trim().max(1000).optional(),
   is_promoted: yup.boolean().required(),
   is_published: yup.boolean().required(),
+  for_sale: yup.boolean().default(true),
 })
 
 export const songUpdateSchema = songSchema

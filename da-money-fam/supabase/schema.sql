@@ -4,7 +4,7 @@
 create extension if not exists "pgcrypto";
 
 create table if not exists songs (
-  id uuid primary key default gen_random_uuid(),
+  id text primary key,
   title varchar(255) not null,
   artist varchar(255) not null default 'JackPot',
   album_cover_path text not null,
@@ -12,6 +12,7 @@ create table if not exists songs (
   preview_path text,
   price numeric(10, 2) not null default 5.00,
   is_promoted boolean not null default false,
+  for_sale boolean not null default true,
   genre varchar(100),
   release_date date,
   description text,
@@ -22,7 +23,7 @@ create table if not exists songs (
 
 create table if not exists purchase_orders (
   id uuid primary key default gen_random_uuid(),
-  song_id uuid not null references songs(id) on delete cascade,
+  song_id text not null references songs(id) on delete cascade,
   buyer_email varchar(255) not null,
   buyer_name varchar(255) not null,
   payment_proof text not null,

@@ -8,28 +8,30 @@
     "preview_path": "private-audio/NOTEBOOK (2).m4a",
     "price": 5.00,
     "is_promoted": true,
+    "for_sale": false,
     "genre": "Hip-Hop",
     "release_date": "2026-06-13",
-    "description": "New priority drop — raw notebook energy straight from the vault.",
+    "description": "Exclusive preview — full track coming soon. Listen now, not available for purchase.",
     "is_published": true,
     "created_at": "2026-06-13T00:00:00.000Z",
-    "updated_at": "2026-06-13T00:00:00.000Z"
+    "updated_at": "2026-06-14T00:00:00.000Z"
   },
   {
     "id": "lotto-devil-inside-me",
     "title": "Lotto Devil Inside Me",
     "artist": "JackPot",
-    "album_cover_path": "/store/covers/IMG_8447.PNG",
+    "album_cover_path": "/store/covers/lotto-devil-inside-me.jpeg",
     "mp3_file_path": "private-audio/eMastered_LOTTO  DEVIL INSIDE ME.mp3",
     "preview_path": "private-audio/eMastered_LOTTO  DEVIL INSIDE ME.mp3",
     "price": 5.00,
     "is_promoted": true,
+    "for_sale": true,
     "genre": "Hip-Hop",
     "release_date": "2026-06-13",
     "description": "High-stakes energy. Mastered and ready for release.",
     "is_published": true,
     "created_at": "2026-06-13T00:00:00.000Z",
-    "updated_at": "2026-06-13T00:00:00.000Z"
+    "updated_at": "2026-06-14T00:00:00.000Z"
   },
   {
     "id": "rockstar-baby",
@@ -40,6 +42,7 @@
     "preview_path": "private-audio/eMastered_ROCKSTAR BABY MIX 1.mp3",
     "price": 5.00,
     "is_promoted": true,
+    "for_sale": true,
     "genre": "Hip-Hop",
     "release_date": "2026-06-13",
     "description": "The rockstar anthem — promoted new release with exclusive cover art.",
