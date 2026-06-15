@@ -8,6 +8,7 @@ import { PREVIEW_DURATION_SEC } from '@/lib/audio-constants'
 
 const FADE_DURATION_MS = 1000
 const FADE_INTERVAL_MS = 50
+const AUTOPLAY_DELAY_MS = 5000
 
 function pickRandomSong(songs: PublicSong[], excludeId?: string): PublicSong | null {
   if (songs.length === 0) return null
@@ -22,7 +23,6 @@ export default function MusicPlayer() {
   const [progress, setProgress] = useState(0)
   const [volume] = useState(0.75)
   const [loading, setLoading] = useState(true)
-  const [autoplayBlocked, setAutoplayBlocked] = useState(false)
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const sectionRef = useRef(null)
@@ -32,8 +32,6 @@ export default function MusicPlayer() {
   const currentSongIdRef = useRef<string | null>(null)
   const transitioningRef = useRef(false)
   const previewEndedRef = useRef(false)
-  const wantsPlayRef = useRef(true)
-  const inViewRetryRef = useRef(false)
 
   useEffect(() => {
     volumeRef.current = volume
@@ -42,8 +40,13 @@ export default function MusicPlayer() {
   useEffect(() => {
     currentSongIdRef.current = currentSong?.id ?? null
     previewEndedRef.current = false
-    inViewRetryRef.current = false
   }, [currentSong])
+
+  // Start playback 5 seconds after the site opens
+  useEffect(() => {
+    const timer = setTimeout(() => setIsPlaying(true), AUTOPLAY_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [])
 
   const fadeAudio = useCallback(
     (audio: HTMLAudioElement, startVolume: number, endVolume: number, duration: number) => {
@@ -68,25 +71,6 @@ export default function MusicPlayer() {
     []
   )
 
-  const startPlayback = useCallback(async () => {
-    const audio = audioRef.current
-    if (!audio || !currentSong) return false
-
-    try {
-      audio.volume = 0
-      await audio.play()
-      setIsPlaying(true)
-      setAutoplayBlocked(false)
-      wantsPlayRef.current = true
-      await fadeAudio(audio, 0, volumeRef.current, FADE_DURATION_MS)
-      return true
-    } catch {
-      setIsPlaying(false)
-      setAutoplayBlocked(true)
-      return false
-    }
-  }, [currentSong, fadeAudio])
-
   const advanceToNext = useCallback(async () => {
     if (transitioningRef.current) return
     transitioningRef.current = true
@@ -101,8 +85,8 @@ export default function MusicPlayer() {
     const next = pickRandomSong(songsRef.current, currentSongIdRef.current ?? undefined)
     if (next) {
       setProgress(0)
-      wantsPlayRef.current = true
       setCurrentSong(next)
+      setIsPlaying(true)
     }
 
     transitioningRef.current = false
@@ -115,10 +99,7 @@ export default function MusicPlayer() {
       .then((data) => {
         songsRef.current = data.songs || []
         const first = pickRandomSong(songsRef.current)
-        if (first) {
-          wantsPlayRef.current = true
-          setCurrentSong(first)
-        }
+        if (first) setCurrentSong(first)
       })
       .catch(console.error)
       .finally(() => setLoading(false))
@@ -132,14 +113,12 @@ export default function MusicPlayer() {
     audio.loop = false
 
     const updateProgress = () => {
-      if (audio.paused || audio.currentTime < 0.25) return
-
       const previewEnd = Math.min(
         Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : PREVIEW_DURATION_SEC,
         PREVIEW_DURATION_SEC
       )
 
-      if (audio.currentTime >= previewEnd - 0.1) {
+      if (audio.currentTime >= previewEnd - 0.15) {
         if (!previewEndedRef.current) {
           previewEndedRef.current = true
           void advanceToNext()
@@ -151,8 +130,10 @@ export default function MusicPlayer() {
       setProgress((audio.currentTime / previewEnd) * 100)
     }
 
-    const onPause = () => setIsPlaying(false)
-    const onPlaying = () => setIsPlaying(true)
+    const onPlay = () => {
+      audio.volume = 0
+      fadeAudio(audio, 0, volumeRef.current, FADE_DURATION_MS)
+    }
 
     const onEnded = () => {
       if (!previewEndedRef.current) {
@@ -162,84 +143,45 @@ export default function MusicPlayer() {
     }
 
     audio.addEventListener('timeupdate', updateProgress)
-    audio.addEventListener('pause', onPause)
-    audio.addEventListener('playing', onPlaying)
+    audio.addEventListener('play', onPlay)
     audio.addEventListener('ended', onEnded)
 
     return () => {
       audio.removeEventListener('timeupdate', updateProgress)
-      audio.removeEventListener('pause', onPause)
-      audio.removeEventListener('playing', onPlaying)
+      audio.removeEventListener('play', onPlay)
       audio.removeEventListener('ended', onEnded)
     }
-  }, [advanceToNext])
+  }, [fadeAudio, advanceToNext])
 
-  // Load source and start when song changes
+  // Load and play when song changes
   useEffect(() => {
     const audio = audioRef.current
     if (!currentSong || !audio) return
 
-    let cancelled = false
-
-    const onCanPlay = () => {
-      if (cancelled || !wantsPlayRef.current) return
-      void startPlayback()
-    }
-
-    audio.addEventListener('canplay', onCanPlay)
     audio.src = `/api/preview/${currentSong.id}`
     audio.load()
-
-    if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
-      onCanPlay()
+    if (isPlaying) {
+      audio.play().catch((err) => console.error('Playback failed:', err))
     }
-
-    return () => {
-      cancelled = true
-      audio.removeEventListener('canplay', onCanPlay)
-    }
-  }, [currentSong, startPlayback])
-
-  // Retry when Now Playing scrolls into view (helps after autoplay block)
-  useEffect(() => {
-    if (!isInView || !autoplayBlocked || !currentSong || inViewRetryRef.current) return
-    inViewRetryRef.current = true
-    wantsPlayRef.current = true
-    void startPlayback()
-  }, [isInView, autoplayBlocked, currentSong, startPlayback])
-
-  // Unlock audio on first user interaction anywhere on the page
-  useEffect(() => {
-    const unlock = () => {
-      if (!currentSong || !wantsPlayRef.current) return
-      const audio = audioRef.current
-      if (audio?.paused) {
-        void startPlayback()
-      }
-    }
-
-    window.addEventListener('pointerdown', unlock, { once: true })
-    window.addEventListener('keydown', unlock, { once: true })
-
-    return () => {
-      window.removeEventListener('pointerdown', unlock)
-      window.removeEventListener('keydown', unlock)
-    }
-  }, [currentSong, startPlayback])
+  }, [currentSong, isPlaying])
 
   const togglePlay = () => {
     const audio = audioRef.current
     if (!audio) return
 
     if (isPlaying) {
-      wantsPlayRef.current = false
       fadeAudio(audio, audio.volume, 0, FADE_DURATION_MS).then(() => {
         audio.pause()
         setIsPlaying(false)
       })
     } else {
-      wantsPlayRef.current = true
-      void startPlayback()
+      audio
+        .play()
+        .then(() => {
+          fadeAudio(audio, audio.volume, volumeRef.current, FADE_DURATION_MS)
+          setIsPlaying(true)
+        })
+        .catch(console.error)
     }
   }
 
@@ -263,7 +205,7 @@ export default function MusicPlayer() {
 
   return (
     <section id="music" ref={sectionRef} className="max-w-7xl mx-auto">
-      <audio ref={audioRef} preload="auto" controlsList="nodownload noplaybackrate" onContextMenu={(e) => e.preventDefault()} />
+      <audio ref={audioRef} preload="none" controlsList="nodownload noplaybackrate" onContextMenu={(e) => e.preventDefault()} />
       <motion.div
         initial="hidden"
         animate={isInView ? 'visible' : 'hidden'}
@@ -279,11 +221,6 @@ export default function MusicPlayer() {
         <motion.p variants={itemVariants} className="text-gray-400 text-lg">
           {PREVIEW_DURATION_SEC}s previews — purchase to unlock full tracks
         </motion.p>
-        {autoplayBlocked && !isPlaying && currentSong && (
-          <motion.p variants={itemVariants} className="text-gold/80 text-sm mt-2">
-            Tap play to start the music
-          </motion.p>
-        )}
       </motion.div>
 
       <motion.div
