@@ -322,7 +322,7 @@ export async function getSongComments(songId: string): Promise<SongComment[]> {
 
     if (error) throw new Error(error.message)
 
-    const userIds = [...new Set((data || []).map((row) => String(row.user_id)))]
+    const userIds = Array.from(new Set((data || []).map((row) => String(row.user_id))))
     const profileMap = new Map<string, UserProfile>()
 
     if (userIds.length > 0) {
