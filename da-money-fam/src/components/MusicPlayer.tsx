@@ -8,7 +8,6 @@ import { PREVIEW_DURATION_SEC } from '@/lib/audio-constants'
 
 const FADE_DURATION_MS = 1000
 const FADE_INTERVAL_MS = 50
-const AUTOPLAY_DELAY_MS = 5000
 
 function pickRandomSong(songs: PublicSong[], excludeId?: string): PublicSong | null {
   if (songs.length === 0) return null
@@ -41,30 +40,6 @@ export default function MusicPlayer() {
     currentSongIdRef.current = currentSong?.id ?? null
     previewEndedRef.current = false
   }, [currentSong])
-
-  // Start playback 5 seconds after the site opens
-  useEffect(() => {
-    const timer = setTimeout(() => setIsPlaying(true), AUTOPLAY_DELAY_MS)
-    return () => clearTimeout(timer)
-  }, [])
-
-  const playWhenReady = useCallback((audio: HTMLAudioElement) => {
-    const start = () => {
-      audio.play().catch((err) => console.error('Playback failed:', err))
-    }
-
-    if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
-      start()
-      return () => {}
-    }
-
-    audio.addEventListener('canplay', start, { once: true })
-    if (audio.readyState === HTMLMediaElement.HAVE_NOTHING) {
-      audio.load()
-    }
-
-    return () => audio.removeEventListener('canplay', start)
-  }, [])
 
   const fadeAudio = useCallback(
     (audio: HTMLAudioElement, startVolume: number, endVolume: number, duration: number) => {
@@ -104,7 +79,6 @@ export default function MusicPlayer() {
     if (next) {
       setProgress(0)
       setCurrentSong(next)
-      setIsPlaying(true)
     }
 
     transitioningRef.current = false
@@ -149,8 +123,13 @@ export default function MusicPlayer() {
     }
 
     const onPlay = () => {
+      setIsPlaying(true)
       audio.volume = 0
       fadeAudio(audio, 0, volumeRef.current, FADE_DURATION_MS)
+    }
+
+    const onPause = () => {
+      if (!transitioningRef.current) setIsPlaying(false)
     }
 
     const onEnded = () => {
@@ -162,36 +141,44 @@ export default function MusicPlayer() {
 
     audio.addEventListener('timeupdate', updateProgress)
     audio.addEventListener('play', onPlay)
+    audio.addEventListener('pause', onPause)
     audio.addEventListener('ended', onEnded)
 
     return () => {
       audio.removeEventListener('timeupdate', updateProgress)
       audio.removeEventListener('play', onPlay)
+      audio.removeEventListener('pause', onPause)
       audio.removeEventListener('ended', onEnded)
     }
   }, [fadeAudio, advanceToNext])
 
-  // Preload track when song changes
+  // Load track and autoplay as soon as audio is ready
   useEffect(() => {
     const audio = audioRef.current
     if (!currentSong || !audio) return
 
-    audio.src = `/api/preview/${currentSong.id}`
-    audio.load()
-  }, [currentSong])
+    let cancelled = false
 
-  // Play or pause when isPlaying changes
-  useEffect(() => {
-    const audio = audioRef.current
-    if (!currentSong || !audio) return
-
-    if (!isPlaying) {
-      audio.pause()
-      return
+    const startPlayback = () => {
+      if (cancelled) return
+      audio.play().catch(() => {
+        if (!cancelled) setIsPlaying(false)
+      })
     }
 
-    return playWhenReady(audio)
-  }, [currentSong, isPlaying, playWhenReady])
+    audio.src = `/api/preview/${currentSong.id}`
+    audio.addEventListener('canplay', startPlayback, { once: true })
+    audio.load()
+
+    if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      startPlayback()
+    }
+
+    return () => {
+      cancelled = true
+      audio.removeEventListener('canplay', startPlayback)
+    }
+  }, [currentSong])
 
   const togglePlay = () => {
     const audio = audioRef.current
@@ -203,8 +190,7 @@ export default function MusicPlayer() {
         setIsPlaying(false)
       })
     } else {
-      playWhenReady(audio)
-      setIsPlaying(true)
+      audio.play().catch(console.error)
     }
   }
 
