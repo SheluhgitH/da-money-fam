@@ -30,6 +30,7 @@ export default function MusicPlayer() {
   const songsRef = useRef<PublicSong[]>([])
   const currentSongIdRef = useRef<string | null>(null)
   const transitioningRef = useRef(false)
+  const previewEndedRef = useRef(false)
 
   useEffect(() => {
     volumeRef.current = volume
@@ -37,6 +38,7 @@ export default function MusicPlayer() {
 
   useEffect(() => {
     currentSongIdRef.current = currentSong?.id ?? null
+    previewEndedRef.current = false
   }, [currentSong])
 
   const fadeAudio = useCallback(
@@ -62,9 +64,16 @@ export default function MusicPlayer() {
     []
   )
 
-  const goToNextSong = useCallback(() => {
+  const advanceToNext = useCallback(async () => {
     if (transitioningRef.current) return
     transitioningRef.current = true
+
+    const audio = audioRef.current
+    if (audio) {
+      await fadeAudio(audio, audio.volume, 0, FADE_DURATION_MS)
+      audio.pause()
+      audio.currentTime = 0
+    }
 
     const next = pickRandomSong(songsRef.current, currentSongIdRef.current ?? undefined)
     if (next) {
@@ -74,7 +83,7 @@ export default function MusicPlayer() {
     }
 
     transitioningRef.current = false
-  }, [])
+  }, [fadeAudio])
 
   // Load song catalog once
   useEffect(() => {
@@ -101,11 +110,15 @@ export default function MusicPlayer() {
 
     const updateProgress = () => {
       const maxTime = Math.min(audio.duration || PREVIEW_DURATION_SEC, PREVIEW_DURATION_SEC)
-      if (audio.currentTime >= PREVIEW_DURATION_SEC) {
-        audio.pause()
-        audio.currentTime = PREVIEW_DURATION_SEC
-        setIsPlaying(false)
+
+      if (audio.currentTime >= PREVIEW_DURATION_SEC - 0.15) {
+        if (!previewEndedRef.current) {
+          previewEndedRef.current = true
+          void advanceToNext()
+        }
+        return
       }
+
       setProgress((audio.currentTime / maxTime) * 100)
     }
 
@@ -114,17 +127,8 @@ export default function MusicPlayer() {
       fadeAudio(audio, 0, volumeRef.current, FADE_DURATION_MS)
     }
 
-    const onEnded = async () => {
-      if (transitioningRef.current) return
-      transitioningRef.current = true
-      await fadeAudio(audio, audio.volume, 0, FADE_DURATION_MS)
-      const next = pickRandomSong(songsRef.current, currentSongIdRef.current ?? undefined)
-      if (next) {
-        setProgress(0)
-        setCurrentSong(next)
-        setIsPlaying(true)
-      }
-      transitioningRef.current = false
+    const onEnded = () => {
+      void advanceToNext()
     }
 
     audio.addEventListener('timeupdate', updateProgress)
@@ -136,7 +140,7 @@ export default function MusicPlayer() {
       audio.removeEventListener('play', onPlay)
       audio.removeEventListener('ended', onEnded)
     }
-  }, [fadeAudio])
+  }, [fadeAudio, advanceToNext])
 
   // Load and play when song changes
   useEffect(() => {
@@ -171,15 +175,7 @@ export default function MusicPlayer() {
   }
 
   const playNext = () => {
-    const audio = audioRef.current
-    if (!audio) {
-      goToNextSong()
-      return
-    }
-    fadeAudio(audio, audio.volume, 0, FADE_DURATION_MS / 2).then(() => {
-      audio.pause()
-      goToNextSong()
-    })
+    void advanceToNext()
   }
 
   const containerVariants = {

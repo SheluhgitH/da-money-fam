@@ -3,6 +3,7 @@ import path from 'path'
 import { randomUUID, createHash, timingSafeEqual } from 'crypto'
 import type { PaymentSettings, PurchaseOrder, Song, PublicSong, UserProfile, UserStats } from '@/types/store'
 import { createServiceClient } from '@/lib/supabase/server'
+import { isMissingSupabaseTable } from '@/lib/supabase/errors'
 import { getPrivateAudioDir, getContentType, uploadAudioToStorage } from '@/lib/audio'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
@@ -78,6 +79,7 @@ export async function getPublishedSongs(): Promise<Song[]> {
       .order('created_at', { ascending: false })
 
     if (!error && data?.length) return data.map(mapSupabaseSong)
+    if (error && !isMissingSupabaseTable(error)) console.error('getPublishedSongs:', error.message)
   }
 
   const songs = await readJsonFile<Song[]>('songs.json', [])
@@ -93,6 +95,7 @@ export async function getAllSongs(): Promise<Song[]> {
       .order('created_at', { ascending: false })
 
     if (!error && data?.length) return data.map(mapSupabaseSong)
+    if (error && !isMissingSupabaseTable(error)) console.error('getAllSongs:', error.message)
   }
 
   return readJsonFile<Song[]>('songs.json', [])
@@ -108,6 +111,7 @@ export async function getSongById(id: string): Promise<Song | null> {
       .maybeSingle()
 
     if (!error && data) return mapSupabaseSong(data)
+    if (error && !isMissingSupabaseTable(error)) console.error('getSongById:', error.message)
   }
 
   const songs = await readJsonFile<Song[]>('songs.json', [])
@@ -145,8 +149,8 @@ export async function createSong(input: Omit<Song, 'created_at' | 'updated_at'>)
       .select('*')
       .single()
 
-    if (error) throw new Error(error.message)
-    return mapSupabaseSong(data)
+    if (!error && data) return mapSupabaseSong(data)
+    if (error && !isMissingSupabaseTable(error)) throw new Error(error.message)
   }
 
   const songs = await readJsonFile<Song[]>('songs.json', [])
@@ -168,8 +172,8 @@ export async function updateSong(id: string, updates: Partial<Song>): Promise<So
       .select('*')
       .single()
 
-    if (error) throw new Error(error.message)
-    return mapSupabaseSong(data)
+    if (!error && data) return mapSupabaseSong(data)
+    if (error && !isMissingSupabaseTable(error)) throw new Error(error.message)
   }
 
   const songs = await readJsonFile<Song[]>('songs.json', [])
@@ -185,7 +189,8 @@ export async function deleteSong(id: string): Promise<boolean> {
   if (isSupabaseConfigured()) {
     const supabase = createServiceClient()!
     const { error } = await supabase.from('songs').delete().eq('id', id)
-    return !error
+    if (!error) return true
+    if (!isMissingSupabaseTable(error)) return false
   }
 
   const songs = await readJsonFile<Song[]>('songs.json', [])
@@ -234,8 +239,8 @@ export async function updatePaymentSettings(settings: PaymentSettings): Promise<
       .from('payment_settings')
       .upsert({ id: 1, ...settings })
 
-    if (error) throw new Error(error.message)
-    return settings
+    if (error && !isMissingSupabaseTable(error)) throw new Error(error.message)
+    if (!error) return settings
   }
 
   await writeJsonFile('payment-settings.json', settings)
@@ -301,8 +306,8 @@ export async function createOrder(input: {
       .select('*')
       .single()
 
-    if (error) throw new Error(error.message)
-    return mapSupabaseOrder(data, song.title)
+    if (!error && data) return mapSupabaseOrder(data, song.title)
+    if (error && !isMissingSupabaseTable(error)) throw new Error(error.message)
   }
 
   const orders = await readJsonFile<PurchaseOrder[]>('orders.json', [])
@@ -326,10 +331,11 @@ export async function updateOrder(
       .select('*')
       .single()
 
-    if (error) throw new Error(error.message)
-
-    const song = await getSongById(String(data.song_id))
-    return mapSupabaseOrder(data, song?.title)
+    if (!error && data) {
+      const song = await getSongById(String(data.song_id))
+      return mapSupabaseOrder(data, song?.title)
+    }
+    if (error && !isMissingSupabaseTable(error)) throw new Error(error.message)
   }
 
   const orders = await readJsonFile<PurchaseOrder[]>('orders.json', [])
@@ -424,8 +430,8 @@ export async function createStripeOrder(input: {
       .select('*')
       .single()
 
-    if (error) throw new Error(error.message)
-    return mapSupabaseOrder(data, input.song_title)
+    if (!error && data) return mapSupabaseOrder(data, input.song_title)
+    if (error && !isMissingSupabaseTable(error)) throw new Error(error.message)
   }
 
   const orders = await readJsonFile<PurchaseOrder[]>('orders.json', [])
