@@ -48,6 +48,24 @@ export default function MusicPlayer() {
     return () => clearTimeout(timer)
   }, [])
 
+  const playWhenReady = useCallback((audio: HTMLAudioElement) => {
+    const start = () => {
+      audio.play().catch((err) => console.error('Playback failed:', err))
+    }
+
+    if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      start()
+      return () => {}
+    }
+
+    audio.addEventListener('canplay', start, { once: true })
+    if (audio.readyState === HTMLMediaElement.HAVE_NOTHING) {
+      audio.load()
+    }
+
+    return () => audio.removeEventListener('canplay', start)
+  }, [])
+
   const fadeAudio = useCallback(
     (audio: HTMLAudioElement, startVolume: number, endVolume: number, duration: number) => {
       const volumeChange = endVolume - startVolume
@@ -153,17 +171,27 @@ export default function MusicPlayer() {
     }
   }, [fadeAudio, advanceToNext])
 
-  // Load and play when song changes
+  // Preload track when song changes
   useEffect(() => {
     const audio = audioRef.current
     if (!currentSong || !audio) return
 
     audio.src = `/api/preview/${currentSong.id}`
     audio.load()
-    if (isPlaying) {
-      audio.play().catch((err) => console.error('Playback failed:', err))
+  }, [currentSong])
+
+  // Play or pause when isPlaying changes
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!currentSong || !audio) return
+
+    if (!isPlaying) {
+      audio.pause()
+      return
     }
-  }, [currentSong, isPlaying])
+
+    return playWhenReady(audio)
+  }, [currentSong, isPlaying, playWhenReady])
 
   const togglePlay = () => {
     const audio = audioRef.current
@@ -175,13 +203,8 @@ export default function MusicPlayer() {
         setIsPlaying(false)
       })
     } else {
-      audio
-        .play()
-        .then(() => {
-          fadeAudio(audio, audio.volume, volumeRef.current, FADE_DURATION_MS)
-          setIsPlaying(true)
-        })
-        .catch(console.error)
+      playWhenReady(audio)
+      setIsPlaying(true)
     }
   }
 
@@ -205,7 +228,7 @@ export default function MusicPlayer() {
 
   return (
     <section id="music" ref={sectionRef} className="max-w-7xl mx-auto">
-      <audio ref={audioRef} preload="none" controlsList="nodownload noplaybackrate" onContextMenu={(e) => e.preventDefault()} />
+      <audio ref={audioRef} preload="auto" controlsList="nodownload noplaybackrate" onContextMenu={(e) => e.preventDefault()} />
       <motion.div
         initial="hidden"
         animate={isInView ? 'visible' : 'hidden'}
