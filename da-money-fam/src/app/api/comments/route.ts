@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/user'
-import { addSongComment, getSongComments } from '@/lib/user-store'
+import { addSongComment, deleteSongComment, getSongComments, awardXp } from '@/lib/user-store'
 import { getSongById } from '@/lib/store'
 
 export const dynamic = 'force-dynamic'
@@ -41,10 +41,34 @@ export async function POST(req: Request) {
     }
 
     const comment = await addSongComment(user.id, song_id, comment_text)
+    await awardXp(user.id, 200)
     return NextResponse.json({ comment })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to add comment' },
+      { status: 400 }
+    )
+  }
+}
+
+export async function DELETE(req: Request) {
+  const user = await getCurrentUser()
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  try {
+    const { searchParams } = new URL(req.url)
+    const commentId = searchParams.get('comment_id')
+    if (!commentId) {
+      return NextResponse.json({ error: 'comment_id is required' }, { status: 400 })
+    }
+
+    await deleteSongComment(user.id, commentId)
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to delete comment' },
       { status: 400 }
     )
   }

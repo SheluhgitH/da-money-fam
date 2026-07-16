@@ -47,6 +47,21 @@ Set in **Settings → Environment Variables** (Production):
 
 After changing env vars: **Deployments → ⋯ → Redeploy**.
 
+### Post-audit env verification
+
+On deploy, the app logs `[DMF env ...]` messages when required variables are missing or unsafe. Confirm in Vercel **Runtime Logs**:
+
+| Check | Expected |
+|-------|----------|
+| `NEXT_PUBLIC_SITE_URL` | `https://damoneyfam.com` (must start with `https://`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Set whenever `NEXT_PUBLIC_SUPABASE_URL` is set |
+| `STRIPE_WEBHOOK_SECRET` | Live webhook secret (not placeholder) |
+| `ADMIN_PASSWORD` | Not the default `dmf-admin-2026` |
+| `ADMIN_SESSION_SECRET` | Random 32+ character string |
+| Root Directory | `da-money-fam` (parent `vercel.json` is ignored when root is set) |
+
+Run `merch_orders` migration from [`supabase/schema.sql`](supabase/schema.sql) after deploy if merch checkout was just added.
+
 ### Enable Vercel Analytics
 
 **Project → Analytics → Enable** (no code required beyond `@vercel/analytics` in layout).

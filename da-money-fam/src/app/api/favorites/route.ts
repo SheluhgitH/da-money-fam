@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/user'
-import { addFavorite, removeFavorite, getUserFavorites } from '@/lib/user-store'
+import { addFavorite, removeFavorite, getUserFavorites, awardXp } from '@/lib/user-store'
 import { getSongById } from '@/lib/store'
 
 export async function GET() {
@@ -31,6 +31,7 @@ export async function POST(req: Request) {
     }
 
     await addFavorite(user.id, song_id)
+    await awardXp(user.id, 100)
     return NextResponse.json({ success: true })
   } catch (error) {
     return NextResponse.json(

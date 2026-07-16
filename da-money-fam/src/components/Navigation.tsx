@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { scrollToSection } from '../utils/scrollToSection'
 import { useAuth } from '@/contexts/AuthProvider'
 import { useSiteSettings } from '@/contexts/SiteSettingsProvider'
@@ -10,6 +11,8 @@ import UserAvatar from '@/components/UserAvatar'
 import type { UserProfile } from '@/types/store'
 
 export default function Navigation() {
+  const pathname = usePathname()
+  const isHome = pathname === '/'
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const { user, loading, signOut } = useAuth()
@@ -30,54 +33,87 @@ export default function Navigation() {
       return
     }
 
-    fetch('/api/user/profile')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setProfile(data?.profile || null))
-      .catch(() => setProfile(null))
+    const loadProfile = () => {
+      fetch('/api/user/profile')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => setProfile(data?.profile || null))
+        .catch(() => setProfile(null))
+    }
+
+    loadProfile()
+    window.addEventListener('dmf-profile-updated', loadProfile)
+    return () => window.removeEventListener('dmf-profile-updated', loadProfile)
   }, [user])
 
   const navLinks = [
-    { name: 'Home', href: '#home' },
-    { name: 'Music', href: '#music' },
-    { name: 'Store', href: '#store' },
-    { name: 'Artists', href: '#artists' },
-    { name: 'Services', href: '#services' },
-    { name: 'Contact', href: '#contact' },
-  ]
+    { name: 'Home', section: 'home' },
+    { name: 'Store', section: 'store' },
+    { name: 'Listen', section: 'music' },
+    { name: 'Blog', href: '/blog', isRoute: true },
+    { name: 'Artists', section: 'artists' },
+    { name: 'Streams', section: 'streams' },
+    { name: 'Services', section: 'services' },
+    { name: 'Contact', section: 'contact' },
+  ] as const
+
+  const handleSectionNav = (section: string, e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!isHome) return
+    e.preventDefault()
+    scrollToSection(section)
+  }
 
   return (
     <motion.nav
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.8, ease: 'easeOut' }}
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+      className={`fixed top-0 left-0 right-0 z-[100] pointer-events-auto transition-all duration-500 ${
         isScrolled ? 'glass py-3 md:py-4' : 'bg-transparent py-4 md:py-6'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 md:px-8 flex justify-between items-center">
-        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="text-lg sm:text-xl md:text-2xl font-serif font-bold gold-gradient">
+        <Link
+          href="/"
+          onClick={(e) => {
+            if (isHome) {
+              e.preventDefault()
+              scrollToSection('home')
+            }
+          }}
+          className="text-lg sm:text-xl md:text-2xl font-serif font-bold gold-gradient"
+        >
           Da Money Fam
-        </button>
+        </Link>
 
-        <div className="hidden md:flex items-center space-x-6">
-              {navLinks.map((link) => (
-                <button
-                  key={link.name}
-                  onClick={() => scrollToSection(link.href.slice(1))}
-                  className="text-sm uppercase tracking-widest text-gray-300 hover:text-gold transition-colors duration-300 relative group"
-                >
-                  {link.name}
-                </button>
-              ))}
+        <div className="hidden md:flex items-center space-x-6 relative z-10">
+              {navLinks.map((link) =>
+                'isRoute' in link && link.isRoute ? (
+                  <Link
+                    key={link.name}
+                    href={link.href}
+                    className={`text-sm uppercase tracking-widest transition-colors duration-300 ${
+                      pathname.startsWith('/blog') ? 'text-gold hover:text-white' : 'text-gold hover:text-white'
+                    }`}
+                  >
+                    {link.name}
+                  </Link>
+                ) : 'section' in link ? (
+                  <Link
+                    key={link.name}
+                    href={`/#${link.section}`}
+                    onClick={(e) => handleSectionNav(link.section, e)}
+                    className="text-sm uppercase tracking-widest text-gray-300 hover:text-gold transition-colors duration-300 relative group cursor-pointer"
+                  >
+                    {link.name}
+                  </Link>
+                ) : null
+              )}
 
               {!loading && (
                 user ? (
                   <div className="flex items-center gap-3 ml-2">
                     <Link href="/library" className="text-xs uppercase tracking-widest text-gold hover:text-white transition-colors">
                       Library
-                    </Link>
-                    <Link href="/coin-wallet" className="text-xs uppercase tracking-widest text-gold hover:text-white transition-colors">
-                      Coinz
                     </Link>
                     <div className="flex items-center gap-2">
                       <span className="text-xs uppercase tracking-widest text-gray-300">Animations</span>
@@ -130,26 +166,35 @@ export default function Navigation() {
             className="md:hidden glass mt-4"
           >
             <div className="flex flex-col space-y-4 p-8">
-              {navLinks.map((link) => (
-                <button
-                  key={link.name}
-                  onClick={() => {
-                    scrollToSection(link.href.slice(1))
-                    setIsMenuOpen(false)
-                  }}
-                  className="text-lg uppercase tracking-widest text-gray-300 hover:text-gold transition-colors duration-300"
-                >
-                  {link.name}
-                </button>
-              ))}
+              {navLinks.map((link) =>
+                'isRoute' in link && link.isRoute ? (
+                  <Link
+                    key={link.name}
+                    href={link.href}
+                    className="text-lg uppercase tracking-widest text-gold"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {link.name}
+                  </Link>
+                ) : 'section' in link ? (
+                  <Link
+                    key={link.name}
+                    href={`/#${link.section}`}
+                    onClick={(e) => {
+                      handleSectionNav(link.section, e)
+                      setIsMenuOpen(false)
+                    }}
+                    className="text-lg uppercase tracking-widest text-gray-300 hover:text-gold transition-colors duration-300 cursor-pointer"
+                  >
+                    {link.name}
+                  </Link>
+                ) : null
+              )}
               {!loading && (
                 user ? (
                   <>
                     <Link href="/library" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
                       Library
-                    </Link>
-                    <Link href="/coin-wallet" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
-                      Coinz
                     </Link>
                     <Link href="/account/profile" className="flex items-center gap-3 text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
                       <UserAvatar

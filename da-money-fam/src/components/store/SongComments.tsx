@@ -8,21 +8,24 @@ import UserAvatar from '@/components/UserAvatar'
 type SongCommentsProps = {
   songId: string
   initialCount?: number
+  defaultExpanded?: boolean
 }
 
-export default function SongComments({ songId, initialCount = 0 }: SongCommentsProps) {
+export default function SongComments({ songId, initialCount = 0, defaultExpanded = false }: SongCommentsProps) {
   const { user } = useAuth()
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const [comments, setComments] = useState<SongComment[]>([])
   const [commentText, setCommentText] = useState('')
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [error, setError] = useState('')
   const [count, setCount] = useState(initialCount)
-
   const [loaded, setLoaded] = useState(false)
 
   const loadComments = async () => {
     setLoading(true)
+    setError('')
     try {
       const res = await fetch(`/api/comments?song_id=${encodeURIComponent(songId)}`)
       const data = await res.json()
@@ -30,13 +33,22 @@ export default function SongComments({ songId, initialCount = 0 }: SongCommentsP
         setComments(data.comments || [])
         setCount((data.comments || []).length)
         setLoaded(true)
+      } else {
+        setError(data.error || 'Failed to load comments')
       }
-    } catch (error) {
-      console.error(error)
+    } catch {
+      setError('Failed to load comments')
     } finally {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (defaultExpanded && !loaded) {
+      loadComments()
+      setExpanded(true)
+    }
+  }, [defaultExpanded, loaded, songId])
 
   useEffect(() => {
     if (expanded && !loaded) {
@@ -53,6 +65,7 @@ export default function SongComments({ songId, initialCount = 0 }: SongCommentsP
     if (!commentText.trim()) return
 
     setSubmitting(true)
+    setError('')
     try {
       const res = await fetch('/api/comments', {
         method: 'POST',
@@ -64,11 +77,35 @@ export default function SongComments({ songId, initialCount = 0 }: SongCommentsP
         setComments((prev) => [data.comment, ...prev])
         setCount((prev) => prev + 1)
         setCommentText('')
+      } else {
+        setError(data.error || 'Failed to post comment')
       }
-    } catch (error) {
-      console.error(error)
+    } catch {
+      setError('Failed to post comment')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleDelete = async (commentId: string) => {
+    setDeletingId(commentId)
+    setError('')
+    try {
+      const res = await fetch(
+        `/api/comments?comment_id=${encodeURIComponent(commentId)}`,
+        { method: 'DELETE' }
+      )
+      const data = await res.json()
+      if (res.ok) {
+        setComments((prev) => prev.filter((c) => c.id !== commentId))
+        setCount((prev) => Math.max(0, prev - 1))
+      } else {
+        setError(data.error || 'Failed to delete comment')
+      }
+    } catch {
+      setError('Failed to delete comment')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -103,6 +140,8 @@ export default function SongComments({ songId, initialCount = 0 }: SongCommentsP
             </button>
           </form>
 
+          {error && <p className="text-red-400 text-sm">{error}</p>}
+
           {loading ? (
             <p className="text-gray-500 text-sm">Loading comments...</p>
           ) : comments.length === 0 ? (
@@ -117,9 +156,21 @@ export default function SongComments({ songId, initialCount = 0 }: SongCommentsP
                     size="sm"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs text-gold font-semibold">
-                      {comment.display_name || 'Fan'}
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-gold font-semibold">
+                        {comment.display_name || 'Fan'}
+                      </p>
+                      {user?.id === comment.user_id && (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(comment.id)}
+                          disabled={deletingId === comment.id}
+                          className="text-[10px] uppercase tracking-wider text-gray-500 hover:text-red-400 disabled:opacity-50"
+                        >
+                          {deletingId === comment.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      )}
+                    </div>
                     <p className="text-sm text-gray-300 break-words">{comment.comment_text}</p>
                   </div>
                 </div>

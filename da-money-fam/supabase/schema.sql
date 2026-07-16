@@ -229,6 +229,98 @@ drop policy if exists "Users can insert own coins" on user_coins;
 create policy "Users can insert own coins"
   on user_coins for insert with check (auth.uid() = user_id);
 
+create table if not exists merch_orders (
+  id uuid primary key default gen_random_uuid(),
+  merch_id text not null,
+  merch_name text not null,
+  price numeric(10, 2) not null,
+  size text,
+  shipping_address text,
+  buyer_email varchar(255) not null,
+  buyer_name varchar(255) not null,
+  stripe_session_id text unique not null,
+  user_id uuid references auth.users(id) on delete set null,
+  status varchar(20) not null default 'paid',
+  created_at timestamptz not null default now()
+);
+
+alter table merch_orders enable row level security;
+
+drop policy if exists "Users can read own merch orders" on merch_orders;
+create policy "Users can read own merch orders"
+  on merch_orders for select using (auth.uid() = user_id);
+
+-- Migration for existing merch_orders tables:
+-- alter table merch_orders add column if not exists size text;
+-- alter table merch_orders add column if not exists shipping_address text;
+
+create table if not exists drop_waitlist (
+  id uuid primary key default gen_random_uuid(),
+  song_id text not null references songs(id) on delete cascade,
+  email varchar(255) not null,
+  user_id uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (song_id, email)
+);
+
+alter table drop_waitlist enable row level security;
+
+create table if not exists newsletter_subscribers (
+  id uuid primary key default gen_random_uuid(),
+  email varchar(255) not null unique,
+  created_at timestamptz not null default now()
+);
+
+alter table newsletter_subscribers enable row level security;
+
 -- Storage buckets (create in Supabase dashboard):
 --   store-audio (private)
 --   store-covers (public)
+
+create table if not exists service_orders (
+  id uuid primary key default gen_random_uuid(),
+  package_slug text not null,
+  package_name text not null,
+  deposit_amount numeric(10, 2) not null,
+  buyer_email varchar(255) not null,
+  buyer_name varchar(255) not null,
+  stripe_session_id text unique not null,
+  user_id uuid references auth.users(id) on delete set null,
+  status varchar(20) not null default 'deposit_paid',
+  created_at timestamptz not null default now()
+);
+
+alter table service_orders enable row level security;
+
+drop policy if exists "Users can read own service orders" on service_orders;
+create policy "Users can read own service orders"
+  on service_orders for select using (auth.uid() = user_id);
+
+create table if not exists fan_subscriptions (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  stripe_subscription_id text not null,
+  stripe_customer_id text,
+  status varchar(20) not null default 'active',
+  current_period_end timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table fan_subscriptions enable row level security;
+
+drop policy if exists "Users can read own fan subscription" on fan_subscriptions;
+create policy "Users can read own fan subscription"
+  on fan_subscriptions for select using (auth.uid() = user_id);
+
+create table if not exists referrals (
+  id uuid primary key default gen_random_uuid(),
+  referrer_id uuid not null references auth.users(id) on delete cascade,
+  referred_user_id uuid references auth.users(id) on delete set null,
+  buyer_email varchar(255) not null unique,
+  order_id text not null,
+  status varchar(20) not null default 'pending',
+  coupon_id text,
+  created_at timestamptz not null default now()
+);
+
+alter table referrals enable row level security;

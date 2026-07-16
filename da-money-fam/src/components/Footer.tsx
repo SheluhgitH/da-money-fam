@@ -4,6 +4,8 @@ import { scrollRevealViewport } from '@/lib/motion'
 
 import { motion } from 'framer-motion'
 import { useState } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { CONFIG } from '../config'
 import { scrollToSection } from '../utils/scrollToSection'
 import PremiumChat from './PremiumChat'
@@ -75,6 +77,8 @@ const socialLinks = [
 ]
 
 export default function Footer() {
+  const pathname = usePathname()
+  const isHome = pathname === '/'
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState('')
   const [emailError, setEmailError] = useState('')
@@ -100,26 +104,18 @@ export default function Footer() {
     setSubmitMessage('')
 
     try {
-      const data = new FormData(form);
-
-      const response = await fetch(CONFIG.FORMSPREE_URL, {
+      const response = await fetch('/api/newsletter', {
         method: 'POST',
-        headers: {
-          'Accept': 'application/json'
-        },
-        body: data
-      });
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
 
-      const result = await response.json();
+      const result = await response.json()
       if (response.ok) {
-        setSubmitMessage('Subscribed! Stay tuned for updates.')
+        setSubmitMessage('Subscribed! Stay tuned for release alerts.')
         form.reset()
       } else {
-        if (Object.hasOwn(result, 'errors')) {
-          setSubmitMessage(result.errors.map((error: any) => error.message).join(', '));
-        } else {
-          setSubmitMessage(result.error || 'Failed to subscribe. Please try again.');
-        }
+        setSubmitMessage(result.error || 'Failed to subscribe. Please try again.')
       }
     } catch (error) {
       setSubmitMessage('Failed to subscribe. Please check your connection.');
@@ -187,15 +183,34 @@ export default function Footer() {
               Quick Links
             </h4>
             <ul className="space-y-3">
-              {['Home', 'Music', 'Artists', 'Events', 'Contact', 'Merch'].map((link) => (
-                <li key={link}>
-                  <motion.button
-                    onClick={() => scrollToSection(link.toLowerCase())}
-                    whileHover={{ x: 5 }}
-                    className="text-gray-400 hover:text-gold transition-colors duration-300"
+              {[
+                { label: 'Home', section: 'home' },
+                { label: 'Store', section: 'store' },
+                { label: 'Listen', section: 'music' },
+                { label: 'Artists', section: 'artists' },
+                { label: 'Streams', section: 'streams' },
+                { label: 'Services', section: 'services' },
+                { label: 'Merch', section: 'merch' },
+                { label: 'Events', section: 'events' },
+                { label: 'Contact', section: 'contact' },
+              ].map((link) => (
+                <li key={link.section}>
+                  <Link
+                    href={`/#${link.section}`}
+                    onClick={(e) => {
+                      if (isHome) {
+                        e.preventDefault()
+                        scrollToSection(link.section)
+                      }
+                    }}
                   >
-                    {link}
-                  </motion.button>
+                    <motion.span
+                      whileHover={{ x: 5 }}
+                      className="inline-block text-gray-400 hover:text-gold transition-colors duration-300"
+                    >
+                      {link.label}
+                    </motion.span>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -206,7 +221,7 @@ export default function Footer() {
               Newsletter
             </h4>
             <p className="text-gray-400 mb-4">
-              Subscribe for exclusive releases, events, and updates
+              Subscribe for exclusive releases, merch drops, and store alerts
             </p>
             <form onSubmit={handleSubmit} className="flex flex-col gap-2">
               <div className="flex gap-2">

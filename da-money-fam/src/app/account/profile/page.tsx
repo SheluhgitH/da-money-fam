@@ -17,6 +17,7 @@ export default function ProfilePage() {
   const [favorites, setFavorites] = useState<PublicSong[]>([])
   const [ownedCount, setOwnedCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (authLoading) return
@@ -25,14 +26,30 @@ export default function ProfilePage() {
       return
     }
 
+    setLoading(true)
+    setError('')
+
     Promise.all([
-      fetch('/api/user/profile').then((r) => r.json()),
-      fetch('/api/user/stats').then((r) => r.json()),
-      fetch('/api/favorites').then((r) => r.json()),
-      fetch('/api/songs').then((r) => r.json()),
-      fetch('/api/library').then((r) => r.json()),
+      fetch('/api/user/profile'),
+      fetch('/api/user/stats'),
+      fetch('/api/favorites'),
+      fetch('/api/songs'),
+      fetch('/api/library'),
     ])
-      .then(([profileData, statsData, favData, songsData, libraryData]) => {
+      .then(async ([profileRes, statsRes, favRes, songsRes, libraryRes]) => {
+        if (!profileRes.ok) {
+          const body = await profileRes.json().catch(() => ({}))
+          throw new Error(body.error || 'Failed to load profile')
+        }
+
+        const [profileData, statsData, favData, songsData, libraryData] = await Promise.all([
+          profileRes.json(),
+          statsRes.ok ? statsRes.json() : { stats: null },
+          favRes.ok ? favRes.json() : { favorites: [] },
+          songsRes.ok ? songsRes.json() : { songs: [] },
+          libraryRes.ok ? libraryRes.json() : { library: [] },
+        ])
+
         setProfile(profileData.profile || null)
         setEmail(profileData.email || user.email || '')
         setStats(statsData.stats || null)
@@ -41,7 +58,9 @@ export default function ProfilePage() {
         setFavorites(allSongs.filter((s) => favoriteIds.includes(s.id)))
         setOwnedCount((libraryData.library || []).length)
       })
-      .catch(console.error)
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load profile')
+      })
       .finally(() => setLoading(false))
   }, [user, authLoading, router])
 
@@ -53,7 +72,27 @@ export default function ProfilePage() {
     )
   }
 
-  if (!user || !profile) return null
+  if (!user) return null
+
+  if (error || !profile) {
+    return (
+      <div className="min-h-screen bg-matte-black flex items-center justify-center px-4">
+        <div className="max-w-md w-full glass-gold rounded-2xl p-8 text-center space-y-4">
+          <p className="text-red-400 text-sm">{error || 'Could not load your profile.'}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 bg-gold text-black rounded-full text-xs font-bold uppercase tracking-wider hover:bg-white transition-colors"
+          >
+            Try Again
+          </button>
+          <Link href="/account" className="block text-gold text-sm hover:underline">
+            Account Settings
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   const xpProgress = stats ? (stats.xp % 2000) / 20 : 0
 

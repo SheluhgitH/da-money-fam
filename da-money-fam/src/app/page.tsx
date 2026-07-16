@@ -1,71 +1,49 @@
-'use client'
+import type { Metadata } from 'next'
+import { getSongById } from '@/lib/store'
+import HomePage from '@/components/HomePage'
 
-import HeroSection from '@/components/HeroSection'
-import Navigation from '@/components/Navigation'
-import MusicPlayer from '@/components/MusicPlayer'
-import ArtistRoster from '@/components/ArtistRoster'
-import EventCalendar from '@/components/EventCalendar'
-import PricingSection from '@/components/PricingSection'
-import PricingVideoSection from '@/components/PricingVideoSection'
-import VideoEditingSection from '@/components/VideoEditingSection'
-import Footer from '@/components/Footer'
-import FloatingShapes from '@/components/FloatingShapes'
-import HeroVideoSection from '@/components/HeroVideoSection'
-import MerchStore from '@/components/MerchStore'
-import DmfReputationCard from '@/components/DmfReputationCard'
-import SongStore from '@/components/store/SongStore'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
-export default function Home() {
-  return (
-    <main className="min-h-screen bg-matte-black">
-      <Navigation />
-      <FloatingShapes />
+type PageProps = {
+  searchParams: Promise<{ song?: string }>
+}
 
-      <section className="relative">
-        <HeroSection />
-      </section>
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const params = await searchParams
+  const songId = params.song
+  if (!songId) return {}
 
-      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
-        <SongStore />
-      </section>
+  const song = await getSongById(songId)
+  if (!song) return {}
 
-      <section className="relative">
-        <HeroVideoSection />
-      </section>
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://damoneyfam.com'
+  const imageUrl = song.album_cover_path.startsWith('http')
+    ? song.album_cover_path
+    : `${siteUrl}${song.album_cover_path}`
 
-      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
-        <ArtistRoster />
-      </section>
+  const title = `${song.title} — ${song.artist}`
+  const description = song.description || `Listen and buy ${song.title} by ${song.artist} on Da Money Fam`
 
-      <section className="relative">
-        <MerchStore />
-      </section>
+  return {
+    title: `${title} | Da Money Fam`,
+    description,
+    openGraph: {
+      title,
+      description,
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: song.title }],
+      url: `${siteUrl}/?song=${songId}#store`,
+      type: 'website',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: [imageUrl],
+    },
+  }
+}
 
-      <section className="relative px-4 md:px-8 lg:px-16 py-10 md:py-16">
-        <DmfReputationCard />
-      </section>
-
-      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
-        <EventCalendar />
-      </section>
-
-      <section className="relative">
-        <PricingVideoSection />
-      </section>
-
-      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
-        <VideoEditingSection />
-      </section>
-
-      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
-        <PricingSection />
-      </section>
-
-      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
-        <MusicPlayer />
-      </section>
-
-      <Footer />
-    </main>
-  )
+export default function Page() {
+  return <HomePage />
 }

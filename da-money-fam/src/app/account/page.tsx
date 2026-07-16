@@ -13,10 +13,16 @@ export default function AccountPage() {
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [fanClubActive, setFanClubActive] = useState(false)
+  const [fanClubStatus, setFanClubStatus] = useState<string | null>(null)
+  const [portalLoading, setPortalLoading] = useState(false)
 
   useEffect(() => {
     if (authLoading) return
-    if (!user) return
+    if (!user) {
+      router.push('/login?redirect=/account')
+      return
+    }
 
     fetch('/api/user/profile')
       .then(async (r) => {
@@ -31,7 +37,31 @@ export default function AccountPage() {
         }
       })
       .catch(console.error)
-  }, [user, authLoading])
+
+    fetch('/api/user/fan-club')
+      .then((r) => r.json())
+      .then((data) => {
+        setFanClubActive(Boolean(data.active))
+        setFanClubStatus(data.subscription?.status ?? null)
+      })
+      .catch(() => {
+        setFanClubActive(false)
+        setFanClubStatus(null)
+      })
+  }, [user, authLoading, router])
+
+  const handleManageSubscription = async () => {
+    setPortalLoading(true)
+    try {
+      const res = await fetch('/api/billing/portal', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to open portal')
+      window.location.href = data.url
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to open billing portal')
+      setPortalLoading(false)
+    }
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,6 +76,7 @@ export default function AccountPage() {
 
     if (res.ok) {
       setMessage('Profile updated!')
+      window.dispatchEvent(new Event('dmf-profile-updated'))
     } else {
       setMessage('Failed to update profile')
     }
@@ -65,6 +96,8 @@ export default function AccountPage() {
       </div>
     )
   }
+
+  if (!user) return null
 
   return (
     <div className="min-h-screen bg-matte-black py-24 px-4">
@@ -130,6 +163,36 @@ export default function AccountPage() {
         </form>
 
         <div className="mt-8 pt-8 border-t border-white/10 space-y-3">
+          <div className="p-4 rounded-xl border border-purple-400/20 bg-purple-900/10 mb-4">
+            <p className="text-purple-200 text-[10px] font-bold uppercase tracking-wider mb-1">DMF Fan Club</p>
+            {fanClubActive ? (
+              <>
+                <p className="text-green-400 text-sm mb-3">Active — 60s previews + member perks</p>
+                <button
+                  type="button"
+                  onClick={handleManageSubscription}
+                  disabled={portalLoading}
+                  className="w-full py-2.5 border border-gold/30 text-gold rounded-full text-xs font-bold uppercase tracking-wider hover:bg-gold/10 disabled:opacity-50"
+                >
+                  {portalLoading ? 'Opening...' : 'Manage Subscription'}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-400 text-sm mb-3">
+                  {fanClubStatus === 'canceled'
+                    ? 'Your membership ended. Rejoin for extended previews.'
+                    : '$9/mo — 60s previews & member perks'}
+                </p>
+                <Link
+                  href="/#reputation"
+                  className="block text-center py-2.5 bg-purple-600/40 border border-purple-400/40 text-purple-100 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-purple-600/60"
+                >
+                  Join Fan Club
+                </Link>
+              </>
+            )}
+          </div>
           <Link
             href="/account/profile"
             className="block text-center py-3 border border-gold/30 text-gold rounded-full text-xs font-bold uppercase tracking-wider hover:bg-gold/10 transition-colors"

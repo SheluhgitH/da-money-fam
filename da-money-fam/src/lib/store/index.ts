@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { randomUUID, createHash, timingSafeEqual } from 'crypto'
-import type { PaymentSettings, PurchaseOrder, Song, PublicSong, UserProfile, UserStats } from '@/types/store'
+import type { PaymentSettings, PurchaseOrder, MerchOrder, ServiceOrder, Song, PublicSong, UserProfile, UserStats } from '@/types/store'
 import { createServiceClient } from '@/lib/supabase/server'
 import { isMissingSupabaseTable } from '@/lib/supabase/errors'
 import { getPrivateAudioDir, getContentType, uploadAudioToStorage } from '@/lib/audio'
@@ -84,7 +84,34 @@ function normalizeSong(song: Song): Song {
   return { ...song, for_sale: song.for_sale !== false }
 }
 
+export async function applyScheduledDropReleases(): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10)
+
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    await supabase
+      .from('songs')
+      .update({ for_sale: true, updated_at: new Date().toISOString() })
+      .eq('for_sale', false)
+      .lte('release_date', today)
+    return
+  }
+
+  const songs = await readJsonFile<Song[]>('songs.json', [])
+  let changed = false
+  for (const song of songs) {
+    if (song.for_sale === false && song.release_date && song.release_date <= today) {
+      song.for_sale = true
+      song.updated_at = new Date().toISOString()
+      changed = true
+    }
+  }
+  if (changed) await writeJsonFile('songs.json', songs)
+}
+
 export async function getPublishedSongs(): Promise<Song[]> {
+  await applyScheduledDropReleases()
+
   if (isSupabaseConfigured()) {
     const supabase = createServiceClient()!
     const { data, error } = await supabase
@@ -459,6 +486,224 @@ export async function createStripeOrder(input: {
 
 export function generateDownloadToken(): string {
   return createHash('sha256').update(randomUUID() + Date.now()).digest('hex')
+}
+
+export async function getMerchOrderByStripeSession(sessionId: string): Promise<MerchOrder | null> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data } = await supabase
+      .from('merch_orders')
+      .select('*')
+      .eq('stripe_session_id', sessionId)
+      .maybeSingle()
+    if (data) {
+      return {
+        id: String(data.id),
+        merch_id: String(data.merch_id),
+        merch_name: String(data.merch_name),
+        price: Number(data.price),
+        size: data.size ? String(data.size) : null,
+        shipping_address: data.shipping_address ? String(data.shipping_address) : null,
+        buyer_email: String(data.buyer_email),
+        buyer_name: String(data.buyer_name),
+        stripe_session_id: String(data.stripe_session_id),
+        user_id: data.user_id ? String(data.user_id) : null,
+        status: 'paid',
+        created_at: String(data.created_at),
+      }
+    }
+  }
+
+  const orders = await readJsonFile<MerchOrder[]>('merch-orders.json', [])
+  return orders.find((order) => order.stripe_session_id === sessionId) || null
+}
+
+export async function getAllMerchOrders(): Promise<MerchOrder[]> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('merch_orders')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (!error && data) {
+      return data.map((row) => ({
+        id: String(row.id),
+        merch_id: String(row.merch_id),
+        merch_name: String(row.merch_name),
+        price: Number(row.price),
+        size: row.size ? String(row.size) : null,
+        shipping_address: row.shipping_address ? String(row.shipping_address) : null,
+        buyer_email: String(row.buyer_email),
+        buyer_name: String(row.buyer_name),
+        stripe_session_id: String(row.stripe_session_id),
+        user_id: row.user_id ? String(row.user_id) : null,
+        status: 'paid' as const,
+        created_at: String(row.created_at),
+      }))
+    }
+    if (error && !isMissingSupabaseTable(error)) throw new Error(error.message)
+  }
+
+  return readJsonFile<MerchOrder[]>('merch-orders.json', [])
+}
+
+export async function createMerchOrder(input: {
+  merch_id: string
+  merch_name: string
+  price: number
+  size?: string | null
+  shipping_address?: string | null
+  buyer_email: string
+  buyer_name: string
+  stripe_session_id: string
+  user_id?: string | null
+}): Promise<MerchOrder> {
+  const now = new Date().toISOString()
+  const order: MerchOrder = {
+    id: randomUUID(),
+    merch_id: input.merch_id,
+    merch_name: input.merch_name,
+    price: input.price,
+    size: input.size ?? null,
+    shipping_address: input.shipping_address ?? null,
+    buyer_email: input.buyer_email,
+    buyer_name: input.buyer_name,
+    stripe_session_id: input.stripe_session_id,
+    user_id: input.user_id ?? null,
+    status: 'paid',
+    created_at: now,
+  }
+
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('merch_orders')
+      .insert({
+        merch_id: input.merch_id,
+        merch_name: input.merch_name,
+        price: input.price,
+        size: input.size ?? null,
+        shipping_address: input.shipping_address ?? null,
+        buyer_email: input.buyer_email,
+        buyer_name: input.buyer_name,
+        stripe_session_id: input.stripe_session_id,
+        user_id: input.user_id ?? null,
+        status: 'paid',
+      })
+      .select('*')
+      .single()
+
+    if (!error && data) {
+      return {
+        id: String(data.id),
+        merch_id: String(data.merch_id),
+        merch_name: String(data.merch_name),
+        price: Number(data.price),
+        size: data.size ? String(data.size) : null,
+        shipping_address: data.shipping_address ? String(data.shipping_address) : null,
+        buyer_email: String(data.buyer_email),
+        buyer_name: String(data.buyer_name),
+        stripe_session_id: String(data.stripe_session_id),
+        user_id: data.user_id ? String(data.user_id) : null,
+        status: 'paid',
+        created_at: String(data.created_at),
+      }
+    }
+    if (error && !isMissingSupabaseTable(error)) throw new Error(error.message)
+  }
+
+  const orders = await readJsonFile<MerchOrder[]>('merch-orders.json', [])
+  orders.unshift(order)
+  await writeJsonFile('merch-orders.json', orders)
+  return order
+}
+
+export async function getAllServiceOrders(): Promise<ServiceOrder[]> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('service_orders')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (!error && data) {
+      return data.map((row) => ({
+        id: String(row.id),
+        package_slug: String(row.package_slug),
+        package_name: String(row.package_name),
+        deposit_amount: Number(row.deposit_amount),
+        buyer_email: String(row.buyer_email),
+        buyer_name: String(row.buyer_name),
+        stripe_session_id: String(row.stripe_session_id),
+        user_id: row.user_id ? String(row.user_id) : null,
+        status: 'deposit_paid' as const,
+        created_at: String(row.created_at),
+      }))
+    }
+    if (error && !isMissingSupabaseTable(error)) throw new Error(error.message)
+  }
+  return readJsonFile<ServiceOrder[]>('service-orders.json', [])
+}
+
+export async function createServiceOrder(input: {
+  package_slug: string
+  package_name: string
+  deposit_amount: number
+  buyer_email: string
+  buyer_name: string
+  stripe_session_id: string
+  user_id?: string | null
+}): Promise<ServiceOrder> {
+  const now = new Date().toISOString()
+  const order: ServiceOrder = {
+    id: randomUUID(),
+    package_slug: input.package_slug,
+    package_name: input.package_name,
+    deposit_amount: input.deposit_amount,
+    buyer_email: input.buyer_email,
+    buyer_name: input.buyer_name,
+    stripe_session_id: input.stripe_session_id,
+    user_id: input.user_id ?? null,
+    status: 'deposit_paid',
+    created_at: now,
+  }
+
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('service_orders')
+      .insert({
+        package_slug: input.package_slug,
+        package_name: input.package_name,
+        deposit_amount: input.deposit_amount,
+        buyer_email: input.buyer_email,
+        buyer_name: input.buyer_name,
+        stripe_session_id: input.stripe_session_id,
+        user_id: input.user_id ?? null,
+        status: 'deposit_paid',
+      })
+      .select('*')
+      .single()
+    if (!error && data) {
+      return {
+        id: String(data.id),
+        package_slug: String(data.package_slug),
+        package_name: String(data.package_name),
+        deposit_amount: Number(data.deposit_amount),
+        buyer_email: String(data.buyer_email),
+        buyer_name: String(data.buyer_name),
+        stripe_session_id: String(data.stripe_session_id),
+        user_id: data.user_id ? String(data.user_id) : null,
+        status: 'deposit_paid',
+        created_at: String(data.created_at),
+      }
+    }
+    if (error && !isMissingSupabaseTable(error)) throw new Error(error.message)
+  }
+
+  const orders = await readJsonFile<ServiceOrder[]>('service-orders.json', [])
+  orders.unshift(order)
+  await writeJsonFile('service-orders.json', orders)
+  return order
 }
 
 export async function saveUploadedFile(

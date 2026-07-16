@@ -80,12 +80,9 @@ export async function upsertUserProfile(
 }
 
 export async function ensureUserProfile(userId: string, email?: string): Promise<UserProfile> {
-  console.log('ensureUserProfile called with userId:', userId, 'email:', email, 'isSupabaseConfigured:', isSupabaseConfigured());
   const existing = await getUserProfile(userId)
-    console.log('ensureUserProfile - existing profile:', existing);
   if (existing) return existing
   const displayName = email ? email.split('@')[0] : 'Fan'
-  console.log('ensureUserProfile - creating new profile with displayName:', displayName);
   return upsertUserProfile(userId, { display_name: displayName })
 }
 
@@ -148,12 +145,30 @@ export async function getUserCoins(userId: string): Promise<number> {
   return coins[userId] || 0
 }
 
+export async function awardXp(userId: string, amount: number): Promise<UserStats> {
+  const current = await getUserStats(userId)
+  const newXp = current.xp + amount
+  const newLevel = Math.floor(newXp / 2000) + 1
+  return saveUserStats({
+    ...current,
+    xp: newXp,
+    level: newLevel,
+  })
+}
+
 export async function creditUserCoins(userId: string, amount: number): Promise<number> {
   if (isSupabaseConfigured()) {
     const supabase = createServiceClient()!
+    const { data: existing } = await supabase
+      .from('user_coins')
+      .select('amount')
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    const newAmount = (existing ? Number(existing.amount) : 0) + amount
     const { data, error } = await supabase
       .from('user_coins')
-      .upsert({ user_id: userId, amount: amount }, { onConflict: 'user_id', ignoreDuplicates: false })
+      .upsert({ user_id: userId, amount: newAmount }, { onConflict: 'user_id' })
       .select('amount')
       .single()
     if (error) throw new Error(error.message)
@@ -263,6 +278,30 @@ export async function userOwnsSong(userId: string, songId: string): Promise<bool
 }
 
 export async function getUserLibrary(userId: string): Promise<LibraryItem[]> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data } = await supabase
+      .from('purchase_orders')
+      .select('id, song_id, download_token, created_at')
+      .eq('user_id', userId)
+      .in('status', ['verified', 'delivered'])
+
+    const items: LibraryItem[] = []
+    for (const row of data || []) {
+      const songId = String(row.song_id)
+      const song = await getSongById(songId)
+      items.push({
+        order_id: String(row.id),
+        song_id: songId,
+        song_title: song?.title || 'Unknown',
+        album_cover_path: song?.album_cover_path || '/store/covers/IMG_8447.PNG',
+        download_token: row.download_token ? String(row.download_token) : null,
+        purchased_at: String(row.created_at),
+      })
+    }
+    return items
+  }
+
   const orders = await getAllOrders()
   const userOrders = orders.filter(
     (o) =>
@@ -419,6 +458,26 @@ export async function addSongComment(
   return comment
 }
 
+export async function deleteSongComment(userId: string, commentId: string): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { error } = await supabase
+      .from('song_comments')
+      .delete()
+      .eq('id', commentId)
+      .eq('user_id', userId)
+    if (error) throw new Error(error.message)
+    return
+  }
+
+  const comments = await readJsonFile<SongComment[]>('song-comments.json', [])
+  const next = comments.filter((c) => !(c.id === commentId && c.user_id === userId))
+  if (next.length === comments.length) {
+    throw new Error('Comment not found')
+  }
+  await writeJsonFile('song-comments.json', next)
+}
+
 export async function getSongCommentCounts(songIds: string[]): Promise<Record<string, number>> {
   if (songIds.length === 0) return {}
 
@@ -438,6 +497,35 @@ export async function getSongCommentCounts(songIds: string[]): Promise<Record<st
   for (const comment of comments) {
     if (songIds.includes(comment.song_id)) {
       counts[comment.song_id] = (counts[comment.song_id] || 0) + 1
+    }
+  }
+  return counts
+}
+
+export async function getSongFavoriteCounts(songIds: string[]): Promise<Record<string, number>> {
+  if (songIds.length === 0) return {}
+
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data } = await supabase.from('user_favorites').select('song_id').in('song_id', songIds)
+    const counts: Record<string, number> = {}
+    for (const row of data || []) {
+      const id = String(row.song_id)
+      counts[id] = (counts[id] || 0) + 1
+    }
+    return counts
+  }
+
+  const favorites = await readJsonFile<Record<string, string[]>>('user-favorites.json', {})
+  const counts: Record<string, number> = {}
+  for (const songId of songIds) {
+    counts[songId] = 0
+  }
+  for (const list of Object.values(favorites)) {
+    for (const songId of list) {
+      if (songIds.includes(songId)) {
+        counts[songId] = (counts[songId] || 0) + 1
+      }
     }
   }
   return counts

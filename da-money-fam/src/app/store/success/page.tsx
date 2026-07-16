@@ -10,6 +10,7 @@ function SuccessContent() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [songTitle, setSongTitle] = useState('')
   const [downloadUrl, setDownloadUrl] = useState('')
+  const [isBundle, setIsBundle] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -28,6 +29,7 @@ function SuccessContent() {
       .then((data) => {
         setSongTitle(data.song_title)
         setDownloadUrl(data.download_url)
+        setIsBundle(Boolean(data.is_bundle))
         setStatus('success')
 
         const link = document.createElement('a')
@@ -59,17 +61,40 @@ function SuccessContent() {
             <div className="text-4xl mb-4 text-gold">✓</div>
             <h1 className="font-serif text-2xl text-white mb-2">Payment Successful</h1>
             <p className="text-gray-400 mb-6">
-              <span className="text-gold">{songTitle}</span> is downloading to your device.
+              <span className="text-gold">{songTitle}</span>{' '}
+              {isBundle ? 'is in your library. Your first track is downloading now.' : 'is downloading to your device.'}
             </p>
             <a
               href={downloadUrl}
               className="inline-block bg-gold text-black font-bold px-8 py-3 rounded-full uppercase tracking-wider hover:bg-white transition-colors mb-4"
             >
-              Download Again
+              {isBundle ? 'Download First Track' : 'Download Again'}
             </a>
-            <p className="text-gray-500 text-xs">
+            {isBundle && (
+              <Link
+                href="/library"
+                className="block text-gold text-sm mb-4 hover:underline"
+              >
+                Open your library for all bundle tracks
+              </Link>
+            )}
+            <p className="text-gray-500 text-xs mb-6">
               If the download didn&apos;t start, click the button above.
             </p>
+            <div className="border-t border-white/10 pt-6 mt-2">
+              <p className="text-gold text-[10px] font-bold uppercase tracking-wider mb-2">
+                Complete the fit
+              </p>
+              <p className="text-gray-400 text-sm mb-4">
+                Rep the movement — shop limited 1-of-1 DMF merch.
+              </p>
+              <Link
+                href="/#merch"
+                className="inline-block border border-gold/40 text-gold font-bold px-8 py-3 rounded-full uppercase tracking-wider text-xs hover:bg-gold hover:text-black transition-colors"
+              >
+                Shop Merch
+              </Link>
+            </div>
           </>
         )}
 

@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server'
 import { getSongById } from '@/lib/store'
 import { getStripe, getSiteUrl } from '@/lib/stripe'
+import { stripeHomeReturnUrl } from '@/lib/stripe-redirects'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getCurrentUser } from '@/lib/auth/user'
+import { getUserStats } from '@/lib/user-store'
+import { getReferralCookie } from '@/lib/referrals'
+
+const LEVEL3_DISCOUNT_PERCENT = 10
 
 export async function POST(req: Request) {
   const ip = req.headers.get('x-forwarded-for') || 'anonymous'
@@ -31,14 +36,29 @@ export async function POST(req: Request) {
     const user = await getCurrentUser()
     const stripe = getStripe()
     const siteUrl = getSiteUrl()
-    const unitAmount = Math.round(song.price * 100)
+    const referral = await getReferralCookie()
+
+    let unitAmount = Math.round(song.price * 100)
+    let discountNote = ''
+
+    if (user) {
+      const stats = await getUserStats(user.id)
+      if (stats.level >= 3) {
+        unitAmount = Math.round(unitAmount * (1 - LEVEL3_DISCOUNT_PERCENT / 100))
+        discountNote = ` — ${LEVEL3_DISCOUNT_PERCENT}% Level ${stats.level} fan discount`
+      }
+    }
 
     const metadata: Record<string, string> = {
+      type: 'song_purchase',
       song_id: song.id,
       song_title: song.title,
     }
     if (user) {
       metadata.user_id = user.id
+    }
+    if (referral) {
+      metadata.referrer_id = referral
     }
 
     const session = await stripe.checkout.sessions.create({
@@ -50,7 +70,7 @@ export async function POST(req: Request) {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: `${song.title} — ${song.artist}`,
+              name: `${song.title} — ${song.artist}${discountNote}`,
               description: `Digital download: ${song.title}`,
             },
             unit_amount: unitAmount,
@@ -60,7 +80,7 @@ export async function POST(req: Request) {
       ],
       metadata,
       success_url: `${siteUrl}/store/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/#store`,
+      cancel_url: stripeHomeReturnUrl(siteUrl, { section: 'store', checkout: 'cancel' }),
     })
 
     if (!session.url) {

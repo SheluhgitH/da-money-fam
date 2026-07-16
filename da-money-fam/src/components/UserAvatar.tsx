@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { useState } from 'react'
 
 type UserAvatarProps = {
   avatarUrl?: string | null
@@ -23,12 +24,14 @@ export default function UserAvatar({
   size = 'md',
   className = '',
 }: UserAvatarProps) {
+  const [imgError, setImgError] = useState(false)
+
   const fallback =
     displayName?.[0]?.toUpperCase() ||
     email?.[0]?.toUpperCase() ||
     'U'
 
-  if (avatarUrl) {
+  if (avatarUrl && !imgError) {
     return (
       <div
         className={`relative rounded-full overflow-hidden border border-gold/40 bg-gold/10 shrink-0 ${sizeClasses[size]} ${className}`}
@@ -39,6 +42,7 @@ export default function UserAvatar({
           fill
           className="object-cover"
           unoptimized
+          onError={() => setImgError(true)}
         />
       </div>
     )

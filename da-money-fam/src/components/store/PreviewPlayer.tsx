@@ -2,18 +2,38 @@
 
 import { useRef, useState, useEffect } from 'react'
 import { PREVIEW_DURATION_SEC, pauseAllExceptAudio } from '@/lib/audio-constants'
+import { usePreviewPlayerOptional } from '@/contexts/PreviewPlayerContext'
 
 interface PreviewPlayerProps {
   songId: string
   owned?: boolean
   className?: string
+  title?: string
+  artist?: string
+  cover?: string
+  price?: number
+  for_sale?: boolean
+  previewDurationSec?: number
 }
 
-export default function PreviewPlayer({ songId, owned, className = '' }: PreviewPlayerProps) {
+export default function PreviewPlayer({
+  songId,
+  owned,
+  className = '',
+  title = '',
+  artist = '',
+  cover = '',
+  price,
+  for_sale,
+  previewDurationSec = PREVIEW_DURATION_SEC,
+}: PreviewPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
+  const previewCtx = usePreviewPlayerOptional()
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [previewEnded, setPreviewEnded] = useState(false)
+
+  const isActiveInBar = previewCtx?.activePreview?.songId === songId
 
   const streamUrl = owned
     ? `/api/library/stream/${songId}`
@@ -31,25 +51,48 @@ export default function PreviewPlayer({ songId, owned, className = '' }: Preview
 
     const onTimeUpdate = () => {
       const t = audio.currentTime
-      if (!owned && t >= PREVIEW_DURATION_SEC) {
+      if (!owned && t >= previewDurationSec) {
         audio.pause()
-        audio.currentTime = PREVIEW_DURATION_SEC
+        audio.currentTime = previewDurationSec
         setIsPlaying(false)
         setPreviewEnded(true)
+        if (isActiveInBar && previewCtx) {
+          previewCtx.setIsPlaying(false)
+          previewCtx.setPreviewEnded(true)
+        }
       }
-      const max = owned ? audio.duration || 1 : PREVIEW_DURATION_SEC
-      setProgress((t / max) * 100)
+      const max = owned ? audio.duration || 1 : previewDurationSec
+      const pct = (t / max) * 100
+      setProgress(pct)
+      if (isActiveInBar && previewCtx) {
+        previewCtx.setProgress(pct)
+      }
     }
 
-    const onEnded = () => setIsPlaying(false)
+    const onEnded = () => {
+      setIsPlaying(false)
+      if (isActiveInBar && previewCtx) previewCtx.setIsPlaying(false)
+    }
+
+    const onPlay = () => {
+      if (isActiveInBar && previewCtx) previewCtx.setIsPlaying(true)
+    }
+
+    const onPause = () => {
+      if (isActiveInBar && previewCtx) previewCtx.setIsPlaying(false)
+    }
 
     audio.addEventListener('timeupdate', onTimeUpdate)
     audio.addEventListener('ended', onEnded)
+    audio.addEventListener('play', onPlay)
+    audio.addEventListener('pause', onPause)
     return () => {
       audio.removeEventListener('timeupdate', onTimeUpdate)
       audio.removeEventListener('ended', onEnded)
+      audio.removeEventListener('play', onPlay)
+      audio.removeEventListener('pause', onPause)
     }
-  }, [owned, songId])
+  }, [owned, songId, previewDurationSec, isActiveInBar, previewCtx])
 
   const togglePlay = async () => {
     const audio = audioRef.current
@@ -63,8 +106,20 @@ export default function PreviewPlayer({ songId, owned, className = '' }: Preview
     } else {
       try {
         pauseAllExceptAudio(audio)
+        if (previewCtx && title) {
+          previewCtx.registerPreview({
+            songId,
+            title,
+            artist,
+            cover,
+            owned,
+            price,
+            for_sale,
+          })
+        }
         await audio.play()
         setIsPlaying(true)
+        if (previewCtx) previewCtx.setIsPlaying(true)
       } catch {
         setIsPlaying(false)
       }
@@ -78,6 +133,7 @@ export default function PreviewPlayer({ songId, owned, className = '' }: Preview
     >
       <audio
         ref={audioRef}
+        data-song-id={songId}
         src={streamUrl}
         preload="none"
         controlsList="nodownload noplaybackrate"
@@ -114,7 +170,7 @@ export default function PreviewPlayer({ songId, owned, className = '' }: Preview
             ? 'Full track unlocked'
             : previewEnded
               ? 'Purchase to unlock full track'
-              : `${PREVIEW_DURATION_SEC}s preview`}
+              : `${previewDurationSec}s preview`}
         </p>
       </div>
     </div>

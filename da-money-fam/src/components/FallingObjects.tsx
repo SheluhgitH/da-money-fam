@@ -43,7 +43,7 @@ export default function FallingObjects() {
   const countScale = isMobile ? 0.5 : 1
 
   return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden z-50">
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-20">
       {FALLING_OBJECTS.map((objectType) =>
         Array.from({ length: Math.max(1, Math.round(objectType.amount * 2 * countScale)) }).map((_, i) => (
           <motion.div

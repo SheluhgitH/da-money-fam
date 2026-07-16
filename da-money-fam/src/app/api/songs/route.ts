@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getPublishedSongs, toPublicSong } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/user'
-import { getUserFavorites, getUserOwnedSongIds, getSongCommentCounts } from '@/lib/user-store'
+import { getUserFavorites, getUserOwnedSongIds, getSongCommentCounts, getSongFavoriteCounts } from '@/lib/user-store'
 import { getRecommendations } from '@/lib/recommendations'
 
 export const dynamic = 'force-dynamic'
@@ -27,9 +27,11 @@ export async function GET() {
     )
 
     const commentCounts = await getSongCommentCounts(publicSongs.map((s) => s.id))
+    const favoriteCounts = await getSongFavoriteCounts(publicSongs.map((s) => s.id))
     const songsWithCounts = publicSongs.map((song) => ({
       ...song,
       comment_count: commentCounts[song.id] || 0,
+      favorite_count: favoriteCounts[song.id] || 0,
     }))
 
     const recommendations =

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe'
-import { fulfillStripeSession } from '@/lib/stripe-fulfillment'
+import { fulfillStripeSession, handleSubscriptionUpdated } from '@/lib/stripe-fulfillment'
 import Stripe from 'stripe'
 
 export async function POST(req: Request) {
@@ -35,6 +35,19 @@ export async function POST(req: Request) {
     } catch (error) {
       console.error('Webhook fulfillment error:', error)
       return NextResponse.json({ error: 'Fulfillment failed' }, { status: 500 })
+    }
+  }
+
+  if (
+    event.type === 'customer.subscription.updated' ||
+    event.type === 'customer.subscription.deleted'
+  ) {
+    const subscription = event.data.object as Stripe.Subscription
+    try {
+      await handleSubscriptionUpdated(subscription)
+    } catch (error) {
+      console.error('Subscription webhook error:', error)
+      return NextResponse.json({ error: 'Subscription update failed' }, { status: 500 })
     }
   }
 

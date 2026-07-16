@@ -33,6 +33,7 @@ export interface PublicSong {
   owned?: boolean
   is_favorited?: boolean
   comment_count?: number
+  favorite_count?: number
 }
 
 export interface SongComment {
@@ -60,6 +61,34 @@ export interface PurchaseOrder {
   user_id?: string | null
   created_at: string
   updated_at: string
+}
+
+export interface MerchOrder {
+  id: string
+  merch_id: string
+  merch_name: string
+  price: number
+  size?: string | null
+  shipping_address?: string | null
+  buyer_email: string
+  buyer_name: string
+  stripe_session_id: string
+  user_id?: string | null
+  status: 'paid'
+  created_at: string
+}
+
+export interface ServiceOrder {
+  id: string
+  package_slug: string
+  package_name: string
+  deposit_amount: number
+  buyer_email: string
+  buyer_name: string
+  stripe_session_id: string
+  user_id?: string | null
+  status: 'deposit_paid'
+  created_at: string
 }
 
 export interface PaymentSettings {

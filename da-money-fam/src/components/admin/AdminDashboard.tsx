@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import type { OrderStatus, PaymentSettings, PurchaseOrder, Song } from '@/types/store'
+import type { OrderStatus, PaymentSettings, PurchaseOrder, MerchOrder, ServiceOrder, Song } from '@/types/store'
 import NewSongForm from './NewSongForm'
 import EditSongForm from './EditSongForm'
 
-type Tab = 'overview' | 'songs' | 'orders' | 'settings' | 'new' | 'edit'
+type Tab = 'overview' | 'songs' | 'orders' | 'merch' | 'services' | 'settings' | 'new' | 'edit'
 type OrderFilter = 'all' | OrderStatus
 
 function formatDate(iso: string) {
@@ -34,6 +34,8 @@ export default function AdminDashboard() {
   const [orderFilter, setOrderFilter] = useState<OrderFilter>('all')
   const [songs, setSongs] = useState<Song[]>([])
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
+  const [merchOrders, setMerchOrders] = useState<MerchOrder[]>([])
+  const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([])
   const [settings, setSettings] = useState<PaymentSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -42,9 +44,11 @@ export default function AdminDashboard() {
     setLoading(true)
     setMessage('')
     try {
-      const [songsRes, ordersRes, settingsRes] = await Promise.all([
+      const [songsRes, ordersRes, merchRes, serviceRes, settingsRes] = await Promise.all([
         fetch('/api/admin/songs'),
         fetch('/api/admin/orders'),
+        fetch('/api/admin/merch-orders'),
+        fetch('/api/admin/service-orders'),
         fetch('/api/admin/payment-settings'),
       ])
 
@@ -56,6 +60,8 @@ export default function AdminDashboard() {
 
       const songsData = await songsRes.json()
       const ordersData = await ordersRes.json()
+      const merchData = merchRes.ok ? await merchRes.json() : { orders: [] }
+      const serviceData = serviceRes.ok ? await serviceRes.json() : { orders: [] }
       const settingsData = await settingsRes.json()
 
       if (!songsRes.ok) {
@@ -64,6 +70,8 @@ export default function AdminDashboard() {
 
       setSongs(songsData.songs || [])
       setOrders(ordersData.orders || [])
+      setMerchOrders(merchData.orders || [])
+      setServiceOrders(serviceData.orders || [])
       setSettings(settingsData.settings || null)
     } catch (error) {
       console.error(error)
@@ -82,6 +90,8 @@ export default function AdminDashboard() {
     const promoted = songs.filter((s) => s.is_promoted).length
     const pending = orders.filter((o) => o.status === 'pending').length
     const delivered = orders.filter((o) => o.status === 'delivered').length
+    const merchRevenue = merchOrders.reduce((sum, o) => sum + o.price, 0)
+    const serviceRevenue = serviceOrders.reduce((sum, o) => sum + o.deposit_amount, 0)
     const revenue = orders
       .filter((o) => o.status === 'delivered' || o.status === 'verified')
       .reduce((sum, order) => {
@@ -89,8 +99,8 @@ export default function AdminDashboard() {
         return sum + (song?.price || 0)
       }, 0)
 
-    return { published, promoted, pending, delivered, revenue }
-  }, [songs, orders])
+    return { published, promoted, pending, delivered, revenue, merchRevenue, merchCount: merchOrders.length, serviceRevenue, serviceCount: serviceOrders.length }
+  }, [songs, orders, merchOrders, serviceOrders])
 
   const filteredOrders = useMemo(() => {
     if (orderFilter === 'all') return orders
@@ -132,6 +142,21 @@ export default function AdminDashboard() {
       loadData()
     } else {
       setMessage(data.error || 'Failed to delete song')
+    }
+  }
+
+  const notifySubscribers = async (song: Song) => {
+    if (!confirm(`Send release alert to all newsletter subscribers for "${song.title}"?`)) return
+    const res = await fetch('/api/admin/release-alert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ song_id: song.id }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      setMessage(`Release alert sent to ${data.sent} subscribers`)
+    } else {
+      setMessage(data.error || 'Failed to send release alert')
     }
   }
 
@@ -195,7 +220,9 @@ export default function AdminDashboard() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'songs', label: 'Songs' },
-    { id: 'orders', label: 'Orders' },
+    { id: 'orders', label: 'Song Orders' },
+    { id: 'merch', label: 'Merch Orders' },
+    { id: 'services', label: 'Service Orders' },
     { id: 'settings', label: 'Payment' },
     { id: 'new', label: 'Add Song' },
   ]
@@ -235,11 +262,13 @@ export default function AdminDashboard() {
         <p className="text-gray-500">Loading...</p>
       ) : tab === 'overview' ? (
         <div className="space-y-8">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
             <StatCard label="Total Songs" value={songs.length} hint={`${stats.published} published`} />
             <StatCard label="Promoted" value={stats.promoted} hint="Shown on homepage" />
             <StatCard label="Pending Orders" value={stats.pending} hint="Awaiting verification" />
             <StatCard label="Est. Revenue" value={`$${stats.revenue.toFixed(2)}`} hint={`${stats.delivered} delivered`} />
+            <StatCard label="Merch Orders" value={stats.merchCount} hint={`$${stats.merchRevenue.toFixed(2)} merch`} />
+            <StatCard label="Service Deposits" value={stats.serviceCount} hint={`$${stats.serviceRevenue.toFixed(2)} deposits`} />
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -362,12 +391,71 @@ export default function AdminDashboard() {
                   >
                     Preview
                   </a>
+                  {song.is_published && (
+                    <button
+                      onClick={() => notifySubscribers(song)}
+                      className="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-200"
+                    >
+                      Notify Fans
+                    </button>
+                  )}
                   <button
                     onClick={() => deleteSong(song.id)}
                     className="text-xs px-3 py-1 rounded-full bg-red-500/20 text-red-300"
                   >
                     Delete
                   </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : tab === 'merch' ? (
+        <div className="space-y-4">
+          {merchOrders.length === 0 ? (
+            <p className="text-gray-500">No merch orders yet.</p>
+          ) : (
+            merchOrders.map((order) => (
+              <div key={order.id} className="glass rounded-xl p-4 space-y-2">
+                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h3 className="font-bold">{order.merch_name}</h3>
+                    <p className="text-sm text-gray-400">
+                      {order.buyer_name} · {order.buyer_email}
+                    </p>
+                    {order.size && (
+                      <p className="text-xs text-gold mt-1 uppercase tracking-wider">Size: {order.size}</p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">{formatDate(order.created_at)}</p>
+                    {order.shipping_address && (
+                      <p className="text-xs text-gray-400 mt-2 whitespace-pre-line">
+                        Ship to: {order.shipping_address}
+                      </p>
+                    )}
+                  </div>
+                  <p className="text-gold font-mono text-lg shrink-0">${order.price.toFixed(2)}</p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : tab === 'services' ? (
+        <div className="space-y-4">
+          {serviceOrders.length === 0 ? (
+            <p className="text-gray-500">No service deposits yet.</p>
+          ) : (
+            serviceOrders.map((order) => (
+              <div key={order.id} className="glass rounded-xl p-4 space-y-2">
+                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h3 className="font-bold">{order.package_name}</h3>
+                    <p className="text-sm text-gray-400">
+                      {order.buyer_name} · {order.buyer_email}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">{formatDate(order.created_at)}</p>
+                    <p className="text-xs text-gold mt-1 uppercase tracking-wider">{order.status}</p>
+                  </div>
+                  <p className="text-gold font-mono text-lg shrink-0">${order.deposit_amount.toFixed(2)}</p>
                 </div>
               </div>
             ))

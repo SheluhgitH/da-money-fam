@@ -10,10 +10,259 @@ import SongComments from './SongComments'
 import SongShare from './SongShare'
 import { useAuth } from '@/contexts/AuthProvider'
 import { scrollRevealViewport, scrollRevealInView } from '@/lib/motion'
+import { SONG_BUNDLES } from '@/lib/bundles'
+import { FAN_CLUB_PREVIEW_DURATION_SEC, PREVIEW_DURATION_SEC } from '@/lib/audio-constants'
 
 const PromotedAlbumAnimation = dynamic(() => import('./PromotedAlbumAnimation'), {
   ssr: false,
 })
+
+function CountdownTimer({ releaseDate }: { releaseDate: string }) {
+  const [remaining, setRemaining] = useState('')
+
+  useEffect(() => {
+    const target = new Date(releaseDate + 'T12:00:00').getTime()
+    const tick = () => {
+      const diff = target - Date.now()
+      if (diff <= 0) {
+        setRemaining('Dropping soon')
+        return
+      }
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+      const hours = Math.floor((diff / (1000 * 60 * 60)) % 24)
+      const mins = Math.floor((diff / (1000 * 60)) % 60)
+      setRemaining(`${days}d ${hours}h ${mins}m`)
+    }
+    tick()
+    const id = setInterval(tick, 60_000)
+    return () => clearInterval(id)
+  }, [releaseDate])
+
+  if (!remaining) return null
+  return (
+    <p className="text-purple-200 text-xs font-mono mt-2">
+      Drop in: <span className="text-gold">{remaining}</span>
+    </p>
+  )
+}
+
+function DropWaitlist({ songId }: { songId: string }) {
+  const { user } = useAuth()
+  const [email, setEmail] = useState('')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [message, setMessage] = useState('')
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setStatus('loading')
+    setMessage('')
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ song_id: songId, email }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to join waitlist')
+      setStatus('done')
+      setMessage("You're on the list — we'll notify you on drop day.")
+    } catch (err) {
+      setStatus('error')
+      setMessage(err instanceof Error ? err.message : 'Failed to join waitlist')
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-4 space-y-2">
+      <p className="text-[10px] text-purple-200 uppercase tracking-wider font-bold">
+        Notify me when this drops
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder={user?.email || 'your@email.com'}
+          required
+          className="flex-1 px-3 py-2 bg-black/50 border border-purple-400/30 rounded-lg text-white text-xs placeholder-gray-500"
+        />
+        <button
+          type="submit"
+          disabled={status === 'loading' || status === 'done'}
+          className="px-4 py-2 bg-purple-500/30 border border-purple-400/40 text-purple-100 text-[10px] font-bold uppercase rounded-lg hover:bg-purple-500/50 disabled:opacity-50"
+        >
+          {status === 'done' ? 'Joined' : status === 'loading' ? '...' : 'Join'}
+        </button>
+      </div>
+      {message && (
+        <p className={`text-xs ${status === 'error' ? 'text-red-400' : 'text-green-400'}`}>{message}</p>
+      )}
+    </form>
+  )
+}
+
+function BundleCard({
+  songs,
+  onPurchase,
+  purchasing,
+}: {
+  songs: PublicSong[]
+  onPurchase: () => void
+  purchasing: boolean
+}) {
+  const bundle = SONG_BUNDLES['starter-pack']
+  const bundleSongs = bundle.song_ids
+    .map((id) => songs.find((s) => s.id === id))
+    .filter(Boolean) as PublicSong[]
+  const ownsAny = bundleSongs.some((s) => s.owned)
+  const unavailable = bundleSongs.length < bundle.song_ids.length || bundleSongs.some((s) => !s.for_sale)
+
+  if (unavailable || ownsAny) return null
+
+  return (
+    <div className="mb-10 rounded-2xl border border-purple-400/30 bg-gradient-to-r from-purple-900/30 via-black/60 to-black p-6 md:p-8">
+      <p className="text-purple-200 text-[10px] font-bold uppercase tracking-[4px] mb-2">Fans also bought</p>
+      <div className="flex flex-col md:flex-row md:items-center gap-6">
+        <div className="flex -space-x-3">
+          {bundleSongs.map((song) => (
+            <img
+              key={song.id}
+              src={song.album_cover_path}
+              alt={song.title}
+              className="w-16 h-16 rounded-lg border-2 border-black object-cover"
+            />
+          ))}
+        </div>
+        <div className="flex-1">
+          <h3 className="font-serif text-2xl text-white mb-1">{bundle.name}</h3>
+          <p className="text-gray-400 text-sm mb-2">{bundle.description}</p>
+          <p className="text-gold font-mono text-xl">${bundle.price.toFixed(2)} <span className="text-gray-500 text-sm line-through ml-2">$10</span></p>
+        </div>
+        <button
+          type="button"
+          onClick={onPurchase}
+          disabled={purchasing}
+          className="shrink-0 bg-gold text-black text-xs font-bold px-8 py-3 rounded-full uppercase tracking-wider hover:bg-white disabled:opacity-50"
+        >
+          {purchasing ? 'Redirecting...' : 'Get Bundle'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function PromotedHero({
+  song,
+  onPurchase,
+  onToggleFavorite,
+  purchasingId,
+  previewDurationSec,
+}: {
+  song: PublicSong
+  onPurchase: (song: PublicSong) => void
+  onToggleFavorite: (song: PublicSong) => void
+  purchasingId: string | null
+  previewDurationSec: number
+}) {
+  const isPurchasing = purchasingId === song.id
+  const dropPending = !song.for_sale && song.release_date
+
+  return (
+    <motion.div
+      id={`song-${song.id}`}
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={scrollRevealViewport}
+      className="mb-12 rounded-3xl border border-gold/40 bg-gradient-to-br from-gold/10 via-black/60 to-black overflow-hidden"
+    >
+      <div className="grid md:grid-cols-2 gap-0">
+        <div className="relative h-64 md:h-auto min-h-[280px]">
+          <img
+            src={song.album_cover_path}
+            alt={`${song.title} cover`}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-black/80 md:block hidden" />
+          <div className="absolute bottom-4 left-4 right-4 md:hidden">
+            {song.preview_available && (
+              <PreviewPlayer
+                songId={song.id}
+                owned={song.owned}
+                title={song.title}
+                artist={song.artist}
+                cover={song.album_cover_path}
+                price={song.price}
+                for_sale={song.for_sale}
+                previewDurationSec={previewDurationSec}
+              />
+            )}
+          </div>
+        </div>
+        <div className="p-6 md:p-10 flex flex-col justify-center">
+          <span className="text-gold text-[10px] font-bold tracking-[4px] uppercase mb-2">
+            {dropPending ? 'Exclusive Drop' : 'Featured Track'}
+          </span>
+          <h3 className="font-serif text-3xl md:text-4xl text-white mb-2">{song.title}</h3>
+          <p className="text-gold text-sm uppercase tracking-wider mb-3">{song.artist}</p>
+          {song.description && (
+            <p className="text-gray-400 text-sm mb-4">{song.description}</p>
+          )}
+          {dropPending && song.release_date && (
+            <>
+              <CountdownTimer releaseDate={song.release_date} />
+              <DropWaitlist songId={song.id} />
+            </>
+          )}
+          <div className="hidden md:block mt-4 mb-4">
+            {song.preview_available && (
+              <PreviewPlayer
+                songId={song.id}
+                owned={song.owned}
+                title={song.title}
+                artist={song.artist}
+                cover={song.album_cover_path}
+                price={song.price}
+                for_sale={song.for_sale}
+                previewDurationSec={previewDurationSec}
+              />
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 mt-4">
+            {song.for_sale && (
+              <span className="text-gold font-mono text-xl">${song.price.toFixed(2)}</span>
+            )}
+            <SongShare song={song} />
+            <button
+              type="button"
+              onClick={() => onToggleFavorite(song)}
+              className="text-lg"
+              aria-label="Favorite"
+            >
+              {song.is_favorited ? '❤️' : '🤍'}
+            </button>
+            {song.owned ? (
+              <Link
+                href="/library"
+                className="bg-white/10 text-gold text-xs font-bold px-6 py-2.5 rounded-full uppercase tracking-wider hover:bg-gold hover:text-black"
+              >
+                In Library
+              </Link>
+            ) : song.for_sale ? (
+              <button
+                onClick={() => onPurchase(song)}
+                disabled={isPurchasing}
+                className="bg-gold text-black text-xs font-bold px-6 py-2.5 rounded-full uppercase tracking-wider hover:bg-white disabled:opacity-50"
+              >
+                {isPurchasing ? 'Redirecting...' : 'Buy Now'}
+              </button>
+            ) : null}
+          </div>
+          <SongComments songId={song.id} initialCount={song.comment_count} defaultExpanded />
+        </div>
+      </div>
+    </motion.div>
+  )
+}
 
 function SongCard({
   song,
@@ -21,12 +270,14 @@ function SongCard({
   onToggleFavorite,
   purchasingId,
   isFeatured,
+  previewDurationSec,
 }: {
   song: PublicSong
   onPurchase: (song: PublicSong) => void
   onToggleFavorite: (song: PublicSong) => void
   purchasingId: string | null
   isFeatured?: boolean
+  previewDurationSec: number
 }) {
   const [isHovered, setIsHovered] = useState(false)
   const isPurchasing = purchasingId === song.id
@@ -96,7 +347,16 @@ function SongCard({
 
         {song.preview_available && (
           <div className="absolute bottom-3 left-3 right-3">
-            <PreviewPlayer songId={song.id} owned={song.owned} />
+            <PreviewPlayer
+              songId={song.id}
+              owned={song.owned}
+              title={song.title}
+              artist={song.artist}
+              cover={song.album_cover_path}
+              price={song.price}
+              for_sale={song.for_sale}
+              previewDurationSec={previewDurationSec}
+            />
           </div>
         )}
       </div>
@@ -138,6 +398,21 @@ function SongCard({
           </div>
         </div>
 
+        {!song.for_sale && song.release_date && new Date(song.release_date + 'T23:59:59') > new Date() && (
+          <>
+            <CountdownTimer releaseDate={song.release_date} />
+            <DropWaitlist songId={song.id} />
+          </>
+        )}
+
+        {(song.favorite_count || song.comment_count) ? (
+          <p className="text-[10px] text-gray-500 mb-2 uppercase tracking-wider">
+            {song.favorite_count ? `${song.favorite_count} fan${song.favorite_count === 1 ? '' : 's'} favorited` : ''}
+            {song.favorite_count && song.comment_count ? ' · ' : ''}
+            {song.comment_count ? `${song.comment_count} comment${song.comment_count === 1 ? '' : 's'}` : ''}
+          </p>
+        ) : null}
+
         <SongComments songId={song.id} initialCount={song.comment_count} />
       </div>
 
@@ -157,10 +432,14 @@ export default function SongStore() {
   const [songs, setSongs] = useState<PublicSong[]>([])
   const [recommendations, setRecommendations] = useState<PublicSong[]>([])
   const [purchasingId, setPurchasingId] = useState<string | null>(null)
+  const [purchasingBundle, setPurchasingBundle] = useState(false)
+  const [fanClubActive, setFanClubActive] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const headerRef = useRef(null)
   const isInView = useInView(headerRef, scrollRevealInView)
+
+  const previewDurationSec = fanClubActive ? FAN_CLUB_PREVIEW_DURATION_SEC : PREVIEW_DURATION_SEC
 
   const loadSongs = () => {
     fetch('/api/songs')
@@ -185,6 +464,35 @@ export default function SongStore() {
       }, 600)
     }
   }, [user])
+
+  useEffect(() => {
+    if (!user) {
+      setFanClubActive(false)
+      return
+    }
+    fetch('/api/user/fan-club')
+      .then((r) => r.json())
+      .then((data) => setFanClubActive(Boolean(data.active)))
+      .catch(() => setFanClubActive(false))
+  }, [user])
+
+  const handleBundlePurchase = async () => {
+    setPurchasingBundle(true)
+    setError('')
+    try {
+      const res = await fetch('/api/checkout/bundle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bundle_id: 'starter-pack' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Checkout failed')
+      window.location.href = data.url
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Checkout failed')
+      setPurchasingBundle(false)
+    }
+  }
 
   const handlePurchase = async (song: PublicSong) => {
     setPurchasingId(song.id)
@@ -230,6 +538,8 @@ export default function SongStore() {
 
   const promoted = songs.filter((s) => s.is_promoted)
   const regular = songs.filter((s) => !s.is_promoted)
+  const heroSong = promoted[0] || songs[0]
+  const gridPromoted = heroSong ? promoted.filter((s) => s.id !== heroSong.id) : promoted
 
   return (
     <section id="store" className="max-w-7xl mx-auto">
@@ -245,7 +555,7 @@ export default function SongStore() {
           Buy The Music
         </h2>
         <p className="text-gray-400 text-sm sm:text-base md:text-lg mt-3 md:mt-4 max-w-2xl mx-auto px-2">
-          Preview 25 seconds free. Sign in to save favorites and unlock your library after purchase.
+          Preview {previewDurationSec} seconds free{fanClubActive ? ' (Fan Club)' : ''}. Sign in to save favorites and unlock your library after purchase.
         </p>
       </motion.div>
 
@@ -261,6 +571,18 @@ export default function SongStore() {
         <div className="text-center py-20 text-gray-500">No songs available yet.</div>
       ) : (
         <div className="space-y-12">
+          <BundleCard songs={songs} onPurchase={handleBundlePurchase} purchasing={purchasingBundle} />
+
+          {heroSong && (
+            <PromotedHero
+              song={heroSong}
+              onPurchase={handlePurchase}
+              onToggleFavorite={handleToggleFavorite}
+              purchasingId={purchasingId}
+              previewDurationSec={previewDurationSec}
+            />
+          )}
+
           {user && recommendations.length > 0 && (
             <div>
               <h3 className="text-gold text-sm uppercase tracking-[4px] mb-6">Recommended For You</h3>
@@ -272,17 +594,18 @@ export default function SongStore() {
                     onPurchase={handlePurchase}
                     onToggleFavorite={handleToggleFavorite}
                     purchasingId={purchasingId}
+                    previewDurationSec={previewDurationSec}
                   />
                 ))}
               </div>
             </div>
           )}
 
-          {promoted.length > 0 && (
+          {gridPromoted.length > 0 && (
             <div>
               <h3 className="text-gold text-sm uppercase tracking-[4px] mb-6">Promoted Releases</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {promoted.map((song, index) => (
+                {gridPromoted.map((song, index) => (
                   <SongCard
                     key={song.id}
                     song={song}
@@ -290,6 +613,7 @@ export default function SongStore() {
                     onToggleFavorite={handleToggleFavorite}
                     purchasingId={purchasingId}
                     isFeatured={index === 0}
+                    previewDurationSec={previewDurationSec}
                   />
                 ))}
               </div>
@@ -307,6 +631,7 @@ export default function SongStore() {
                     onPurchase={handlePurchase}
                     onToggleFavorite={handleToggleFavorite}
                     purchasingId={purchasingId}
+                    previewDurationSec={previewDurationSec}
                   />
                 ))}
               </div>

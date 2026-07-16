@@ -2,18 +2,24 @@
 
 import { useState } from 'react'
 import type { PublicSong } from '@/types/store'
+import { useAuth } from '@/contexts/AuthProvider'
 
 type SongShareProps = {
   song: PublicSong
 }
 
 export default function SongShare({ song }: SongShareProps) {
+  const { user } = useAuth()
   const [copied, setCopied] = useState(false)
 
   const shareUrl =
     typeof window !== 'undefined'
-      ? `${window.location.origin}/?song=${encodeURIComponent(song.id)}#store`
-      : `/?song=${encodeURIComponent(song.id)}#store`
+      ? user
+        ? `${window.location.origin}/?song=${encodeURIComponent(song.id)}&ref=${encodeURIComponent(user.id)}#store`
+        : `${window.location.origin}/?song=${encodeURIComponent(song.id)}#store`
+      : user
+        ? `/?song=${encodeURIComponent(song.id)}&ref=${encodeURIComponent(user.id)}#store`
+        : `/?song=${encodeURIComponent(song.id)}#store`
 
   const shareText = `Check out "${song.title}" by ${song.artist} on Da Money Fam`
 

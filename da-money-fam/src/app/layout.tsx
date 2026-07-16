@@ -3,7 +3,7 @@ import { Playfair_Display, Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider } from '@/contexts/AuthProvider'
 import { SiteSettingsProvider } from '@/contexts/SiteSettingsProvider'
-import { AudioPlayerProvider } from '@/components/GlobalAudioPlayer'
+import CheckoutReturnHandler from '@/components/CheckoutReturnHandler'
 import FallingObjects from '@/components/FallingObjects'
 import GoogleAnalytics from '@/components/GoogleAnalytics'
 import './globals.css'
@@ -42,9 +42,8 @@ export default function RootLayout({
       <body className={`${playfair.variable} ${inter.variable} font-sans antialiased`}>
         <SiteSettingsProvider>
           <AuthProvider>
-            <AudioPlayerProvider>
-              {children}
-            </AudioPlayerProvider>
+            <CheckoutReturnHandler />
+            {children}
           </AuthProvider>
           <FallingObjects />
         </SiteSettingsProvider>

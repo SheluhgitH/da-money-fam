@@ -9,12 +9,13 @@ import { scrollRevealInView } from '@/lib/motion'
 import ShowreelModal from './ShowreelModal'
 
 export default function HeroVideoSection() {
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isShowreelOpen, setIsShowreelOpen] = useState(false)
+  const [isContactOpen, setIsContactOpen] = useState(false)
   const contentRef = useRef(null)
   const isInView = useInView(contentRef, scrollRevealInView)
 
   const playShowreel = () => {
-    setIsModalOpen(true)
+    setIsShowreelOpen(true)
   }
 
   return (
@@ -69,36 +70,34 @@ export default function HeroVideoSection() {
           initial={{ opacity: 0 }}
           animate={isInView ? { opacity: 1 } : { opacity: 0 }}
           transition={{ duration: 0.5, delay: 0.25 }}
-          className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center"
+          className="flex flex-col sm:flex-row gap-4 sm:gap-4 justify-center items-stretch sm:items-center"
         >
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+          <button
+            type="button"
             onClick={playShowreel}
-            className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-gold text-matte-black font-bold uppercase tracking-widest text-xs sm:text-sm hover:bg-gold-light transition-colors duration-300 flex items-center justify-center gap-2 neon-border"
+            className="relative z-0 w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-gold text-matte-black font-bold uppercase tracking-widest text-xs sm:text-sm hover:bg-gold-light transition-colors duration-300 flex items-center justify-center gap-2 neon-border active:scale-[0.98] sm:hover:scale-105 sm:transition-transform"
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M8 5v14l11-7z" />
             </svg>
             Watch Showreel
-          </motion.button>
+          </button>
 
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsModalOpen(true)}
-            className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-black/70 backdrop-blur-md text-white font-bold uppercase tracking-widest text-xs sm:text-sm hover:bg-black/85 transition-colors duration-300 border border-gold/50 neon-border"
+          <button
+            type="button"
+            onClick={() => setIsContactOpen(true)}
+            className="relative z-10 w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-black/70 backdrop-blur-md text-white font-bold uppercase tracking-widest text-xs sm:text-sm hover:bg-black/85 transition-colors duration-300 border border-gold/50 neon-border active:scale-[0.98] sm:hover:scale-105 sm:transition-transform"
           >
             Start Your Animation Project
-          </motion.button>
+          </button>
         </motion.div>
       </motion.div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Start Your Animation Project">
-        <ContactForm onClose={() => setIsModalOpen(false)} />
+      <Modal isOpen={isContactOpen} onClose={() => setIsContactOpen(false)} title="Start Your Animation Project">
+        <ContactForm onClose={() => setIsContactOpen(false)} />
       </Modal>
 
-      <ShowreelModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} videoSrc="/videos/hero-video.mp4" />
+      <ShowreelModal isOpen={isShowreelOpen} onClose={() => setIsShowreelOpen(false)} videoSrc="/videos/hero-video.mp4" />
 
     </section>
   )

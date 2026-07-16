@@ -1,71 +1,64 @@
 'use client'
 
 import { motion, useInView } from 'framer-motion'
-import { useRef } from 'react'
-import { scrollToSection } from '@/utils/scrollToSection'
+import { useRef, useState } from 'react'
 import { scrollRevealInView } from '@/lib/motion'
+import { SERVICE_PACKAGES } from '@/lib/service-packages'
 
-const pricingPackages = [
-  {
-    id: 1,
-    title: 'Video Commercials',
-    price: '$500 / video',
-    description: 'Punchy, high-impact cuts designed to convert viewers into customers. Includes color grading and sound mixing.',
-    icon: (
-      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 10l2 2-2 2" />
-      </svg>
-    ),
-  },
-  {
-    id: 2,
-    title: 'Short Films',
-    price: '$1,200 / project',
-    description: 'Cinematic storytelling focus. We handle pacing, narrative flow, and advanced color correction to set the mood.',
-    icon: (
-      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m-9 0H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2h-3m-9 0v12a2 2 0 002 2h6a2 2 0 002-2V4" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" />
-      </svg>
-    ),
-  },
-  {
-    id: 3,
-    title: 'YouTube Content',
-    price: '$300 / video',
-    description: 'Clean, engaging edits for long-form content. Includes basic motion graphics, cuts, and audio cleanup.',
-    icon: (
-      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1.586a1 1 0 01.707.293l.707.707A1 1 0 0012.414 11H15m-3 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-    ),
-  },
-  {
-    id: 4,
-    title: 'Social Reels',
-    price: '$150 / reel',
-    description: 'Fast-paced, trend-aware editing for vertical formats (TikTok/IG). Perfect for keeping retention high.',
-    icon: (
-      <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 10l5 3-5 3V10z" />
-      </svg>
-    ),
-  },
-]
+const packageIcons: Record<string, React.ReactNode> = {
+  'video-commercials': (
+    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+    </svg>
+  ),
+  'short-films': (
+    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m-9 0H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2h-3m-9 0v12a2 2 0 002 2h6a2 2 0 002-2V4" />
+    </svg>
+  ),
+  'youtube-content': (
+    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1.586a1 1 0 01.707.293l.707.707A1 1 0 0012.414 11H15m-3 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  'social-reels': (
+    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+    </svg>
+  ),
+}
+
+const displayOrder = ['video-commercials', 'short-films', 'youtube-content', 'social-reels'] as const
 
 export default function VideoEditingSection() {
   const headerRef = useRef(null)
   const isInView = useInView(headerRef, scrollRevealInView)
+  const [payingSlug, setPayingSlug] = useState<string | null>(null)
+  const [error, setError] = useState('')
+
+  const handlePayDeposit = async (slug: string) => {
+    setPayingSlug(slug)
+    setError('')
+    try {
+      const res = await fetch('/api/checkout/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ package_slug: slug }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Checkout failed')
+      window.location.href = data.url
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Checkout failed')
+      setPayingSlug(null)
+    }
+  }
 
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
-      transition: {
-        staggerChildren: 0.2,
-      },
+      transition: { staggerChildren: 0.2 },
     },
   }
 
@@ -74,9 +67,7 @@ export default function VideoEditingSection() {
     visible: {
       opacity: 1,
       y: 0,
-      transition: {
-        duration: 0.6,
-      },
+      transition: { duration: 0.6 },
     },
   }
 
@@ -104,51 +95,60 @@ export default function VideoEditingSection() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-gray-400 text-sm sm:text-base md:text-lg"
           >
-            Professional post-production tailored to your vision.
+            Professional post-production tailored to your vision. Pay a 50% deposit to reserve your slot.
           </motion.p>
         </motion.div>
 
+        {error && (
+          <p className="text-center text-red-400 text-sm mb-6">{error}</p>
+        )}
+
         <motion.div
           initial="hidden"
-          animate={isInView ? "visible" : "hidden"}
+          animate={isInView ? 'visible' : 'hidden'}
           variants={containerVariants}
           className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 lg:gap-8"
         >
-          {pricingPackages.map((pkg) => (
-            <motion.div
-              key={pkg.id}
-              variants={itemVariants}
-              whileHover={{ y: -5 }}
-              className="glass rounded-2xl p-4 sm:p-6 md:p-8 transition-all duration-500 hover:border-gold/50 hover:neon-border"
-            >
-              <div className="flex items-center gap-3 md:gap-4 mb-4 md:mb-6">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-gold to-gold-dark rounded-xl flex items-center justify-center neon-border text-black shrink-0">
-                  {pkg.icon}
-                </div>
-                <div className="min-w-0">
-                  <h3 className="font-serif text-lg sm:text-xl md:text-2xl font-bold mb-1">
-                    {pkg.title}
-                  </h3>
-                  <p className="text-gold font-bold text-base sm:text-lg md:text-xl">
-                    {pkg.price}
-                  </p>
-                </div>
-              </div>
-
-              <p className="text-gray-400 leading-relaxed mb-6">
-                {pkg.description}
-              </p>
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => scrollToSection('services')}
-                className="px-5 py-2 bg-gold text-black text-xs font-bold uppercase tracking-widest rounded-full hover:bg-white transition-colors"
+          {displayOrder.map((slug) => {
+            const pkg = SERVICE_PACKAGES[slug]
+            return (
+              <motion.div
+                key={pkg.slug}
+                variants={itemVariants}
+                whileHover={{ y: -5 }}
+                className="glass rounded-2xl p-4 sm:p-6 md:p-8 transition-all duration-500 hover:border-gold/50 hover:neon-border"
               >
-                Book Now
-              </motion.button>
-            </motion.div>
-          ))}
+                <div className="flex items-center gap-3 md:gap-4 mb-4 md:mb-6">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gradient-to-br from-gold to-gold-dark rounded-xl flex items-center justify-center neon-border text-black shrink-0">
+                    {packageIcons[pkg.slug]}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-serif text-lg sm:text-xl md:text-2xl font-bold mb-1">
+                      {pkg.title}
+                    </h3>
+                    <p className="text-gold font-bold text-base sm:text-lg md:text-xl">
+                      ${pkg.fullPrice} / project
+                    </p>
+                    <p className="text-gray-500 text-xs mt-1">
+                      ${pkg.depositAmount} deposit today
+                    </p>
+                  </div>
+                </div>
+
+                <p className="text-gray-400 leading-relaxed mb-6">{pkg.description}</p>
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => handlePayDeposit(pkg.slug)}
+                  disabled={payingSlug === pkg.slug}
+                  className="px-5 py-2 bg-gold text-black text-xs font-bold uppercase tracking-widest rounded-full hover:bg-white transition-colors disabled:opacity-50"
+                >
+                  {payingSlug === pkg.slug ? 'Redirecting...' : 'Pay Deposit'}
+                </motion.button>
+              </motion.div>
+            )
+          })}
         </motion.div>
       </div>
     </section>

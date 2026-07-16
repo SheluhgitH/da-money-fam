@@ -17,6 +17,19 @@ export async function GET(req: Request) {
     const result = await fulfillStripeSession(session)
     const siteUrl = getSiteUrl()
 
+    if (result.type === 'bundle_purchase' && 'download_token' in result) {
+      return NextResponse.json({
+        song_title: result.song_title,
+        download_url: `${siteUrl}/api/download/${result.download_token}`,
+        order_ids: result.order_ids,
+        is_bundle: true,
+      })
+    }
+
+    if (result.type !== 'song_purchase' || !('download_token' in result)) {
+      return NextResponse.json({ error: 'Not a song purchase session' }, { status: 400 })
+    }
+
     return NextResponse.json({
       song_title: result.song_title,
       download_url: `${siteUrl}/api/download/${result.download_token}`,
