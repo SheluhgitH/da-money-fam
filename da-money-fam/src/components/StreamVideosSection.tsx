@@ -21,24 +21,41 @@ export default function StreamVideosSection() {
   const [brokenThumbs, setBrokenThumbs] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
-    fetch('/api/kick/videos')
-      .then(async (res) => {
+    const fetchVideos = async () => {
+      try {
+        setLoading(true)
+        setError('')
+        const res = await fetch(`/api/kick/videos?cachebust=${Date.now()}`)
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Failed to load streams')
         setVideos(data.videos || [])
-      })
-      .catch((err) => {
+      } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load streams')
-      })
-      .finally(() => setLoading(false))
+      } finally {
+        setLoading(false)
+      }
+    }
 
-    fetch('/api/kick/live')
-      .then((r) => r.json())
-      .then((data) => {
+    const fetchLiveStatus = async () => {
+      try {
+        const res = await fetch('/api/kick/live')
+        const data = await res.json()
         setIsLive(Boolean(data.live))
         if (data.watchUrl) setLiveWatchUrl(data.watchUrl)
-      })
-      .catch(() => setIsLive(false))
+      } catch {
+        setIsLive(false)
+      }
+    }
+
+    fetchVideos()
+    fetchLiveStatus()
+
+    const interval = setInterval(() => {
+      fetchVideos()
+      fetchLiveStatus()
+    }, 300000) // Refresh every 5 minutes
+
+    return () => clearInterval(interval)
   }, [])
 
   const kickstarterHref =
@@ -71,6 +88,27 @@ export default function StreamVideosSection() {
           Watch Day with DMF and behind-the-scenes IRL streams from Jackpotwrld on Kick.
         </p>
       </motion.div>
+
+      {isLive && (
+        <motion.a
+          href={liveWatchUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={scrollRevealViewport}
+          className="mb-10 md:mb-12 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-2xl border border-red-500/40 bg-red-600/15 px-6 py-5 hover:bg-red-600/25 transition-colors"
+        >
+          <div className="text-center sm:text-left">
+            <p className="text-red-400 text-[10px] font-bold uppercase tracking-[0.3em] mb-1">Live on Kick</p>
+            <p className="text-white font-serif text-xl">Jackpotwrld is live right now</p>
+            <p className="text-gray-400 text-sm mt-1">Tap in for Day with DMF — watch as it happens.</p>
+          </div>
+          <span className="shrink-0 px-6 py-3 bg-red-600 text-white text-xs font-bold uppercase tracking-wider rounded-full animate-pulse">
+            Watch Live →
+          </span>
+        </motion.a>
+      )}
 
       <motion.a
         href={kickstarterHref}

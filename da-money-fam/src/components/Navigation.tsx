@@ -15,16 +15,41 @@ export default function Navigation() {
   const isHome = pathname === '/'
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [showPromo, setShowPromo] = useState(true)
   const { user, loading, signOut } = useAuth()
   const { showAnimations, toggleAnimations } = useSiteSettings()
   const [profile, setProfile] = useState<UserProfile | null>(null)
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50)
+    const dismissed = sessionStorage.getItem('dmf-promo-dismissed')
+    if (dismissed === '1') setShowPromo(false)
+  }, [])
+
+  useEffect(() => {
+    let raf = 0
+    let pending = false
+    let lastScrolled = isScrolled
+
+    const update = () => {
+      pending = false
+      const scrolled = window.scrollY > 50
+      if (scrolled !== lastScrolled) {
+        lastScrolled = scrolled
+        setIsScrolled(scrolled)
+      }
     }
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
+
+    const handleScroll = () => {
+      if (pending) return
+      pending = true
+      raf = requestAnimationFrame(update)
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      cancelAnimationFrame(raf)
+    }
   }, [])
 
   useEffect(() => {
@@ -52,7 +77,8 @@ export default function Navigation() {
     { name: 'Blog', href: '/blog', isRoute: true },
     { name: 'Artists', section: 'artists' },
     { name: 'Streams', section: 'streams' },
-    { name: 'Services', section: 'services' },
+    { name: 'Merch', section: 'merch' },
+    { name: 'Services', section: 'video-editing' },
     { name: 'Contact', section: 'contact' },
   ] as const
 
@@ -63,11 +89,48 @@ export default function Navigation() {
   }
 
   return (
+    <>
+    <AnimatePresence>
+      {showPromo && (
+        <motion.div
+          initial={{ y: -40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: -40, opacity: 0 }}
+          className="liquid-glass-promo fixed top-0 left-0 right-0 z-[110] text-center text-[10px] sm:text-xs font-semibold uppercase tracking-[0.22em] py-2.5 px-10"
+        >
+          <Link
+            href={isHome ? '/#store' : '/#store'}
+            onClick={(e) => {
+              if (isHome) {
+                e.preventDefault()
+                scrollToSection('store')
+              }
+            }}
+            className="relative z-[1] text-white/90 hover:text-gold transition-colors"
+          >
+            New drop live — Shop the music &amp; join the Fan Club
+          </Link>
+          <button
+            type="button"
+            aria-label="Dismiss announcement"
+            onClick={() => {
+              setShowPromo(false)
+              sessionStorage.setItem('dmf-promo-dismissed', '1')
+            }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 z-[1] w-6 h-6 rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-colors text-sm leading-none"
+          >
+            ×
+          </button>
+        </motion.div>
+      )}
+    </AnimatePresence>
     <motion.nav
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.8, ease: 'easeOut' }}
-      className={`fixed top-0 left-0 right-0 z-[100] pointer-events-auto transition-all duration-500 ${
+      className={`fixed left-0 right-0 z-[100] pointer-events-auto transition-all duration-500 ${
+        showPromo ? 'top-8' : 'top-0'
+      } ${
         isScrolled ? 'glass py-3 md:py-4' : 'bg-transparent py-4 md:py-6'
       }`}
     >
@@ -80,9 +143,9 @@ export default function Navigation() {
               scrollToSection('home')
             }
           }}
-          className="text-lg sm:text-xl md:text-2xl font-serif font-bold gold-gradient"
+          className="text-lg sm:text-xl md:text-2xl font-serif font-bold text-white text-glow"
         >
-          Da Money Fam
+          DMF
         </Link>
 
         <div className="hidden md:flex items-center space-x-6 relative z-10">
@@ -233,5 +296,6 @@ export default function Navigation() {
         )}
       </AnimatePresence>
     </motion.nav>
+    </>
   )
 }

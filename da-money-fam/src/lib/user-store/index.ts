@@ -2,7 +2,9 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { createServiceClient } from '@/lib/supabase/server'
 import type { UserProfile, UserStats, LibraryItem, SongComment } from '@/types/store'
-import { getAllOrders, getSongById } from '@/lib/store'
+import { getAllOrders, getSongById, linkGuestOrdersToUser } from '@/lib/store'
+import { levelFromXp, applyXpMultiplier } from '@/lib/fan-perks'
+import { isActiveFanClubMember } from '@/lib/fan-club'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 
@@ -80,6 +82,10 @@ export async function upsertUserProfile(
 }
 
 export async function ensureUserProfile(userId: string, email?: string): Promise<UserProfile> {
+  if (email) {
+    await linkGuestOrdersToUser(userId, email)
+  }
+
   const existing = await getUserProfile(userId)
   if (existing) return existing
   const displayName = email ? email.split('@')[0] : 'Fan'
@@ -147,8 +153,11 @@ export async function getUserCoins(userId: string): Promise<number> {
 
 export async function awardXp(userId: string, amount: number): Promise<UserStats> {
   const current = await getUserStats(userId)
-  const newXp = current.xp + amount
-  const newLevel = Math.floor(newXp / 2000) + 1
+  const fanClub = await isActiveFanClubMember(userId)
+  const level = levelFromXp(current.xp)
+  const multiplied = applyXpMultiplier(amount, level, fanClub)
+  const newXp = current.xp + multiplied
+  const newLevel = levelFromXp(newXp)
   return saveUserStats({
     ...current,
     xp: newXp,

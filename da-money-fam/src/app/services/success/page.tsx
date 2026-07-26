@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { trackPurchase } from '@/lib/analytics'
 
 function SuccessContent() {
   const searchParams = useSearchParams()
@@ -27,6 +28,9 @@ function SuccessContent() {
       .then((data) => {
         setPackageName(data.package_name || 'Your project')
         setStatus('success')
+        if (data.analytics) {
+          trackPurchase(data.analytics)
+        }
       })
       .catch((err) => {
         setStatus('error')
@@ -52,6 +56,28 @@ function SuccessContent() {
             <p className="text-gray-400 mb-6">
               Your <span className="text-gold">{packageName}</span> deposit is confirmed. Our team will reach out within 1–2 business days.
             </p>
+            <div className="border-t border-white/10 pt-6 mb-6">
+              <p className="text-gold text-[10px] font-bold uppercase tracking-wider mb-2">
+                While you wait
+              </p>
+              <p className="text-gray-400 text-sm mb-4">
+                Grab exclusive tracks or rep the movement with limited merch.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link
+                  href="/#store"
+                  className="inline-block border border-gold/40 text-gold font-bold px-8 py-3 rounded-full uppercase tracking-wider text-xs hover:bg-gold hover:text-black transition-colors"
+                >
+                  Shop Music
+                </Link>
+                <Link
+                  href="/#merch"
+                  className="inline-block border border-gold/40 text-gold font-bold px-8 py-3 rounded-full uppercase tracking-wider text-xs hover:bg-gold hover:text-black transition-colors"
+                >
+                  Shop Merch
+                </Link>
+              </div>
+            </div>
             <Link
               href="/?section=video-editing"
               className="inline-block bg-gold text-black font-bold px-8 py-3 rounded-full uppercase tracking-wider hover:bg-white transition-colors"

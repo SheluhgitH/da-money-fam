@@ -1,10 +1,13 @@
 'use client'
 
 import Image from 'next/image'
+import Link from 'next/link'
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion'
 import { useState, useRef, useEffect } from 'react'
-import { MERCH_CATALOG, MERCH_SIZES, type MerchSize } from '@/lib/merch'
+import { MERCH_CATALOG, MERCH_SIZES, isMerchInPresale, type MerchSize } from '@/lib/merch'
 import { scrollRevealViewport } from '@/lib/motion'
+import { trackPurchase } from '@/lib/analytics'
+import { useMiniCart } from '@/contexts/MiniCartContext'
 
 type ClothingType = 't-shirt' | 'sweater'
 
@@ -116,15 +119,19 @@ function SizeSelector({
 const FloatingProduct = ({
   product,
   onBuy,
+  onQuickAdd,
   checkingOut,
 }: {
   product: Product
   onBuy: (id: number, size: MerchSize) => void
+  onQuickAdd?: (id: number, size: MerchSize) => void
   checkingOut: boolean
 }) => {
   const ref = useRef<HTMLDivElement>(null)
   const [isHovered, setIsHovered] = useState(false)
   const [size, setSize] = useState<MerchSize>('M')
+  const catalogItem = MERCH_CATALOG[String(product.id)]
+  const inPresale = catalogItem ? isMerchInPresale(catalogItem) : false
 
   const x = useMotionValue(0)
   const y = useMotionValue(0)
@@ -193,18 +200,34 @@ const FloatingProduct = ({
           <div className="absolute inset-0 flex flex-col justify-end p-6">
             <span className="text-gold text-[10px] font-bold tracking-[3px] uppercase mb-1">
               {product.category} · 1-of-1
+              {inPresale ? ' · Presale' : ''}
             </span>
             <h3 className="text-white text-xl font-bold mb-1">{product.name}</h3>
             <p className="text-gold/80 font-mono text-lg">{product.price}</p>
+            {inPresale && (
+              <p className="text-purple-200 text-[10px] uppercase tracking-wider mb-1">
+                Fan Club / Level 5 early buy
+              </p>
+            )}
             <SizeSelector selected={size} onSelect={setSize} disabled={checkingOut} />
-            <button
-              type="button"
-              onClick={() => onBuy(product.id, size)}
-              disabled={checkingOut}
-              className="mt-3 w-full py-2 bg-gold text-black text-[10px] font-bold uppercase tracking-wider rounded-full hover:bg-white transition-colors disabled:opacity-60"
-            >
-              {checkingOut ? 'Redirecting...' : 'Buy Now'}
-            </button>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => onQuickAdd?.(product.id, size)}
+                disabled={checkingOut}
+                className="flex-1 py-2 border border-gold/40 text-gold text-[10px] font-bold uppercase tracking-wider rounded-full hover:bg-gold/10 transition-colors disabled:opacity-60"
+              >
+                + Bag
+              </button>
+              <button
+                type="button"
+                onClick={() => onBuy(product.id, size)}
+                disabled={checkingOut}
+                className="flex-1 py-2 bg-gold text-black text-[10px] font-bold uppercase tracking-wider rounded-full hover:bg-white transition-colors disabled:opacity-60"
+              >
+                {checkingOut ? 'Redirecting...' : 'Buy Now'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -215,10 +238,12 @@ const FloatingProduct = ({
 function MobileProductCard({
   product,
   onBuy,
+  onQuickAdd,
   checkingOut,
 }: {
   product: Product
   onBuy: (id: number, size: MerchSize) => void
+  onQuickAdd?: (id: number, size: MerchSize) => void
   checkingOut: boolean
 }) {
   const [size, setSize] = useState<MerchSize>('M')
@@ -245,14 +270,24 @@ function MobileProductCard({
           <h3 className="text-white text-lg font-bold">{product.name}</h3>
           <p className="text-gold font-mono">{product.price}</p>
           <SizeSelector selected={size} onSelect={setSize} disabled={checkingOut} />
-          <button
-            type="button"
-            onClick={() => onBuy(product.id, size)}
-            disabled={checkingOut}
-            className="mt-3 w-full py-2 bg-gold text-black text-[10px] font-bold uppercase tracking-wider rounded-full disabled:opacity-60"
-          >
-            {checkingOut ? 'Redirecting...' : 'Buy Now'}
-          </button>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => onQuickAdd?.(product.id, size)}
+              disabled={checkingOut}
+              className="flex-1 py-2 border border-gold/40 text-gold text-[10px] font-bold uppercase tracking-wider rounded-full disabled:opacity-60"
+            >
+              + Bag
+            </button>
+            <button
+              type="button"
+              onClick={() => onBuy(product.id, size)}
+              disabled={checkingOut}
+              className="flex-1 py-2 bg-gold text-black text-[10px] font-bold uppercase tracking-wider rounded-full disabled:opacity-60"
+            >
+              {checkingOut ? 'Redirecting...' : 'Buy Now'}
+            </button>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -261,17 +296,44 @@ function MobileProductCard({
 
 export default function MerchStore() {
   const { checkingOutId, checkoutError, startCheckout } = useMerchCheckout()
+  const { addItem } = useMiniCart()
   const [showSuccess, setShowSuccess] = useState(false)
   const tShirtPrice = MERCH_CATALOG['1'].price
   const sweaterPrice = MERCH_CATALOG['2'].price
+
+  const quickAdd = (productId: number, size: MerchSize) => {
+    const product = products.find((p) => p.id === productId)
+    if (!product) return
+    addItem({
+      id: `merch-${productId}-${size}`,
+      kind: 'merch',
+      title: product.name,
+      priceLabel: product.price,
+      image: product.image,
+      size,
+      merchId: productId,
+    })
+  }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('checkout') === 'success') {
       setShowSuccess(true)
+      const sessionId = params.get('session_id')
+      if (sessionId) {
+        fetch(`/api/checkout/verify-merch?session_id=${encodeURIComponent(sessionId)}`)
+          .then(async (res) => {
+            const data = await res.json()
+            if (res.ok && data.analytics) {
+              trackPurchase(data.analytics)
+            }
+          })
+          .catch(() => {})
+      }
       const url = new URL(window.location.href)
       url.searchParams.delete('checkout')
       url.searchParams.delete('from')
+      url.searchParams.delete('session_id')
       const query = url.searchParams.toString()
       const hash = url.hash || '#merch'
       window.history.replaceState({}, '', `${url.pathname}${query ? `?${query}` : ''}${hash}`)
@@ -297,6 +359,20 @@ export default function MerchStore() {
             <p className="text-gray-400 text-sm max-w-md mx-auto">
               Thanks for your purchase. A confirmation email is on the way with shipping details.
             </p>
+            <div className="mt-4 flex flex-col sm:flex-row gap-3 justify-center">
+              <Link
+                href="/#store"
+                className="inline-block border border-gold/40 text-gold font-bold px-6 py-2 rounded-full uppercase tracking-wider text-[10px] hover:bg-gold hover:text-black transition-colors"
+              >
+                Shop Music
+              </Link>
+              <Link
+                href="/#reputation"
+                className="inline-block border border-gold/40 text-gold font-bold px-6 py-2 rounded-full uppercase tracking-wider text-[10px] hover:bg-gold hover:text-black transition-colors"
+              >
+                Join Fan Club
+              </Link>
+            </div>
             <button
               type="button"
               onClick={() => setShowSuccess(false)}
@@ -346,6 +422,7 @@ export default function MerchStore() {
               key={product.id}
               product={product}
               onBuy={startCheckout}
+              onQuickAdd={quickAdd}
               checkingOut={checkingOutId === product.id}
             />
           ))}
@@ -357,6 +434,7 @@ export default function MerchStore() {
               key={product.id}
               product={product}
               onBuy={startCheckout}
+              onQuickAdd={quickAdd}
               checkingOut={checkingOutId === product.id}
             />
           ))}

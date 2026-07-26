@@ -157,8 +157,18 @@ export default function SongComments({ songId, initialCount = 0, defaultExpanded
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs text-gold font-semibold">
+                      <p className="text-xs text-gold font-semibold flex items-center gap-1.5 flex-wrap">
                         {comment.display_name || 'Fan'}
+                        {(comment.level ?? 1) >= 2 && (
+                          <span className="text-[8px] font-extrabold uppercase tracking-wider bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded-full">
+                            Fam
+                          </span>
+                        )}
+                        {comment.priority && (
+                          <span className="text-[8px] font-extrabold uppercase tracking-wider bg-gold/20 text-gold px-1.5 py-0.5 rounded-full">
+                            Priority
+                          </span>
+                        )}
                       </p>
                       {user?.id === comment.user_id && (
                         <button

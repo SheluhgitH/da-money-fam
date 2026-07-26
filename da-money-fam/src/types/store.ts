@@ -1,5 +1,7 @@
 export type OrderStatus = 'pending' | 'verified' | 'delivered' | 'rejected'
 
+export type SongAccess = 'public' | 'early' | 'exclusive'
+
 export interface Song {
   id: string
   title: string
@@ -10,6 +12,7 @@ export interface Song {
   price: number
   is_promoted: boolean
   for_sale: boolean
+  access: SongAccess
   genre?: string
   release_date?: string
   description?: string
@@ -26,6 +29,7 @@ export interface PublicSong {
   price: number
   is_promoted: boolean
   for_sale: boolean
+  access: SongAccess
   genre?: string
   release_date?: string
   description?: string
@@ -44,6 +48,9 @@ export interface SongComment {
   created_at: string
   display_name: string | null
   avatar_url: string | null
+  level?: number
+  priority?: boolean
+  fan_club?: boolean
 }
 
 export interface PurchaseOrder {

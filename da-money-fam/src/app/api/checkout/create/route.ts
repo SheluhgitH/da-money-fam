@@ -6,8 +6,13 @@ import { checkRateLimit } from '@/lib/rate-limit'
 import { getCurrentUser } from '@/lib/auth/user'
 import { getUserStats } from '@/lib/user-store'
 import { getReferralCookie } from '@/lib/referrals'
-
-const LEVEL3_DISCOUNT_PERCENT = 10
+import { isActiveFanClubMember } from '@/lib/fan-club'
+import {
+  LEVEL3_DISCOUNT_PERCENT,
+  canAccessPerk,
+  canPurchaseSong,
+  levelFromXp,
+} from '@/lib/fan-perks'
 
 export async function POST(req: Request) {
   const ip = req.headers.get('x-forwarded-for') || 'anonymous'
@@ -29,11 +34,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Song not found' }, { status: 404 })
     }
 
-    if (song.for_sale === false) {
-      return NextResponse.json({ error: 'This track is exclusive and not available for purchase yet' }, { status: 403 })
+    const user = await getCurrentUser()
+    const stats = user ? await getUserStats(user.id) : null
+    const fanClub = user ? await isActiveFanClubMember(user.id) : false
+    const level = stats ? levelFromXp(stats.xp) : 1
+
+    if (!canPurchaseSong(song, new Date(), level, fanClub)) {
+      if (song.access === 'exclusive') {
+        return NextResponse.json(
+          { error: 'Fam Exclusive — unlock with Fan Club or Level 5' },
+          { status: 403 }
+        )
+      }
+      if (song.access === 'early') {
+        return NextResponse.json(
+          { error: 'Early access only — unlock with Fan Club or Level 5' },
+          { status: 403 }
+        )
+      }
+      return NextResponse.json(
+        { error: 'This track is not available for purchase yet' },
+        { status: 403 }
+      )
     }
 
-    const user = await getCurrentUser()
     const stripe = getStripe()
     const siteUrl = getSiteUrl()
     const referral = await getReferralCookie()
@@ -41,12 +65,11 @@ export async function POST(req: Request) {
     let unitAmount = Math.round(song.price * 100)
     let discountNote = ''
 
-    if (user) {
-      const stats = await getUserStats(user.id)
-      if (stats.level >= 3) {
-        unitAmount = Math.round(unitAmount * (1 - LEVEL3_DISCOUNT_PERCENT / 100))
-        discountNote = ` — ${LEVEL3_DISCOUNT_PERCENT}% Level ${stats.level} fan discount`
-      }
+    if (user && canAccessPerk(level, fanClub, 'song_discount')) {
+      unitAmount = Math.round(unitAmount * (1 - LEVEL3_DISCOUNT_PERCENT / 100))
+      discountNote = fanClub
+        ? ` — ${LEVEL3_DISCOUNT_PERCENT}% Fan Club discount`
+        : ` — ${LEVEL3_DISCOUNT_PERCENT}% Level ${level} fan discount`
     }
 
     const metadata: Record<string, string> = {

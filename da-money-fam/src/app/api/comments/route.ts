@@ -1,9 +1,38 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/user'
-import { addSongComment, deleteSongComment, getSongComments, awardXp } from '@/lib/user-store'
+import { getSongComments, addSongComment, deleteSongComment, awardXp, getUserStats } from '@/lib/user-store'
 import { getSongById } from '@/lib/store'
+import { isActiveFanClubMember } from '@/lib/fan-club'
+import { canAccessPerk, levelFromXp } from '@/lib/fan-perks'
+import type { SongComment } from '@/types/store'
 
 export const dynamic = 'force-dynamic'
+
+const PRIORITY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+async function enrichComments(comments: SongComment[]): Promise<SongComment[]> {
+  const enriched = await Promise.all(
+    comments.map(async (c) => {
+      try {
+        const stats = await getUserStats(c.user_id)
+        const fanClub = await isActiveFanClubMember(c.user_id)
+        const level = levelFromXp(stats.xp)
+        const priority =
+          canAccessPerk(level, fanClub, 'priority_comments') &&
+          Date.now() - new Date(c.created_at).getTime() < PRIORITY_WINDOW_MS
+        return { ...c, level, fan_club: fanClub, priority }
+      } catch {
+        return { ...c, level: 1, fan_club: false, priority: false }
+      }
+    })
+  )
+
+  return enriched.sort((a, b) => {
+    if (a.priority && !b.priority) return -1
+    if (!a.priority && b.priority) return 1
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  })
+}
 
 export async function GET(req: Request) {
   try {
@@ -14,7 +43,8 @@ export async function GET(req: Request) {
     }
 
     const comments = await getSongComments(songId)
-    return NextResponse.json({ comments })
+    const enriched = await enrichComments(comments)
+    return NextResponse.json({ comments: enriched })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to load comments' },
@@ -42,7 +72,15 @@ export async function POST(req: Request) {
 
     const comment = await addSongComment(user.id, song_id, comment_text)
     await awardXp(user.id, 200)
-    return NextResponse.json({ comment })
+
+    const stats = await getUserStats(user.id)
+    const fanClub = await isActiveFanClubMember(user.id)
+    const level = levelFromXp(stats.xp)
+    const priority = canAccessPerk(level, fanClub, 'priority_comments')
+
+    return NextResponse.json({
+      comment: { ...comment, level, fan_club: fanClub, priority },
+    })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to add comment' },

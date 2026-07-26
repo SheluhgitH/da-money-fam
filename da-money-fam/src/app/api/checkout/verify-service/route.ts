@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getStripe } from '@/lib/stripe'
 import { fulfillStripeSession } from '@/lib/stripe-fulfillment'
+import { getStripePurchaseAnalytics } from '@/lib/stripe-analytics'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -22,6 +23,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       package_name: session.metadata?.package_name || 'Service package',
       order_id: result.order_id,
+      analytics: getStripePurchaseAnalytics(session),
     })
   } catch (error) {
     console.error('Service verify error:', error)

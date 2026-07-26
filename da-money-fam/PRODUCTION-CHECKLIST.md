@@ -40,6 +40,7 @@ Set in **Settings → Environment Variables** (Production):
 | `STRIPE_SECRET_KEY` | Stripe dashboard |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe dashboard |
 | `STRIPE_WEBHOOK_SECRET` | Stripe webhook for `https://damoneyfam.com/api/webhooks/stripe` |
+| `STRIPE_FAN_CLUB_PRICE_ID` | Live recurring `price_...` for DMF Fan Club ($9/mo) |
 | `ADMIN_PASSWORD` | Strong password (not default) |
 | `ADMIN_SESSION_SECRET` | Random 32+ char string |
 | `RESEND_API_KEY` | If using contact/order emails |
@@ -114,7 +115,37 @@ GoDaddy remains your **domain registrar and DNS** — not your web traffic analy
 
 ---
 
-## 6. Verify the live site
+## 6. Stripe live setup
+
+Dashboard: [Stripe → Live mode](https://dashboard.stripe.com) (toggle **Test mode** off)
+
+### Products catalog
+
+Most checkouts (songs, merch, bundles, services, Coinz) use **dynamic `price_data`** at checkout — an empty Products tab is normal. You only need one pre-created subscription product:
+
+| Product | Price | Env var |
+|---------|-------|---------|
+| DMF Fan Club | $9.00 USD / month (recurring) | `STRIPE_FAN_CLUB_PRICE_ID=price_...` |
+
+Create: **Product catalog → Add product** → recurring monthly $9 → copy the **Price ID**.
+
+### Webhook
+
+**Developers → Webhooks → Add endpoint**
+
+- URL: `https://damoneyfam.com/api/webhooks/stripe`
+- Events: `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`
+- Copy signing secret → `STRIPE_WEBHOOK_SECRET` on Vercel
+
+### Customer portal
+
+**Settings → Billing → Customer portal** — enable subscription cancel/update, save. Required for `/api/billing/portal` (“Manage subscription” on `/account`).
+
+After env changes: **Deployments → ⋯ → Redeploy**.
+
+---
+
+## 7. Verify the live site
 
 After redeploy, open [https://damoneyfam.com](https://damoneyfam.com) and confirm:
 
@@ -133,7 +164,7 @@ Hard-refresh (Ctrl+Shift+R) or try incognito if you still see the old UI (DNS/ca
 
 ---
 
-## 7. Audio files on production
+## 8. Audio files on production
 
 MP3s are **not in GitHub** (by design). On Vercel:
 

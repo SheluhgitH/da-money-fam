@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
-import { getMerchItem, isValidMerchSize } from '@/lib/merch'
+import { getMerchItem, isValidMerchSize, canPurchaseMerch } from '@/lib/merch'
 import { getStripe, getSiteUrl } from '@/lib/stripe'
 import { stripeHomeReturnUrl } from '@/lib/stripe-redirects'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getCurrentUser } from '@/lib/auth/user'
+import { getUserStats } from '@/lib/user-store'
+import { isActiveFanClubMember } from '@/lib/fan-club'
+import { levelFromXp } from '@/lib/fan-perks'
 
 export async function POST(req: Request) {
   const ip = req.headers.get('x-forwarded-for') || 'anonymous'
@@ -34,6 +37,17 @@ export async function POST(req: Request) {
     }
 
     const user = await getCurrentUser()
+    const stats = user ? await getUserStats(user.id) : null
+    const fanClub = user ? await isActiveFanClubMember(user.id) : false
+    const level = stats ? levelFromXp(stats.xp) : 1
+
+    if (!canPurchaseMerch(item, new Date(), level, fanClub)) {
+      return NextResponse.json(
+        { error: 'This item is in Fan Club / Level 5 presale' },
+        { status: 403 }
+      )
+    }
+
     const stripe = getStripe()
     const siteUrl = getSiteUrl()
     const unitAmount = Math.round(item.price * 100)
@@ -70,7 +84,11 @@ export async function POST(req: Request) {
         },
       ],
       metadata,
-      success_url: stripeHomeReturnUrl(siteUrl, { section: 'merch', checkout: 'success' }),
+      success_url: stripeHomeReturnUrl(siteUrl, {
+        section: 'merch',
+        checkout: 'success',
+        includeSessionId: true,
+      }),
       cancel_url: stripeHomeReturnUrl(siteUrl, { section: 'merch', checkout: 'cancel' }),
     })
 
@@ -80,7 +98,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ url: session.url })
   } catch (error) {
-    console.error('Merch checkout create error:', error)
+    console.error('Merch checkout error:', error)
     const message = error instanceof Error ? error.message : 'Checkout failed'
     const status = message.includes('Payments are temporarily unavailable') ? 503 : 500
     return NextResponse.json({ error: message }, { status })

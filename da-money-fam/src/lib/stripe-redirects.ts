@@ -7,6 +7,7 @@ export function stripeHomeReturnUrl(
   options: {
     section: string
     checkout?: 'success' | 'cancel'
+    includeSessionId?: boolean
   }
 ): string {
   const base = siteUrl.replace(/\/$/, '')
@@ -16,5 +17,9 @@ export function stripeHomeReturnUrl(
   if (options.checkout) {
     url.searchParams.set('checkout', options.checkout)
   }
-  return url.toString()
+  let href = url.toString()
+  if (options.includeSessionId) {
+    href += `${href.includes('?') ? '&' : '?'}session_id={CHECKOUT_SESSION_ID}`
+  }
+  return href
 }

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useAuth } from '@/contexts/AuthProvider'
 import UserAvatar from '@/components/UserAvatar'
+import { XP_PER_LEVEL } from '@/lib/fan-perks'
 import type { PublicSong, UserProfile, UserStats } from '@/types/store'
 
 export default function ProfilePage() {
@@ -94,7 +95,7 @@ export default function ProfilePage() {
     )
   }
 
-  const xpProgress = stats ? (stats.xp % 2000) / 20 : 0
+  const xpProgress = stats ? ((stats.xp % XP_PER_LEVEL) / XP_PER_LEVEL) * 100 : 0
 
   return (
     <div className="min-h-screen bg-matte-black py-24 px-4">
@@ -113,8 +114,13 @@ export default function ProfilePage() {
             />
             <div className="text-center sm:text-left flex-1">
               <p className="text-gold text-xs uppercase tracking-[4px] mb-2">DMF Fan Profile</p>
-              <h1 className="font-serif text-3xl md:text-4xl gold-gradient mb-1">
+              <h1 className="font-serif text-3xl md:text-4xl gold-gradient mb-1 flex items-center justify-center sm:justify-start gap-3 flex-wrap">
                 {profile.display_name || 'Fan'}
+                {stats && stats.level >= 2 && (
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider bg-purple-500/30 text-purple-200 border border-purple-400/40 px-2.5 py-1 rounded-full">
+                    Fam Regular
+                  </span>
+                )}
               </h1>
               <p className="text-gray-400 text-sm">{email}</p>
             </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getStripe, getSiteUrl } from '@/lib/stripe'
 import { fulfillStripeSession } from '@/lib/stripe-fulfillment'
+import { getStripePurchaseAnalytics } from '@/lib/stripe-analytics'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -16,6 +17,7 @@ export async function GET(req: Request) {
 
     const result = await fulfillStripeSession(session)
     const siteUrl = getSiteUrl()
+    const analytics = getStripePurchaseAnalytics(session)
 
     if (result.type === 'bundle_purchase' && 'download_token' in result) {
       return NextResponse.json({
@@ -23,6 +25,21 @@ export async function GET(req: Request) {
         download_url: `${siteUrl}/api/download/${result.download_token}`,
         order_ids: result.order_ids,
         is_bundle: true,
+        analytics,
+      })
+    }
+
+    if (result.type === 'cart_purchase') {
+      const downloadToken =
+        'download_token' in result && result.download_token ? result.download_token : null
+      return NextResponse.json({
+        song_title: result.song_title,
+        download_url: downloadToken ? `${siteUrl}/api/download/${downloadToken}` : null,
+        order_ids: result.order_ids,
+        is_bundle: Boolean(result.has_songs && (result.order_ids?.length ?? 0) > 1),
+        is_cart: true,
+        has_merch: result.has_merch,
+        analytics,
       })
     }
 
@@ -34,6 +51,7 @@ export async function GET(req: Request) {
       song_title: result.song_title,
       download_url: `${siteUrl}/api/download/${result.download_token}`,
       order_id: result.order_id,
+      analytics,
     })
   } catch (error) {
     console.error('Checkout verify error:', error)

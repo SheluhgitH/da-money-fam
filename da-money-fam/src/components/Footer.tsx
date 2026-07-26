@@ -135,14 +135,19 @@ export default function Footer() {
         transition={{ duration: 0.5 }}
         className="max-w-7xl mx-auto relative z-10"
       >
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12 mb-8 md:mb-12 lg:mb-16">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-10 mb-8 md:mb-12 lg:mb-16">
           <div>
-            <h3 className="font-serif text-xl sm:text-2xl md:text-3xl font-bold gold-gradient mb-3 md:mb-4">
-              DA MONEY FAM
+            <h3 className="font-serif text-xl sm:text-2xl md:text-3xl font-bold text-white text-glow mb-3 md:mb-4">
+              DMF
             </h3>
             <p className="text-gray-400 mb-6">
               Setting trends in music, fashion, and culture. Luxury hip-hop collective redefining the industry.
             </p>
+            <div className="flex flex-wrap gap-3 mb-6">
+              <Link href="/#store" className="text-xs uppercase tracking-wider text-gold hover:underline">Store</Link>
+              <Link href="/account" className="text-xs uppercase tracking-wider text-gold hover:underline">Membership</Link>
+              <Link href="/#contact" className="text-xs uppercase tracking-wider text-gold hover:underline">Contact</Link>
+            </div>
             <div className="flex gap-4">
               {/* Shared SVG Gradient Definition */}
               <svg className="absolute w-0 h-0" aria-hidden="true">
@@ -214,6 +219,21 @@ export default function Footer() {
                 </li>
               ))}
             </ul>
+          </div>
+
+          <div>
+            <h4 className="font-serif text-xl font-bold text-gold mb-6">
+              Membership
+            </h4>
+            <p className="text-gray-400 text-sm mb-4">
+              Unlock extended previews, early drops, and fam-only perks.
+            </p>
+            <Link
+              href="/account"
+              className="inline-block px-5 py-2.5 bg-gold text-black text-[10px] font-bold uppercase tracking-wider rounded-full hover:bg-white transition-colors"
+            >
+              Join Fan Club
+            </Link>
           </div>
 
           <div id="contact">

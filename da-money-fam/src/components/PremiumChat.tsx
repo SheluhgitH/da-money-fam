@@ -303,7 +303,7 @@ export default function PremiumChat() {
             <motion.button
                 id="chat-trigger"
                 onClick={() => setIsOpen(!isOpen)}
-                className="fixed bottom-[20px] right-[20px] md:bottom-[30px] md:right-[30px] w-[60px] h-[60px] md:w-[70px] md:h-[70px] rounded-full z-[1000] flex items-center justify-center cursor-pointer shadow-[0_10px_30px_rgba(255,215,0,0.3)] border-none"
+                className="fixed bottom-[20px] left-[20px] md:bottom-[30px] md:left-[30px] w-[60px] h-[60px] md:w-[70px] md:h-[70px] rounded-full z-[1000] flex items-center justify-center cursor-pointer shadow-[0_10px_30px_rgba(255,215,0,0.3)] border-none"
                 style={{ background: 'linear-gradient(135deg, #FFD700, #B8860B)' }}
                 animate={{
                     boxShadow: [
@@ -327,7 +327,7 @@ export default function PremiumChat() {
                         exit={{ opacity: 0, y: 20, scale: 0.9 }}
                         className={`fixed z-[999] overflow-hidden flex flex-row shadow-[0_30px_60px_rgba(0,0,0,0.6)] transition-all duration-300 ${isFullscreen
                                 ? 'inset-0 w-full h-full rounded-none'
-                                : 'bottom-[90px] md:bottom-[110px] right-4 left-4 md:left-auto md:right-[30px] md:w-[450px] md:h-[700px] w-auto h-[calc(100dvh-110px)] md:h-[700px] rounded-[24px] border border-[#FFD700]'
+                                : 'bottom-[90px] md:bottom-[110px] right-4 left-4 md:right-auto md:left-[30px] md:w-[450px] md:h-[700px] w-auto h-[calc(100dvh-110px)] md:h-[700px] rounded-[24px] border border-[#FFD700]'
                             }`}
                         style={{
                             background: 'rgba(10, 10, 10, 0.98)',

@@ -133,6 +133,27 @@ export default function AdminDashboard() {
     }
   }
 
+  const cycleAccess = async (song: Song) => {
+    const order: Array<'public' | 'early' | 'exclusive'> = ['public', 'early', 'exclusive']
+    const current = song.access || 'public'
+    const next = order[(order.indexOf(current) + 1) % order.length]
+    const payload: Record<string, unknown> = { id: song.id, access: next }
+    if (next === 'exclusive') payload.for_sale = false
+    if (next === 'public') payload.for_sale = true
+    const res = await fetch('/api/admin/songs', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) {
+      setMessage(`${song.title} access → ${next}`)
+      loadData()
+    } else {
+      setMessage(data.error || `Failed to update access for ${song.title}`)
+    }
+  }
+
   const deleteSong = async (id: string) => {
     if (!confirm('Delete this song permanently?')) return
     const res = await fetch(`/api/admin/songs?id=${id}`, { method: 'DELETE' })
@@ -350,8 +371,10 @@ export default function AdminDashboard() {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-bold truncate">{song.title}</h3>
                   <p className="text-gold text-sm">
-                    {song.artist} · {song.for_sale ? `$${song.price.toFixed(2)}` : 'Exclusive'}
+                    {song.artist} · {song.for_sale ? `$${song.price.toFixed(2)}` : 'Not for sale'}
                     {song.genre ? ` · ${song.genre}` : ''}
+                    {' · '}
+                    {(song.access || 'public').toUpperCase()}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
                     Updated {formatDate(song.updated_at)}
@@ -366,10 +389,22 @@ export default function AdminDashboard() {
                     Edit
                   </button>
                   <button
+                    onClick={() => cycleAccess(song)}
+                    className={`text-xs px-3 py-1 rounded-full ${
+                      song.access === 'exclusive'
+                        ? 'bg-purple-500/30 text-purple-200'
+                        : song.access === 'early'
+                          ? 'bg-blue-500/30 text-blue-200'
+                          : 'bg-white/10'
+                    }`}
+                  >
+                    Access: {song.access || 'public'}
+                  </button>
+                  <button
                     onClick={() => toggleSong(song, 'for_sale')}
                     className={`text-xs px-3 py-1 rounded-full ${song.for_sale ? 'bg-white/10' : 'bg-purple-500/30 text-purple-200'}`}
                   >
-                    {song.for_sale ? 'For Sale' : 'Exclusive'}
+                    {song.for_sale ? 'For Sale' : 'Not For Sale'}
                   </button>
                   <button
                     onClick={() => toggleSong(song, 'is_promoted')}

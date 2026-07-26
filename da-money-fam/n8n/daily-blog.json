@@ -1,0 +1,116 @@
+{
+  "name": "DMF Daily Blog (Ollama)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dmf-daily-blog",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-run-now",
+      "name": "Run Blog Now",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [192, 180],
+      "webhookId": "dmf-daily-blog-webhook"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "triggerAtHour": 8 }]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every Day 8AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [192, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama3.2:3b\",\n  \"stream\": false,\n  \"format\": \"json\",\n  \"prompt\": \"You write for Da Money Fam, a luxury hip-hop collective. Return ONLY valid JSON with keys: title, slug, excerpt, outline. slug must be lowercase with hyphens. excerpt is one sentence. outline is an array of 4 strings (section bullet points). Topic: a current trend in hip-hop, fashion, or culture.\"\n}"
+      },
+      "id": "ollama-outline",
+      "name": "Ollama Outline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [416, 90]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'llama3.2:3b', stream: false, prompt: 'Write a 300-word luxury hip-hop culture blog article for Da Money Fam. Output ONLY the article body as plain text with paragraphs separated by blank lines. No JSON, no title. Topic from this outline: ' + $('Ollama Outline').first().json.response }) }}"
+      },
+      "id": "ollama-expand",
+      "name": "Ollama Expand",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 90]
+    },
+    {
+      "parameters": {
+        "jsCode": "const outlineRaw = $('Ollama Outline').first().json.response;\nconst expandRaw = $input.first().json.response;\n\nlet outline = null;\nlet expanded = null;\ntry { outline = JSON.parse(outlineRaw); } catch { outline = null; }\ntry { expanded = JSON.parse(expandRaw); } catch { expanded = null; }\n\nconst title = String(outline?.title || expanded?.title || 'DMF Daily').trim();\nconst slug = String(outline?.slug || expanded?.slug || `post-${Date.now()}`).trim();\nconst excerpt = String(outline?.excerpt || expanded?.excerpt || '').trim();\n\nlet content = String(expanded?.content || expanded?.body || '').trim();\nif (!content && expandRaw && !expandRaw.trim().startsWith('{')) {\n  content = expandRaw.trim();\n}\nif (!content && outline?.content) {\n  content = String(outline.content).trim();\n}\nif (!content && excerpt) {\n  content = `${excerpt}\\n\\n${excerpt} `.repeat(40).trim();\n}\n\nconst words = content.split(/\\s+/).filter(Boolean).length;\nconst usedFallback = !expandRaw || expandRaw.trim().startsWith('{') && !expanded?.content;\nconst isPadding = excerpt.length > 20 && content.split(excerpt).length > 4;\nconst is_published = Boolean(title && slug && words >= 100 && !isPadding && !usedFallback);\n\nconst covers = [\n  '/store/merch/custom-dmf-t-shirt.png',\n  '/store/merch/dmf-sweater-1.png',\n  '/store/merch/dmf-sweater-2.png'\n];\nconst start = new Date(new Date().getFullYear(), 0, 0);\nconst dayOfYear = Math.floor((Date.now() - start.getTime()) / 86400000);\nconst cover_image_url = covers[dayOfYear % covers.length];\n\nreturn [{\n  json: { slug, title, excerpt, content, cover_image_url, is_published }\n}];"
+      },
+      "id": "quality-check",
+      "name": "Quality Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [864, 90]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3005/api/blog/ingest",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer PASTE_YOUR_SECRET_HERE"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { slug: $json.slug, title: $json.title, excerpt: $json.excerpt, content: $json.content, cover_image_url: $json.cover_image_url, is_published: $json.is_published } }}"
+      },
+      "id": "post-to-site",
+      "name": "Post to Site",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1088, 90]
+    }
+  ],
+  "connections": {
+    "Run Blog Now": {
+      "main": [[{ "node": "Ollama Outline", "type": "main", "index": 0 }]]
+    },
+    "Every Day 8AM": {
+      "main": [[{ "node": "Ollama Outline", "type": "main", "index": 0 }]]
+    },
+    "Ollama Outline": {
+      "main": [[{ "node": "Ollama Expand", "type": "main", "index": 0 }]]
+    },
+    "Ollama Expand": {
+      "main": [[{ "node": "Quality Check", "type": "main", "index": 0 }]]
+    },
+    "Quality Check": {
+      "main": [[{ "node": "Post to Site", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

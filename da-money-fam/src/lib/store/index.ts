@@ -42,6 +42,14 @@ async function writeJsonFile<T>(filename: string, data: T): Promise<void> {
 }
 
 function mapSupabaseSong(row: Record<string, unknown>): Song {
+  const accessRaw = row.access ? String(row.access) : null
+  const access =
+    accessRaw === 'early' || accessRaw === 'exclusive' || accessRaw === 'public'
+      ? accessRaw
+      : row.for_sale === false && !row.release_date
+        ? 'exclusive'
+        : 'public'
+
   return {
     id: String(row.id),
     title: String(row.title),
@@ -52,6 +60,7 @@ function mapSupabaseSong(row: Record<string, unknown>): Song {
     price: Number(row.price),
     is_promoted: Boolean(row.is_promoted),
     for_sale: row.for_sale !== false,
+    access,
     genre: row.genre ? String(row.genre) : undefined,
     release_date: row.release_date ? String(row.release_date) : undefined,
     description: row.description ? String(row.description) : undefined,
@@ -81,7 +90,8 @@ function mapSupabaseOrder(row: Record<string, unknown>, songTitle?: string): Pur
 }
 
 function normalizeSong(song: Song): Song {
-  return { ...song, for_sale: song.for_sale !== false }
+  const access = song.access || (song.for_sale === false && !song.release_date ? 'exclusive' : 'public')
+  return { ...song, for_sale: song.for_sale !== false, access }
 }
 
 export async function applyScheduledDropReleases(): Promise<void> {
@@ -93,6 +103,7 @@ export async function applyScheduledDropReleases(): Promise<void> {
       .from('songs')
       .update({ for_sale: true, updated_at: new Date().toISOString() })
       .eq('for_sale', false)
+      .neq('access', 'exclusive')
       .lte('release_date', today)
     return
   }
@@ -100,7 +111,12 @@ export async function applyScheduledDropReleases(): Promise<void> {
   const songs = await readJsonFile<Song[]>('songs.json', [])
   let changed = false
   for (const song of songs) {
-    if (song.for_sale === false && song.release_date && song.release_date <= today) {
+    if (
+      song.for_sale === false &&
+      song.access !== 'exclusive' &&
+      song.release_date &&
+      song.release_date <= today
+    ) {
       song.for_sale = true
       song.updated_at = new Date().toISOString()
       changed = true
@@ -173,6 +189,7 @@ export function toPublicSong(
     price: song.price,
     is_promoted: song.is_promoted,
     for_sale: song.for_sale !== false,
+    access: song.access || 'public',
     genre: song.genre,
     release_date: song.release_date,
     description: song.description,
@@ -755,4 +772,88 @@ export function createAdminSessionToken(): string {
 export function verifyAdminSessionToken(token: string | undefined): boolean {
   if (!token) return false
   return token.length === 64 && /^[a-f0-9]+$/.test(token)
+}
+
+export async function linkGuestOrdersToUser(userId: string, email: string): Promise<void> {
+  if (!email) return
+
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+
+    const { error: purchaseError } = await supabase
+      .from('purchase_orders')
+      .update({ user_id: userId })
+      .eq('buyer_email', email)
+      .is('user_id', null)
+    if (purchaseError) {
+      console.error('Error linking guest purchase_orders:', purchaseError)
+    }
+
+    const { error: merchError } = await supabase
+      .from('merch_orders')
+      .update({ user_id: userId })
+      .eq('buyer_email', email)
+      .is('user_id', null)
+    if (merchError) {
+      console.error('Error linking guest merch_orders:', merchError)
+    }
+
+    const { error: serviceError } = await supabase
+      .from('service_orders')
+      .update({ user_id: userId })
+      .eq('buyer_email', email)
+      .is('user_id', null)
+    if (serviceError) {
+      console.error('Error linking guest service_orders:', serviceError)
+    }
+    return
+  }
+
+  try {
+    const orders = await readJsonFile<PurchaseOrder[]>('orders.json', [])
+    let updated = false
+    orders.forEach((o) => {
+      if (o.buyer_email === email && !o.user_id) {
+        o.user_id = userId
+        updated = true
+      }
+    })
+    if (updated) {
+      await writeJsonFile('orders.json', orders)
+    }
+  } catch (err) {
+    console.error('Error linking local purchase orders:', err)
+  }
+
+  try {
+    const merchOrders = await readJsonFile<MerchOrder[]>('merch-orders.json', [])
+    let updatedMerch = false
+    merchOrders.forEach((o) => {
+      if (o.buyer_email === email && !o.user_id) {
+        o.user_id = userId
+        updatedMerch = true
+      }
+    })
+    if (updatedMerch) {
+      await writeJsonFile('merch-orders.json', merchOrders)
+    }
+  } catch (err) {
+    console.error('Error linking local merch orders:', err)
+  }
+
+  try {
+    const serviceOrders = await readJsonFile<ServiceOrder[]>('service-orders.json', [])
+    let updatedService = false
+    serviceOrders.forEach((o) => {
+      if (o.buyer_email === email && !o.user_id) {
+        o.user_id = userId
+        updatedService = true
+      }
+    })
+    if (updatedService) {
+      await writeJsonFile('service-orders.json', serviceOrders)
+    }
+  } catch (err) {
+    console.error('Error linking local service orders:', err)
+  }
 }

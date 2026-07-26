@@ -7,6 +7,7 @@ type EnvIssue = {
 const DEFAULT_ADMIN_PASSWORD = 'dmf-admin-2026'
 const DEFAULT_ADMIN_SESSION = 'dmf-session-secret'
 const PLACEHOLDER_WEBHOOK = 'your_stripe_webhook_secret_here'
+const PLACEHOLDER_FAN_CLUB_PRICE = 'your_fan_club_price_id_here'
 
 export function getProductionEnvIssues(): EnvIssue[] {
   if (process.env.NODE_ENV !== 'production') return []
@@ -50,6 +51,15 @@ export function getProductionEnvIssues(): EnvIssue[] {
       variable: 'STRIPE_WEBHOOK_SECRET',
       severity: 'error',
       message: 'Purchases will not unlock library or record merch orders.',
+    })
+  }
+
+  const fanClubPrice = process.env.STRIPE_FAN_CLUB_PRICE_ID
+  if (!fanClubPrice || fanClubPrice === PLACEHOLDER_FAN_CLUB_PRICE || fanClubPrice === 'price_your_fan_club_price_id_here') {
+    issues.push({
+      variable: 'STRIPE_FAN_CLUB_PRICE_ID',
+      severity: 'warning',
+      message: 'Fan Club subscriptions are disabled until a live recurring price ID is set.',
     })
   }
 

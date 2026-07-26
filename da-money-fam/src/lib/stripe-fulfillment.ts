@@ -11,6 +11,7 @@ import {
 import { creditUserCoins, awardXp } from '@/lib/user-store'
 import { sendMerchAdminNotification, sendMerchOrderConfirmation, sendServiceOrderConfirmation, sendServiceAdminNotification } from '@/lib/email'
 import { getBundle } from '@/lib/bundles'
+import { getMerchItem } from '@/lib/merch'
 import { recordReferralPurchase, rewardReferrer, completeReferralReward } from '@/lib/referrals-store'
 import { upsertFanSubscription, setFanClubCustomerId } from '@/lib/fan-club'
 import { getStripe } from '@/lib/stripe'
@@ -47,9 +48,10 @@ async function fulfillSongOrder(
   }
 
   const song = await getSongById(songId)
-  if (!song || song.for_sale === false) {
+  if (!song) {
     throw new Error(`Song not available: ${songId}`)
   }
+  // Paid sessions already passed purchase gates at checkout; allow fulfillment for early/exclusive.
 
   const downloadToken = generateDownloadToken()
   const buyerEmail =
@@ -90,7 +92,21 @@ export async function fulfillStripeSession(session: Stripe.Checkout.Session) {
   }
 
   const meta = session.metadata || {}
-  const { type, song_id, coin_amount, user_id, merch_id, merch_name, price, size, bundle_id, song_ids, package_slug, referrer_id } = meta
+  const {
+    type,
+    song_id,
+    coin_amount,
+    user_id,
+    merch_id,
+    merch_name,
+    price,
+    size,
+    bundle_id,
+    song_ids,
+    merch_items: merch_items_meta,
+    package_slug,
+    referrer_id,
+  } = meta
 
   if (type === 'coin_purchase') {
     if (!user_id || !coin_amount) throw new Error('Missing metadata for coin purchase')
@@ -191,6 +207,99 @@ export async function fulfillStripeSession(session: Stripe.Checkout.Session) {
     return { success: true, type: 'merch_purchase' as const, order_id: order.id }
   }
 
+  if (type === 'cart_purchase') {
+    const ids = song_ids ? song_ids.split(',').filter(Boolean) : []
+    let parsedMerch: Array<{ id: string; size?: string; name?: string; price?: number }> = []
+    try {
+      parsedMerch = merch_items_meta ? JSON.parse(merch_items_meta) : []
+    } catch {
+      parsedMerch = []
+    }
+
+    if (ids.length === 0 && parsedMerch.length === 0) {
+      throw new Error('Cart purchase has no items')
+    }
+
+    const buyerEmail =
+      session.customer_details?.email || session.customer_email || 'customer@stripe.com'
+    const buyerName = session.customer_details?.name || 'Stripe Customer'
+    const shippingAddress = formatShippingAddress(session)
+
+    const songOrders = []
+    for (const id of ids) {
+      const order = await fulfillSongOrder(
+        session,
+        id,
+        `${session.id}:${id}`,
+        user_id ?? null,
+        referrer_id
+      )
+      songOrders.push(order)
+    }
+
+    const merchOrderIds: string[] = []
+    for (const entry of parsedMerch) {
+      if (!entry?.id) continue
+      const sessionKey = `${session.id}:merch:${entry.id}:${entry.size || 'na'}`
+      const existing = await getMerchOrderByStripeSession(sessionKey)
+      if (existing) {
+        merchOrderIds.push(existing.id)
+        continue
+      }
+
+      const catalog = getMerchItem(String(entry.id))
+      const merchName = entry.name || catalog?.name || 'DMF Merch'
+      const merchPrice =
+        typeof entry.price === 'number'
+          ? entry.price
+          : catalog?.price ?? 0
+
+      const order = await createMerchOrder({
+        merch_id: String(entry.id),
+        merch_name: merchName,
+        price: merchPrice,
+        size: entry.size || null,
+        shipping_address: shippingAddress,
+        buyer_email: buyerEmail,
+        buyer_name: buyerName,
+        stripe_session_id: sessionKey,
+        user_id: user_id ?? null,
+      })
+
+      await sendMerchOrderConfirmation({
+        buyerEmail,
+        buyerName,
+        merchName,
+        price: order.price,
+        size: entry.size || 'N/A',
+        shippingAddress,
+      })
+      await sendMerchAdminNotification({
+        merchName,
+        buyerEmail,
+        buyerName,
+        size: entry.size || 'N/A',
+        price: order.price,
+        shippingAddress,
+      })
+
+      merchOrderIds.push(order.id)
+    }
+
+    return {
+      success: true,
+      type: 'cart_purchase' as const,
+      order_ids: [...songOrders.map((o) => o.id), ...merchOrderIds],
+      song_title:
+        songOrders.length > 1
+          ? `${songOrders.length} tracks`
+          : songOrders[0]?.song_title || (merchOrderIds.length ? 'Merch order' : 'Cart'),
+      download_token: songOrders[0]?.download_token,
+      has_songs: songOrders.length > 0,
+      has_merch: merchOrderIds.length > 0,
+    }
+  }
+
   if (type === 'bundle_purchase') {
     const bundle = bundle_id ? getBundle(bundle_id) : null
     const ids = song_ids ? song_ids.split(',').filter(Boolean) : bundle?.song_ids || []
@@ -217,7 +326,7 @@ export async function fulfillStripeSession(session: Stripe.Checkout.Session) {
     }
   }
 
-  if (!song_id && type !== 'bundle_purchase') {
+  if (!song_id && type !== 'bundle_purchase' && type !== 'cart_purchase') {
     throw new Error('Missing song metadata')
   }
 

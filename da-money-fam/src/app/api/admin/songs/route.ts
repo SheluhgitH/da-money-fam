@@ -77,6 +77,7 @@ export async function POST(req: Request) {
       price: payload.price,
       is_promoted: payload.is_promoted,
       for_sale: payload.for_sale,
+      access: 'public',
       genre: payload.genre || undefined,
       release_date: payload.release_date || undefined,
       description: payload.description || undefined,

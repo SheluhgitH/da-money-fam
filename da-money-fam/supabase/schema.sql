@@ -13,6 +13,7 @@ create table if not exists songs (
   price numeric(10, 2) not null default 5.00,
   is_promoted boolean not null default false,
   for_sale boolean not null default true,
+  access text not null default 'public' check (access in ('public', 'early', 'exclusive')),
   genre varchar(100),
   release_date date,
   description text,
@@ -47,6 +48,14 @@ create table if not exists payment_settings (
 );
 
 insert into payment_settings (id) values (1) on conflict (id) do nothing;
+
+-- Existing projects: add access column if missing
+alter table songs add column if not exists access text not null default 'public';
+-- Optional constraint (ignore if already present)
+do $$ begin
+  alter table songs add constraint songs_access_check check (access in ('public', 'early', 'exclusive'));
+exception when duplicate_object then null;
+end $$;
 
 create or replace function update_updated_at()
 returns trigger as $$

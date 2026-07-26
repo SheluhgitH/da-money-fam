@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/user'
-import { getUserStats, saveUserStats, unlockAchievement } from '@/lib/user-store'
+import { getUserStats, saveUserStats } from '@/lib/user-store'
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -22,17 +22,20 @@ export async function PATCH(req: Request) {
     const body = await req.json()
     const current = await getUserStats(user.id)
 
+    if ('xp' in body || 'level' in body) {
+      return NextResponse.json(
+        { error: 'xp and level are server-calculated and cannot be set directly' },
+        { status: 403 }
+      )
+    }
+
     const stats = await saveUserStats({
       user_id: user.id,
-      xp: body.xp ?? current.xp,
-      level: body.level ?? current.level,
+      xp: current.xp,
+      level: current.level,
       streak: body.streak ?? current.streak,
       last_login: body.last_login ?? current.last_login,
     })
-
-    if (body.unlock_achievement) {
-      await unlockAchievement(user.id, body.unlock_achievement)
-    }
 
     return NextResponse.json({ stats })
   } catch (error) {

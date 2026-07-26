@@ -1,17 +1,33 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthProvider'
 
 export default function AccountPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-matte-black flex items-center justify-center text-gray-500">
+          Loading...
+        </div>
+      }
+    >
+      <AccountPageContent />
+    </Suspense>
+  )
+}
+
+function AccountPageContent() {
   const { user, signOut, loading: authLoading } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [displayName, setDisplayName] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
+  const [checkoutSuccess, setCheckoutSuccess] = useState<'fan_club' | 'coinz' | null>(null)
   const [saving, setSaving] = useState(false)
   const [fanClubActive, setFanClubActive] = useState(false)
   const [fanClubStatus, setFanClubStatus] = useState<string | null>(null)
@@ -49,6 +65,24 @@ export default function AccountPage() {
         setFanClubStatus(null)
       })
   }, [user, authLoading, router])
+
+  useEffect(() => {
+    if (searchParams.get('fan_club') === 'success') {
+      setCheckoutSuccess('fan_club')
+      setFanClubActive(true)
+      setFanClubStatus('active')
+    } else if (searchParams.get('status') === 'success') {
+      setCheckoutSuccess('coinz')
+    }
+
+    if (searchParams.get('fan_club') || searchParams.get('status')) {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('fan_club')
+      url.searchParams.delete('status')
+      const query = url.searchParams.toString()
+      window.history.replaceState({}, '', `${url.pathname}${query ? `?${query}` : ''}`)
+    }
+  }, [searchParams])
 
   const handleManageSubscription = async () => {
     setPortalLoading(true)
@@ -104,6 +138,22 @@ export default function AccountPage() {
       <div className="max-w-lg mx-auto glass-gold rounded-2xl p-8">
         <h1 className="font-serif text-3xl gold-gradient mb-2">Your Account</h1>
         <p className="text-gray-400 text-sm mb-8">Manage your profile and preferences</p>
+
+        {checkoutSuccess === 'fan_club' && (
+          <div className="mb-6 p-4 rounded-xl border border-gold/40 bg-gold/10 text-center">
+            <p className="text-gold text-2xl mb-2">✓</p>
+            <p className="text-white font-semibold mb-1">Welcome to the Fan Club</p>
+            <p className="text-gray-400 text-sm">You now get extended previews and member perks.</p>
+          </div>
+        )}
+
+        {checkoutSuccess === 'coinz' && (
+          <div className="mb-6 p-4 rounded-xl border border-gold/40 bg-gold/10 text-center">
+            <p className="text-gold text-2xl mb-2">✓</p>
+            <p className="text-white font-semibold mb-1">Coinz Added</p>
+            <p className="text-gray-400 text-sm">Your balance has been updated.</p>
+          </div>
+        )}
 
         <div className="flex justify-center mb-6">
           <div className="relative">

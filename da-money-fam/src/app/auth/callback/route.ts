@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { linkGuestOrdersToUser } from '@/lib/store'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
@@ -9,7 +10,10 @@ export async function GET(request: Request) {
   if (code) {
     const supabase = createClient()
     if (supabase) {
-      await supabase.auth.exchangeCodeForSession(code)
+      const { data } = await supabase.auth.exchangeCodeForSession(code)
+      if (data.user?.id && data.user.email) {
+        await linkGuestOrdersToUser(data.user.id, data.user.email)
+      }
     }
   }
 
