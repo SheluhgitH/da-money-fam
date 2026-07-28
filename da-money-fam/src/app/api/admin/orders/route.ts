@@ -7,6 +7,7 @@ import {
   getSongById,
   updateOrder,
 } from '@/lib/store'
+import { getSiteUrl } from '@/lib/site-url'
 import { Resend } from 'resend'
 
 export async function GET() {
@@ -44,7 +45,7 @@ export async function PATCH(req: Request) {
       }
 
       const song = await getSongById(order.song_id)
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3005'
+      const baseUrl = getSiteUrl()
       const downloadUrl = `${baseUrl}/api/download/${token}`
 
       if (send_email && process.env.RESEND_API_KEY && process.env.RESEND_API_KEY !== 'your_api_key_here') {

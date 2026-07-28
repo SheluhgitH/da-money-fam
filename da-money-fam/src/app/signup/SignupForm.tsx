@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client'
+import { getAuthCallbackUrl } from '@/lib/site-url'
 
 export default function SignupForm() {
   const [email, setEmail] = useState('')
@@ -34,12 +35,11 @@ export default function SignupForm() {
       return
     }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
     const { data, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${siteUrl}/auth/callback?redirect=${encodeURIComponent(redirect)}`,
+        emailRedirectTo: getAuthCallbackUrl(redirect),
         data: { display_name: displayName || email.split('@')[0] },
       },
     })
@@ -70,11 +70,10 @@ export default function SignupForm() {
       return
     }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${siteUrl}/auth/callback?redirect=${encodeURIComponent(redirect)}`,
+        redirectTo: getAuthCallbackUrl(redirect),
       },
     })
   }

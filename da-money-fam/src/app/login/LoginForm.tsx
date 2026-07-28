@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client'
+import { getAuthCallbackUrl } from '@/lib/site-url'
 
 export default function LoginForm() {
   const [email, setEmail] = useState('')
@@ -55,11 +56,10 @@ export default function LoginForm() {
       return
     }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${siteUrl}/auth/callback?redirect=${encodeURIComponent(redirect)}`,
+        redirectTo: getAuthCallbackUrl(redirect),
       },
     })
   }

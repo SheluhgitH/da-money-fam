@@ -1,4 +1,5 @@
 import Stripe from 'stripe'
+import { getSiteUrl } from './site-url'
 
 const PLACEHOLDER_KEYS = [
   'your_stripe_secret_key_here',
@@ -36,6 +37,4 @@ export function getStripe(): Stripe {
   })
 }
 
-export function getSiteUrl(): string {
-  return process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3005'
-}
+export { getSiteUrl } from './site-url'

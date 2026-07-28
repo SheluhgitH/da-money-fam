@@ -10,7 +10,12 @@ export async function GET(request: Request) {
   if (code) {
     const supabase = createClient()
     if (supabase) {
-      const { data } = await supabase.auth.exchangeCodeForSession(code)
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+      if (exchangeError) {
+        console.error('Auth callback error:', exchangeError.message)
+        return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`)
+      }
+      const { data } = await supabase.auth.getUser()
       if (data.user?.id && data.user.email) {
         await linkGuestOrdersToUser(data.user.id, data.user.email)
       }
