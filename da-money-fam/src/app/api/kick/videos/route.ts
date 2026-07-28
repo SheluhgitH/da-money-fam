@@ -15,11 +15,6 @@ type KickApiVideo = {
   video?: { uuid?: string }
 }
 
-type KickVideoDetail = {
-  uuid?: string
-  vod_id?: string
-}
-
 const KICK_HEADERS = {
   Accept: 'application/json',
   'Accept-Language': 'en-US,en;q=0.9',
@@ -29,6 +24,16 @@ const KICK_HEADERS = {
 }
 
 const FALLBACK_VIDEOS: KickVideo[] = [
+  {
+    id: 'c05b9610-4207-4177-af57-1fd30b7cfc7b',
+    title: 'DMF COOKOUT',
+    category: 'IRL',
+    thumbnail: 'https://images.kick.com/video_thumbnails/LnWNMK7XnYM0/FNia5aNbf8aS/720.webp',
+    durationMs: 6699000,
+    views: 8,
+    createdAt: '2026-07-26 19:06:53',
+    watchUrl: `https://kick.com/${KICK_CHANNEL_SLUG}/videos/160002aa-dmf-cookout`,
+  },
   {
     id: 'eae34da0-8cc6-4d2f-8f8f-dd240dfb61aa',
     title: 'Day with DMF',
@@ -51,29 +56,15 @@ const FALLBACK_VIDEOS: KickVideo[] = [
   },
 ]
 
-async function fetchVideoDetail(uuid: string): Promise<KickVideoDetail | null> {
-  try {
-    const res = await fetch(`https://kick.com/api/v1/video/${uuid}`, {
-      headers: KICK_HEADERS,
-      cache: 'no-store',
-    })
-    if (!res.ok) return null
-    const data = (await res.json()) as KickVideoDetail
-    return data
-  } catch (error) {
-    console.error(`Kick video detail fetch error for ${uuid}:`, error)
-    return null
-  }
-}
-
-function buildVideo(
-  item: KickApiVideo,
-  vodId: string | undefined
-): KickVideo | null {
+function buildVideo(item: KickApiVideo): KickVideo | null {
   const uuid = item.video?.uuid
   if (!uuid) return null
 
-  const urlId = vodId || uuid
+  // Prefer the human-readable slug for the watch URL. It avoids an extra API
+  // call to fetch the vod_id and is less likely to break if Kick blocks detail
+  // requests from serverless IPs.
+  const urlId = item.slug || uuid
+
   return {
     id: String(uuid),
     title: item.session_title || 'Stream',
@@ -86,17 +77,9 @@ function buildVideo(
   }
 }
 
-async function mapKickVideos(data: KickApiVideo[]): Promise<KickVideo[]> {
-  const enriched = await Promise.all(
-    data.map(async (item) => {
-      const uuid = item.video?.uuid
-      if (!uuid) return null
-      const detail = await fetchVideoDetail(uuid)
-      return buildVideo(item, detail?.vod_id)
-    })
-  )
-
-  return enriched
+function mapKickVideos(data: KickApiVideo[]): KickVideo[] {
+  return data
+    .map(buildVideo)
     .filter((video): video is KickVideo => Boolean(video))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
@@ -107,10 +90,16 @@ async function fetchKickVideos(): Promise<KickVideo[]> {
     cache: 'no-store',
   })
 
-  if (!res.ok) return FALLBACK_VIDEOS
+  if (!res.ok) {
+    console.error(`Kick videos API returned ${res.status} ${res.statusText}`)
+    return FALLBACK_VIDEOS
+  }
 
   const data = (await res.json()) as KickApiVideo[]
-  const videos = await mapKickVideos(Array.isArray(data) ? data : [])
+  const videos = mapKickVideos(Array.isArray(data) ? data : [])
+  if (videos.length === 0) {
+    console.error('Kick videos API returned no playable videos')
+  }
   return videos.length > 0 ? videos : FALLBACK_VIDEOS
 }
 
