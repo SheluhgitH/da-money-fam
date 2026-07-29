@@ -51,7 +51,7 @@ function mergeWithVerifiedFallbacks(videos: KickVideo[]): KickVideo[] {
     merged.set(video.id, video)
   }
 
-  return sortVideosNewestFirst([...merged.values()])
+  return sortVideosNewestFirst(Array.from(merged.values()))
 }
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
