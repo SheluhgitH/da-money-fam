@@ -8,6 +8,7 @@ import { scrollToSection } from '../utils/scrollToSection'
 import { useAuth } from '@/contexts/AuthProvider'
 import { useSiteSettings } from '@/contexts/SiteSettingsProvider'
 import UserAvatar from '@/components/UserAvatar'
+import DailyCheckInPrompt from '@/components/DailyCheckInPrompt'
 import type { UserProfile } from '@/types/store'
 
 export default function Navigation() {
@@ -178,6 +179,7 @@ export default function Navigation() {
                     <Link href="/library" className="text-xs uppercase tracking-widest text-gold hover:text-white transition-colors">
                       Library
                     </Link>
+                    <DailyCheckInPrompt variant="nav" />
                     <div className="flex items-center gap-2">
                       <span className="text-xs uppercase tracking-widest text-gray-300">Animations</span>
                       <label className="inline-flex relative items-center cursor-pointer">
@@ -258,6 +260,9 @@ export default function Navigation() {
                   <>
                     <Link href="/library" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
                       Library
+                    </Link>
+                    <Link href="/account/profile" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
+                      Daily Check-In
                     </Link>
                     <Link href="/account/profile" className="flex items-center gap-3 text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
                       <UserAvatar

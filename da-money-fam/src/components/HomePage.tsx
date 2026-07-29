@@ -19,6 +19,7 @@ import FamSpotlights from '@/components/FamSpotlights'
 import BlogTeaser from '@/components/blog/BlogTeaser'
 import SongStore from '@/components/store/SongStore'
 import StreamVideosSection from '@/components/StreamVideosSection'
+import AboutFamSection from '@/components/AboutFamSection'
 import { scrollToSection } from '@/utils/scrollToSection'
 import ReferralCapture from '@/components/ReferralCapture'
 import { PreviewPlayerProvider } from '@/contexts/PreviewPlayerContext'
@@ -31,6 +32,7 @@ import TestimonialsCarousel from '@/components/TestimonialsCarousel'
 import SocialWall from '@/components/SocialWall'
 import EmailCaptureModal from '@/components/EmailCaptureModal'
 import ScrollSkewProvider from '@/components/ScrollSkewProvider'
+import TheVault from '@/components/TheVault'
 
 export default function HomePage() {
   useEffect(() => {
@@ -67,6 +69,10 @@ export default function HomePage() {
 
       <section className="relative">
         <HeroSection />
+      </section>
+
+      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
+        <AboutFamSection />
       </section>
 
       <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
@@ -108,6 +114,9 @@ export default function HomePage() {
           </p>
         </div>
         <DmfReputationCard />
+        <div className="max-w-3xl mx-auto mt-8 md:mt-10">
+          <TheVault />
+        </div>
         <FanPerksLadder />
         <FamSpotlights />
       </section>

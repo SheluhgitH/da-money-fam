@@ -145,7 +145,20 @@ After env changes: **Deployments → ⋯ → Redeploy**.
 
 ---
 
-## 7. Verify the live site
+## 7. Kick stream videos (after each new VOD)
+
+Kick VOD links must use **`vod_id`** from the video URL — not the session slug.
+
+1. Open the VOD on Kick: `https://kick.com/jackpotwrld/videos/{vod_id}`
+2. Copy the `{vod_id}` segment (e.g. `019f9fd2-a128-7b26-bca4-96ed3e7ea297`)
+3. Add or update the entry in [`src/data/kick-videos.ts`](src/data/kick-videos.ts) with that `vodId` and `watchUrl`
+4. Deploy and verify `https://damoneyfam.com/api/kick/videos` — first video `watchUrl` must contain the vod_id
+
+**Do not** use the session slug (e.g. `160002aa-dmf-cookout`) — those URLs 404.
+
+---
+
+## 8. Verify the live site
 
 After redeploy, open [https://damoneyfam.com](https://damoneyfam.com) and confirm:
 
@@ -164,7 +177,7 @@ Hard-refresh (Ctrl+Shift+R) or try incognito if you still see the old UI (DNS/ca
 
 ---
 
-## 8. Audio files on production
+## 9. Audio files on production
 
 MP3s are **not in GitHub** (by design). On Vercel:
 

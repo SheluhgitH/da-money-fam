@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useAuth } from '@/contexts/AuthProvider'
 import UserAvatar from '@/components/UserAvatar'
+import DailyCheckInPrompt from '@/components/DailyCheckInPrompt'
+import ReferralHub from '@/components/ReferralHub'
 import { XP_PER_LEVEL } from '@/lib/fan-perks'
 import type { PublicSong, UserProfile, UserStats } from '@/types/store'
 
@@ -19,6 +21,15 @@ export default function ProfilePage() {
   const [ownedCount, setOwnedCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  const loadStats = () => {
+    fetch('/api/user/stats')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.stats) setStats(data.stats)
+      })
+      .catch(() => {})
+  }
 
   useEffect(() => {
     if (authLoading) return
@@ -64,6 +75,12 @@ export default function ProfilePage() {
       })
       .finally(() => setLoading(false))
   }, [user, authLoading, router])
+
+  useEffect(() => {
+    const onCheckIn = () => loadStats()
+    window.addEventListener('dmf-checkin-updated', onCheckIn)
+    return () => window.removeEventListener('dmf-checkin-updated', onCheckIn)
+  }, [])
 
   if (authLoading || loading) {
     return (
@@ -172,6 +189,16 @@ export default function ProfilePage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="grid grid-cols-1 md:grid-cols-2 gap-6"
+        >
+          <DailyCheckInPrompt variant="compact" />
+          <ReferralHub />
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="glass rounded-2xl p-6 sm:p-8 border border-white/10"
         >
@@ -207,6 +234,12 @@ export default function ProfilePage() {
         </motion.div>
 
         <div className="flex flex-wrap gap-3 justify-center">
+          <Link
+            href="/#vault"
+            className="px-6 py-3 border border-gold/40 text-gold rounded-full text-xs font-bold uppercase tracking-wider hover:bg-gold/10 transition-colors"
+          >
+            The Vault
+          </Link>
           <Link
             href="/library"
             className="px-6 py-3 bg-gold text-black rounded-full text-xs font-bold uppercase tracking-wider hover:bg-white transition-colors"

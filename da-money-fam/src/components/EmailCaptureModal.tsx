@@ -34,8 +34,12 @@ export default function EmailCaptureModal() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to subscribe')
       setStatus('done')
-      setMessage('You are in — early access alerts unlocked.')
-      window.setTimeout(close, 1600)
+      const packUrl = typeof data.wallpaper_pack_url === 'string' ? data.wallpaper_pack_url : '/wallpapers'
+      setMessage('You are in — check your email for the wallpaper pack, or open it now.')
+      window.setTimeout(() => {
+        close()
+        window.location.href = packUrl
+      }, 1400)
     } catch (err) {
       setStatus('error')
       setMessage(err instanceof Error ? err.message : 'Something went wrong')

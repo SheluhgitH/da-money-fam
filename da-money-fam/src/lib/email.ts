@@ -105,6 +105,35 @@ export async function sendServiceAdminNotification(input: {
   })
 }
 
+export async function sendWallpaperWelcomeEmail(input: {
+  email: string
+  packUrl: string
+  wallpaperUrls: string[]
+}) {
+  const resend = getResend()
+  if (!resend) return { sent: false }
+
+  const links = input.wallpaperUrls
+    .map((url, i) => `<li><a href="${url}">Wallpaper ${i + 1}</a></li>`)
+    .join('')
+
+  await resend.emails.send({
+    from: FROM,
+    to: input.email,
+    subject: 'Your DMF wallpaper pack is ready',
+    html: `
+      <h2>Welcome to Da Money Fam</h2>
+      <p>Thanks for joining the early access list. Your exclusive wallpaper pack is ready.</p>
+      <p><a href="${input.packUrl}" style="display:inline-block;padding:12px 20px;background:#d4af37;color:#000;text-decoration:none;border-radius:999px;font-weight:700;">Download Wallpaper Pack</a></p>
+      <p>Or grab individual stills:</p>
+      <ul>${links}</ul>
+      <p>Stay tuned for drop alerts and stream links.</p>
+    `,
+  })
+
+  return { sent: true }
+}
+
 export async function sendReleaseAlert(input: {
   emails: string[]
   title: string

@@ -3,6 +3,9 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { createServiceClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { sendWallpaperWelcomeEmail } from '@/lib/email'
+import { getSiteUrl } from '@/lib/site-url'
+import { NEWSLETTER_WALLPAPERS } from '@/data/wallpapers'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 
@@ -45,7 +48,24 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true })
+    const siteUrl = getSiteUrl().replace(/\/$/, '')
+    const packUrl = `${siteUrl}/wallpapers`
+    const wallpaperUrls = NEWSLETTER_WALLPAPERS.map((w) => `${siteUrl}${w.src}`)
+
+    const emailResult = await sendWallpaperWelcomeEmail({
+      email: emailNorm,
+      packUrl,
+      wallpaperUrls,
+    }).catch((err) => {
+      console.error('Wallpaper welcome email failed:', err)
+      return { sent: false }
+    })
+
+    return NextResponse.json({
+      success: true,
+      wallpaper_pack_url: packUrl,
+      email_sent: Boolean(emailResult?.sent),
+    })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to subscribe' },

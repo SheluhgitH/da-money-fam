@@ -11,6 +11,7 @@ export const STREAMS_CONFIG = {
 
 export type KickVideo = {
   id: string
+  vodId?: string
   title: string
   category: string
   thumbnail: string
@@ -18,6 +19,11 @@ export type KickVideo = {
   views: number
   createdAt: string
   watchUrl: string
+}
+
+/** Kick VOD pages require vod_id in the URL — never use session slug. */
+export function buildKickWatchUrl(vodId: string): string {
+  return `https://kick.com/${KICK_CHANNEL_SLUG}/videos/${vodId}`
 }
 
 export function formatStreamDuration(ms: number): string {

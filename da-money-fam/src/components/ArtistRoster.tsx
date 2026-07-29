@@ -100,7 +100,6 @@ export default function ArtistRoster() {
               <div className="relative aspect-square overflow-hidden">
                 {isCeo && <div className="ceo-card-hue z-[2]" />}
                 {isCeo && <div className="ceo-card-shimmer z-[3]" />}
-                <div className={`absolute inset-0 bg-gradient-to-br ${isCeo ? 'from-amber-500/25 to-gold-dark/30' : 'from-gold/20 to-gold-dark/20'}`} />
                 <div className="absolute inset-0 bg-gradient-to-t from-matte-black via-transparent to-transparent z-[1]" />
                 <motion.div
                   className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center"

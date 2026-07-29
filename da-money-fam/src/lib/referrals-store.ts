@@ -93,5 +93,45 @@ export async function completeReferralReward(referralId: string, couponId: strin
       .from('referrals')
       .update({ status: 'rewarded', coupon_id: couponId })
       .eq('id', referralId)
+    return
+  }
+
+  const file = path.join(DATA_DIR, 'referrals.json')
+  try {
+    const records: ReferralRecord[] = JSON.parse(await fs.readFile(file, 'utf-8'))
+    const next = records.map((r) =>
+      r.id === referralId ? { ...r, status: 'rewarded' as const } : r
+    )
+    await fs.writeFile(file, JSON.stringify(next, null, 2))
+  } catch {
+    // no local file yet
+  }
+}
+
+export async function listReferralsForReferrer(referrerId: string): Promise<ReferralRecord[]> {
+  if (!referrerId) return []
+
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('referrals')
+      .select('*')
+      .eq('referrer_id', referrerId)
+      .order('created_at', { ascending: false })
+    if (error) {
+      console.error('listReferralsForReferrer:', error.message)
+      return []
+    }
+    return (data || []) as ReferralRecord[]
+  }
+
+  const file = path.join(DATA_DIR, 'referrals.json')
+  try {
+    const records: ReferralRecord[] = JSON.parse(await fs.readFile(file, 'utf-8'))
+    return records
+      .filter((r) => r.referrer_id === referrerId)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+  } catch {
+    return []
   }
 }

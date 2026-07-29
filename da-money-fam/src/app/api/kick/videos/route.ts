@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
-import { KICK_CHANNEL_SLUG, type KickVideo } from '@/lib/streams'
+import { VERIFIED_KICK_VIDEOS } from '@/data/kick-videos'
+import { KICK_CHANNEL_SLUG, buildKickWatchUrl, type KickVideo } from '@/lib/streams'
 
 export const dynamic = 'force-dynamic'
+
+const DETAIL_FETCH_TIMEOUT_MS = 5000
 
 type KickApiVideo = {
   id: number
@@ -15,6 +18,12 @@ type KickApiVideo = {
   video?: { uuid?: string }
 }
 
+type KickVideoDetail = {
+  uuid?: string
+  vod_id?: string
+  livestream?: { vod_id?: string }
+}
+
 const KICK_HEADERS = {
   Accept: 'application/json',
   'Accept-Language': 'en-US,en;q=0.9',
@@ -23,84 +32,133 @@ const KICK_HEADERS = {
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 }
 
-const FALLBACK_VIDEOS: KickVideo[] = [
-  {
-    id: 'c05b9610-4207-4177-af57-1fd30b7cfc7b',
-    title: 'DMF COOKOUT',
-    category: 'IRL',
-    thumbnail: 'https://images.kick.com/video_thumbnails/LnWNMK7XnYM0/FNia5aNbf8aS/720.webp',
-    durationMs: 6699000,
-    views: 8,
-    createdAt: '2026-07-26 19:06:53',
-    watchUrl: `https://kick.com/${KICK_CHANNEL_SLUG}/videos/160002aa-dmf-cookout`,
-  },
-  {
-    id: 'eae34da0-8cc6-4d2f-8f8f-dd240dfb61aa',
-    title: 'Day with DMF',
-    category: 'IRL',
-    thumbnail: 'https://images.kick.com/video_thumbnails/LnWNMK7XnYM0/DfCZuzx8rIQK/720.webp',
-    durationMs: 3071000,
-    views: 36,
-    createdAt: '2026-07-21 17:48:39',
-    watchUrl: `https://kick.com/${KICK_CHANNEL_SLUG}/videos/019f85cb-3538-7db8-8eb1-5df3ad3b2bad`,
-  },
-  {
-    id: '862bd851-b105-4ea6-9576-557bed930577',
-    title: 'Day with DMF',
-    category: 'IRL',
-    thumbnail: 'https://images.kick.com/video_thumbnails/LnWNMK7XnYM0/RW17H5Ci60Du/720.webp',
-    durationMs: 927000,
-    views: 14,
-    createdAt: '2026-07-21 14:35:19',
-    watchUrl: `https://kick.com/${KICK_CHANNEL_SLUG}/videos/019f851a-34b8-775c-96ab-57d91622e5fe`,
-  },
-]
+const verifiedById = new Map(VERIFIED_KICK_VIDEOS.map((video) => [video.id, video]))
 
-function buildVideo(item: KickApiVideo): KickVideo | null {
+function sortVideosNewestFirst(videos: KickVideo[]): KickVideo[] {
+  return [...videos].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
+}
+
+function mergeWithVerifiedFallbacks(videos: KickVideo[]): KickVideo[] {
+  const merged = new Map<string, KickVideo>()
+
+  for (const video of VERIFIED_KICK_VIDEOS) {
+    merged.set(video.id, video)
+  }
+
+  for (const video of videos) {
+    merged.set(video.id, video)
+  }
+
+  return sortVideosNewestFirst([...merged.values()])
+}
+
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function fetchVideoDetail(uuid: string): Promise<KickVideoDetail | null> {
+  try {
+    const res = await fetchWithTimeout(
+      `https://kick.com/api/v1/video/${uuid}`,
+      { headers: KICK_HEADERS, cache: 'no-store' },
+      DETAIL_FETCH_TIMEOUT_MS
+    )
+    if (!res.ok) return null
+    return (await res.json()) as KickVideoDetail
+  } catch (error) {
+    console.error(`Kick video detail fetch error for ${uuid}:`, error)
+    return null
+  }
+}
+
+function resolveVodId(detail: KickVideoDetail | null): string | null {
+  if (!detail) return null
+  return detail.vod_id || detail.livestream?.vod_id || null
+}
+
+function buildVideo(item: KickApiVideo, vodId: string): KickVideo {
   const uuid = item.video?.uuid
-  if (!uuid) return null
-
-  // Prefer the human-readable slug for the watch URL. It avoids an extra API
-  // call to fetch the vod_id and is less likely to break if Kick blocks detail
-  // requests from serverless IPs.
-  const urlId = item.slug || uuid
+  if (!uuid) {
+    throw new Error('Missing video uuid')
+  }
 
   return {
     id: String(uuid),
+    vodId,
     title: item.session_title || 'Stream',
     category: item.categories?.[0]?.name || 'IRL',
     thumbnail: item.thumbnail?.src || '',
     durationMs: Number(item.duration) || 0,
     views: Number(item.views) || 0,
     createdAt: item.created_at,
-    watchUrl: `https://kick.com/${KICK_CHANNEL_SLUG}/videos/${urlId}`,
+    watchUrl: buildKickWatchUrl(vodId),
   }
 }
 
-function mapKickVideos(data: KickApiVideo[]): KickVideo[] {
-  return data
-    .map(buildVideo)
+async function mapKickVideos(data: KickApiVideo[]): Promise<KickVideo[]> {
+  const results = await Promise.allSettled(
+    data.map(async (item) => {
+      const uuid = item.video?.uuid
+      if (!uuid) return null
+
+      const detail = await fetchVideoDetail(uuid)
+      const vodId = resolveVodId(detail)
+      if (vodId) {
+        return buildVideo(item, vodId)
+      }
+
+      const verified = verifiedById.get(uuid)
+      if (verified?.vodId) {
+        return {
+          ...buildVideo(item, verified.vodId),
+          watchUrl: verified.watchUrl,
+        }
+      }
+
+      console.warn(`Kick video ${uuid} missing vod_id and no verified fallback — omitted`)
+      return null
+    })
+  )
+
+  return results
+    .filter((result): result is PromiseFulfilledResult<KickVideo | null> => result.status === 'fulfilled')
+    .map((result) => result.value)
     .filter((video): video is KickVideo => Boolean(video))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
 
 async function fetchKickVideos(): Promise<KickVideo[]> {
-  const res = await fetch(`https://kick.com/api/v2/channels/${KICK_CHANNEL_SLUG}/videos`, {
-    headers: KICK_HEADERS,
-    cache: 'no-store',
-  })
+  try {
+    const res = await fetchWithTimeout(
+      `https://kick.com/api/v2/channels/${KICK_CHANNEL_SLUG}/videos`,
+      { headers: KICK_HEADERS, cache: 'no-store' },
+      DETAIL_FETCH_TIMEOUT_MS
+    )
 
-  if (!res.ok) {
-    console.error(`Kick videos API returned ${res.status} ${res.statusText}`)
-    return FALLBACK_VIDEOS
-  }
+    if (!res.ok) {
+      console.error(`Kick videos API returned ${res.status} ${res.statusText}`)
+      return VERIFIED_KICK_VIDEOS
+    }
 
-  const data = (await res.json()) as KickApiVideo[]
-  const videos = mapKickVideos(Array.isArray(data) ? data : [])
-  if (videos.length === 0) {
-    console.error('Kick videos API returned no playable videos')
+    const data = (await res.json()) as KickApiVideo[]
+    const videos = await mapKickVideos(Array.isArray(data) ? data : [])
+    if (videos.length === 0) {
+      console.error('Kick videos API returned no playable videos with valid vod_id')
+    }
+
+    return mergeWithVerifiedFallbacks(videos)
+  } catch (error) {
+    console.error('Kick videos fetch error:', error)
+    return VERIFIED_KICK_VIDEOS
   }
-  return videos.length > 0 ? videos : FALLBACK_VIDEOS
 }
 
 export async function GET() {
@@ -112,8 +170,8 @@ export async function GET() {
       },
     })
   } catch (error) {
-    console.error('Kick videos fetch error:', error)
-    return NextResponse.json({ videos: FALLBACK_VIDEOS, channel: KICK_CHANNEL_SLUG }, {
+    console.error('Kick videos route error:', error)
+    return NextResponse.json({ videos: VERIFIED_KICK_VIDEOS, channel: KICK_CHANNEL_SLUG }, {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
       },

@@ -112,8 +112,13 @@ export default function Footer() {
 
       const result = await response.json()
       if (response.ok) {
-        setSubmitMessage('Subscribed! Stay tuned for release alerts.')
+        setSubmitMessage('Subscribed! Check your email for the wallpaper pack.')
         form.reset()
+        if (typeof result.wallpaper_pack_url === 'string') {
+          window.setTimeout(() => {
+            window.location.href = result.wallpaper_pack_url
+          }, 1200)
+        }
       } else {
         setSubmitMessage(result.error || 'Failed to subscribe. Please try again.')
       }
@@ -241,7 +246,7 @@ export default function Footer() {
               Newsletter
             </h4>
             <p className="text-gray-400 mb-4">
-              Subscribe for exclusive releases, merch drops, and store alerts
+              Subscribe for drop alerts, stream links, and a free DMF wallpaper pack
             </p>
             <form onSubmit={handleSubmit} className="flex flex-col gap-2">
               <div className="flex gap-2">
