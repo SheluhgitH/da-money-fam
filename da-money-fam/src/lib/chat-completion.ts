@@ -88,10 +88,19 @@ function createNdjsonStream(
   return new ReadableStream({
     async start(controller) {
       let sseBuffer = ''
+      const reader = upstream.body?.getReader()
+      if (!reader) {
+        controller.close()
+        return
+      }
 
       try {
-        for await (const chunk of upstream.body as AsyncIterable<Uint8Array>) {
-          sseBuffer += decoder.decode(chunk, { stream: true })
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (!value) continue
+
+          sseBuffer += decoder.decode(value, { stream: true })
           const lines = sseBuffer.split('\n')
           sseBuffer = lines.pop() || ''
 
@@ -117,6 +126,7 @@ function createNdjsonStream(
       } catch (error) {
         console.error('Stream read error:', error)
       } finally {
+        reader.releaseLock()
         controller.close()
       }
     },
