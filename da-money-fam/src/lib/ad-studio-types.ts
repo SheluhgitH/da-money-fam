@@ -17,6 +17,9 @@ export interface AdVideoPricingResponse {
   canEnhance?: boolean
   scenes: number
   variations: number
+  model?: string
+  modelId?: string
+  baseCoins?: number
 }
 
 export interface StoryboardScene {
@@ -39,6 +42,15 @@ export interface AdStudioGeneration {
   thumbnail_url: string | null
   coinz_spent: number
   status: string
+  featured: boolean
+  model: string
+  created_at: string
+}
+
+export interface AdStudioShowcaseItem {
+  id: string
+  videoUrl: string
+  aspect_ratio: string
   created_at: string
 }
 

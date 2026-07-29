@@ -6,6 +6,7 @@ import { isActiveFanClubMember } from '@/lib/fan-club'
 import type { CreativeSelections } from '@/lib/ad-creative-presets'
 import { normalizeDuration, submitSeedanceJob } from '@/lib/seedance-submit'
 import { createAdStudioGeneration } from '@/lib/ad-studio-jobs'
+import { resolveSeedanceModel } from '@/lib/seedance-models'
 
 export async function POST(req: Request) {
   const user = await getCurrentUser()
@@ -26,6 +27,7 @@ export async function POST(req: Request) {
     first_frame_image,
     variations,
     saveToLibrary,
+    model: modelInput,
   } = body
 
   const userBrief =
@@ -50,6 +52,7 @@ export async function POST(req: Request) {
     }
   }
 
+  const model = resolveSeedanceModel(modelInput)
   const duration = normalizeDuration(duration_seconds)
   const variationCount = Math.min(2, Math.max(1, Number(variations) || 1))
   const refSource =
@@ -62,7 +65,7 @@ export async function POST(req: Request) {
   let totalPrice = 0
 
   try {
-    const pricing = await getAdVideoCoinPrice()
+    const pricing = await getAdVideoCoinPrice(model.key)
     if (!pricing.isAuthenticated) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
@@ -84,10 +87,10 @@ export async function POST(req: Request) {
           aspect_ratio,
           reference_images: refSource,
           first_frame_image,
+          model: model.key,
         })
         jobs.push({ jobId: result.jobId, variationIndex: i })
       } catch (err) {
-        // Refund remaining unstarted variations
         const remaining = (variationCount - i) * priceCoins
         if (remaining > 0) {
           await creditUserCoins(user.id, remaining)
@@ -119,6 +122,8 @@ export async function POST(req: Request) {
           duration_seconds: duration,
           coinz_spent: totalPrice,
           status: 'processing',
+          featured: true,
+          model: model.id,
         })
         generationId = gen.id
       } catch (e) {
@@ -132,6 +137,7 @@ export async function POST(req: Request) {
       generationId,
       variations: jobs.length,
       coinzSpent: totalPrice,
+      model: model.key,
     })
   } catch (error: unknown) {
     console.error('Video API Error:', error)

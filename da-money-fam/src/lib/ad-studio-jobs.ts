@@ -2,9 +2,11 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { createServiceClient } from '@/lib/supabase/server'
 import type { AdStudioGeneration, AdStudioMode, StoryboardScene } from '@/lib/ad-studio-types'
+import { SEEDANCE_MODELS } from '@/lib/seedance-models'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 const DATA_FILE = path.join(DATA_DIR, 'ad-studio-generations.json')
+const DEFAULT_MODEL = SEEDANCE_MODELS.fast.id
 
 function isSupabaseConfigured() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
@@ -37,6 +39,8 @@ function mapRow(data: Record<string, unknown>): AdStudioGeneration {
     thumbnail_url: data.thumbnail_url ? String(data.thumbnail_url) : null,
     coinz_spent: Number(data.coinz_spent || 0),
     status: String(data.status || 'completed'),
+    featured: data.featured !== false,
+    model: data.model ? String(data.model) : DEFAULT_MODEL,
     created_at: String(data.created_at),
   }
 }
@@ -62,6 +66,56 @@ export async function listAdStudioGenerations(userId: string, limit = 40): Promi
     .filter((r) => r.user_id === userId)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .slice(0, limit)
+}
+
+export async function listFeaturedGenerations(limit = 12): Promise<AdStudioGeneration[]> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('ad_studio_generations')
+      .select('*')
+      .eq('featured', true)
+      .eq('status', 'completed')
+      .order('created_at', { ascending: false })
+      .limit(limit * 2)
+
+    if (error) {
+      console.error('listFeaturedGenerations:', error)
+      return []
+    }
+
+    return (data || [])
+      .map((row) => mapRow(row as Record<string, unknown>))
+      .filter((row) => row.video_urls.length > 0)
+      .slice(0, limit)
+  }
+
+  const rows = await readLocal()
+  return rows
+    .filter(
+      (r) =>
+        r.featured !== false &&
+        r.status === 'completed' &&
+        Array.isArray(r.video_urls) &&
+        r.video_urls.length > 0
+    )
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, limit)
+}
+
+export async function getAdStudioGenerationById(id: string): Promise<AdStudioGeneration | null> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data } = await supabase
+      .from('ad_studio_generations')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+    return data ? mapRow(data as Record<string, unknown>) : null
+  }
+
+  const rows = await readLocal()
+  return rows.find((r) => r.id === id) || null
 }
 
 export async function getAdStudioGeneration(
@@ -95,6 +149,8 @@ export async function createAdStudioGeneration(input: {
   thumbnail_url?: string | null
   coinz_spent?: number
   status?: string
+  featured?: boolean
+  model?: string
 }): Promise<AdStudioGeneration> {
   const now = new Date().toISOString()
   const row: AdStudioGeneration = {
@@ -110,6 +166,8 @@ export async function createAdStudioGeneration(input: {
     thumbnail_url: input.thumbnail_url ?? null,
     coinz_spent: input.coinz_spent ?? 0,
     status: input.status || 'completed',
+    featured: input.featured !== false,
+    model: input.model || DEFAULT_MODEL,
     created_at: now,
   }
 
@@ -130,6 +188,8 @@ export async function createAdStudioGeneration(input: {
         thumbnail_url: row.thumbnail_url,
         coinz_spent: row.coinz_spent,
         status: row.status,
+        featured: row.featured,
+        model: row.model,
         created_at: now,
         updated_at: now,
       })
@@ -151,7 +211,7 @@ export async function updateAdStudioGeneration(
   patch: Partial<
     Pick<
       AdStudioGeneration,
-      'scenes' | 'video_urls' | 'thumbnail_url' | 'status' | 'coinz_spent' | 'brief'
+      'scenes' | 'video_urls' | 'thumbnail_url' | 'status' | 'coinz_spent' | 'brief' | 'featured' | 'model'
     >
   >
 ): Promise<AdStudioGeneration | null> {

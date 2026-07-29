@@ -15,12 +15,24 @@ create table if not exists ad_studio_generations (
   coinz_spent int not null default 0,
   status text not null default 'completed'
     check (status in ('pending', 'processing', 'completed', 'failed', 'partial')),
+  featured boolean not null default true,
+  model text not null default 'bytedance/seedance-2.0-fast',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
+-- Additive columns for existing deployments
+alter table ad_studio_generations
+  add column if not exists featured boolean not null default true;
+
+alter table ad_studio_generations
+  add column if not exists model text not null default 'bytedance/seedance-2.0-fast';
+
 create index if not exists ad_studio_generations_user_created_idx
   on ad_studio_generations (user_id, created_at desc);
+
+create index if not exists ad_studio_generations_showcase_idx
+  on ad_studio_generations (featured, status, created_at desc);
 
 alter table ad_studio_generations enable row level security;
 

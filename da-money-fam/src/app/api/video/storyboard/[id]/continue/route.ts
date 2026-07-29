@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth/user'
 import { getAdStudioGeneration, updateAdStudioGeneration } from '@/lib/ad-studio-jobs'
 import type { CreativeSelections } from '@/lib/ad-creative-presets'
 import { submitSeedanceJob } from '@/lib/seedance-submit'
+import { resolveSeedanceModel } from '@/lib/seedance-models'
 
 /**
  * Continue storyboard: generate next pending scene with optional first_frame from previous.
@@ -33,6 +34,7 @@ export async function POST(
   const scene = gen.scenes[nextIndex]
   const sceneCount = gen.scenes.length
   const continuityBrief = `${scene.brief}. Scene ${nextIndex + 1} of ${sceneCount} in a continuous ad storyboard. Continue seamlessly from the previous shot.`
+  const model = resolveSeedanceModel(gen.model)
 
   try {
     const result = await submitSeedanceJob({
@@ -43,6 +45,7 @@ export async function POST(
       aspect_ratio: gen.aspect_ratio,
       reference_images: reference_images,
       first_frame_image: first_frame_image || null,
+      model: model.key,
     })
 
     const scenes = gen.scenes.map((s, i) =>

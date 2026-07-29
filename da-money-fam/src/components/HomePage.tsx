@@ -19,6 +19,7 @@ import FamSpotlights from '@/components/FamSpotlights'
 import BlogTeaser from '@/components/blog/BlogTeaser'
 import SongStore from '@/components/store/SongStore'
 import StreamVideosSection from '@/components/StreamVideosSection'
+import AdStudioPromoSection from '@/components/AdStudioPromoSection'
 import AboutFamSection from '@/components/AboutFamSection'
 import { scrollToSection } from '@/utils/scrollToSection'
 import ReferralCapture from '@/components/ReferralCapture'
@@ -77,6 +78,10 @@ export default function HomePage() {
 
       <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
         <StreamVideosSection />
+      </section>
+
+      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
+        <AdStudioPromoSection />
       </section>
 
       <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">

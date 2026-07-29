@@ -1,5 +1,10 @@
 import { resolveAdPrompt } from '@/lib/ad-prompt-enhance'
 import type { CreativeSelections } from '@/lib/ad-creative-presets'
+import {
+  DEFAULT_SEEDANCE_MODEL,
+  resolveSeedanceModel,
+  type SeedanceModelKey,
+} from '@/lib/seedance-models'
 
 const ALLOWED_DURATIONS = new Set([6, 8, 10])
 const MAX_REFERENCE_IMAGES = 3
@@ -59,12 +64,14 @@ export async function submitSeedanceJob(input: {
   aspect_ratio?: string
   reference_images?: unknown
   first_frame_image?: string | null
-}): Promise<{ jobId: string; pollingUrl?: string }> {
+  model?: SeedanceModelKey | string | null
+}): Promise<{ jobId: string; pollingUrl?: string; modelId: string }> {
   const openRouterApiKey = process.env.OPENROUTER_API_KEY
   if (!openRouterApiKey || openRouterApiKey === 'your_openrouter_key_here') {
     throw new Error('OpenRouter API Key not configured')
   }
 
+  const model = resolveSeedanceModel(input.model ?? DEFAULT_SEEDANCE_MODEL)
   const inputReferences = toInputReferences(input.reference_images)
   const firstFrameFromRefs = toFirstFrameImage(input.reference_images)
   const explicitFirstFrame =
@@ -92,11 +99,11 @@ export async function submitSeedanceJob(input: {
       'X-Title': 'DMF Ad Studio',
     },
     body: JSON.stringify({
-      model: 'bytedance/seedance-2.0-fast',
+      model: model.id,
       prompt: finalPrompt,
       duration: input.duration,
       aspect_ratio: input.aspect_ratio || '9:16',
-      resolution: '480p',
+      resolution: model.resolution,
       ...(firstFrame ? { frame_images: [firstFrame] } : {}),
       ...(inputReferences.length > 0 ? { input_references: inputReferences } : {}),
     }),
@@ -109,5 +116,5 @@ export async function submitSeedanceJob(input: {
     throw new Error(rawDetail)
   }
 
-  return { jobId: data.id, pollingUrl: data.polling_url }
+  return { jobId: data.id, pollingUrl: data.polling_url, modelId: model.id }
 }

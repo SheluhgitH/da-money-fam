@@ -148,6 +148,30 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
         )}
 
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => studio.setModelKey('lite')}
+            className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
+              studio.modelKey === 'lite'
+                ? 'bg-gold text-black border-gold'
+                : 'border-white/15 text-white/60'
+            }`}
+            title="Seedance 1.5 Pro · 5 Coinz"
+          >
+            Lite · 5
+          </button>
+          <button
+            type="button"
+            onClick={() => studio.setModelKey('fast')}
+            className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
+              studio.modelKey === 'fast'
+                ? 'bg-gold text-black border-gold'
+                : 'border-white/15 text-white/60'
+            }`}
+            title="Seedance 2.0 Fast · 10 Coinz"
+          >
+            Fast · 10
+          </button>
           {([6, 8, 10] as const).map((d) => (
             <button
               key={d}

@@ -2,6 +2,7 @@
 
 import type { AdStudioController } from '@/hooks/useAdStudio'
 import type { AdStudioGeneration } from '@/lib/ad-studio-types'
+import { resolveSeedanceModel } from '@/lib/seedance-models'
 
 export default function GenerationLibrary({
   studio,
@@ -38,6 +39,8 @@ export default function GenerationLibrary({
           studio.library.map((item) => {
             const thumb = item.video_urls?.[0]
             const active = studio.selectedLibraryId === item.id
+            const onSite = item.featured !== false
+            const modelLabel = resolveSeedanceModel(item.model).label
             return (
               <div
                 key={item.id}
@@ -63,6 +66,9 @@ export default function GenerationLibrary({
                     <span className="absolute top-1.5 left-1.5 text-[8px] uppercase tracking-wider bg-black/70 text-gold px-1.5 py-0.5 rounded">
                       {item.mode === 'storyboard' ? 'Story' : 'Single'}
                     </span>
+                    <span className="absolute top-1.5 right-1.5 text-[8px] uppercase tracking-wider bg-black/70 text-white/70 px-1.5 py-0.5 rounded">
+                      {modelLabel}
+                    </span>
                   </div>
                   <div className="p-2">
                     <p className="text-[11px] text-white/80 line-clamp-2">
@@ -81,6 +87,24 @@ export default function GenerationLibrary({
                   >
                     Remix
                   </button>
+                  {item.status === 'completed' && item.video_urls?.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => studio.setFeatured(item, !onSite)}
+                      className={`flex-1 text-[9px] uppercase tracking-wider py-1 rounded border transition-colors ${
+                        onSite
+                          ? 'border-gold/40 text-gold bg-gold/10'
+                          : 'border-white/15 text-white/45 hover:border-gold/30'
+                      }`}
+                      title={
+                        onSite
+                          ? 'Showing on damoneyfam.com — click to hide'
+                          : 'Hidden from site — click to show'
+                      }
+                    >
+                      {onSite ? 'On site' : 'Hidden'}
+                    </button>
+                  )}
                 </div>
               </div>
             )

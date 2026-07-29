@@ -49,6 +49,8 @@ export async function POST(req: Request) {
       thumbnail_url: body.thumbnail_url,
       coinz_spent: body.coinz_spent,
       status: body.status || 'completed',
+      featured: body.featured !== false,
+      model: body.model,
     })
 
     return NextResponse.json({ item })

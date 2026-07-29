@@ -14,6 +14,11 @@ import type {
   StoryboardScene,
 } from '@/lib/ad-studio-types'
 import { MAX_REFERENCE_BYTES, MAX_REFERENCE_IMAGES } from '@/lib/ad-studio-types'
+import {
+  DEFAULT_SEEDANCE_MODEL,
+  resolveSeedanceModel,
+  type SeedanceModelKey,
+} from '@/lib/seedance-models'
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000
 
@@ -108,6 +113,7 @@ export function useAdStudio(initialBrief = '') {
   const [duration, setDuration] = useState<6 | 8 | 10>(6)
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [variations, setVariations] = useState<1 | 2>(1)
+  const [modelKey, setModelKey] = useState<SeedanceModelKey>(DEFAULT_SEEDANCE_MODEL)
   const [references, setReferences] = useState<AdReferenceImage[]>([])
   const [lookOpen, setLookOpen] = useState(false)
 
@@ -127,7 +133,7 @@ export function useAdStudio(initialBrief = '') {
   const fetchPricing = useCallback(async () => {
     try {
       const res = await fetch(
-        `/api/video/quote?scenes=${sceneCount}&variations=${mode === 'single' ? variations : 1}`
+        `/api/video/quote?scenes=${sceneCount}&variations=${mode === 'single' ? variations : 1}&model=${modelKey}`
       )
       if (res.ok) {
         const data: AdVideoPricingResponse = await res.json()
@@ -138,7 +144,7 @@ export function useAdStudio(initialBrief = '') {
     } catch {
       setPricing(null)
     }
-  }, [sceneCount, variations, mode])
+  }, [sceneCount, variations, mode, modelKey])
 
   const fetchLibrary = useCallback(async () => {
     try {
@@ -244,12 +250,30 @@ export function useAdStudio(initialBrief = '') {
     setBrief(item.brief || '')
     setAspectRatio(item.aspect_ratio)
     setDuration((item.duration_seconds as 6 | 8 | 10) || 6)
+    setModelKey(resolveSeedanceModel(item.model).key)
     if (item.creative) setCreative({ ...DEFAULT_CREATIVE_SELECTIONS, ...item.creative })
     if (item.mode === 'storyboard' && item.scenes?.length) {
       setMode('storyboard')
       setSceneBriefs(item.scenes.map((s) => s.brief))
     } else {
       setMode('single')
+    }
+  }
+
+  const setFeatured = async (item: AdStudioGeneration, featured: boolean) => {
+    try {
+      const res = await fetch('/api/video/library', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: item.id, patch: { featured } }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to update visibility')
+      }
+      setLibrary((prev) => prev.map((row) => (row.id === item.id ? { ...row, featured } : row)))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update visibility')
     }
   }
 
@@ -299,6 +323,7 @@ export function useAdStudio(initialBrief = '') {
             duration_seconds: duration,
             aspect_ratio: aspectRatio,
             reference_images: references,
+            model: modelKey,
           }),
           signal: controller.signal,
         })
@@ -390,6 +415,7 @@ export function useAdStudio(initialBrief = '') {
             reference_images: references,
             variations,
             saveToLibrary: true,
+            model: modelKey,
           }),
           signal: controller.signal,
         })
@@ -472,6 +498,8 @@ export function useAdStudio(initialBrief = '') {
     setAspectRatio,
     variations,
     setVariations,
+    modelKey,
+    setModelKey,
     references,
     addReferenceFiles,
     removeReference,
@@ -490,6 +518,7 @@ export function useAdStudio(initialBrief = '') {
     selectedLibraryId,
     selectLibraryItem,
     remixFromLibrary,
+    setFeatured,
     canGenerate,
     generate,
     cancelGenerate,

@@ -204,12 +204,20 @@ export default function Navigation() {
                     </Link>
                   </div>
                 ) : (
-                  <Link
-                    href="/login"
-                    className="ml-2 px-4 py-2 bg-gold text-black text-xs font-bold uppercase tracking-widest rounded-full hover:bg-white transition-colors"
-                  >
-                    Sign In
-                  </Link>
+                  <div className="flex items-center gap-3 ml-2">
+                    <Link
+                      href="/login?redirect=/ad-studio"
+                      className="text-xs uppercase tracking-widest text-gold hover:text-white transition-colors"
+                    >
+                      Ad Studio
+                    </Link>
+                    <Link
+                      href="/login"
+                      className="px-4 py-2 bg-gold text-black text-xs font-bold uppercase tracking-widest rounded-full hover:bg-white transition-colors"
+                    >
+                      Sign In
+                    </Link>
+                  </div>
                 )
               )}
         </div>
@@ -297,9 +305,18 @@ export default function Navigation() {
                     </button>
                   </>
                 ) : (
-                  <Link href="/login" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
-                    Sign In
-                  </Link>
+                  <>
+                    <Link
+                      href="/login?redirect=/ad-studio"
+                      className="text-lg uppercase tracking-widest text-gold"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Ad Studio
+                    </Link>
+                    <Link href="/login" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
+                      Sign In
+                    </Link>
+                  </>
                 )
               )}
             </div>
