@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getAdStudioGenerationById } from '@/lib/ad-studio-jobs'
 import { extractOpenRouterJobId } from '@/lib/seedance-models'
+import { fetchOpenRouterVideoBuffer, serveBufferedVideo } from '@/lib/video-content-proxy'
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { id: string } }
 ) {
   const { id } = params
@@ -26,44 +27,17 @@ export async function GET(
     return NextResponse.json({ error: 'Video unavailable' }, { status: 404 })
   }
 
-  const openRouterApiKey = process.env.OPENROUTER_API_KEY
-  if (!openRouterApiKey || openRouterApiKey === 'your_openrouter_key_here') {
-    return NextResponse.json({ error: 'OpenRouter API Key not configured' }, { status: 500 })
-  }
-
   try {
-    const upstream = await fetch(
-      `https://openrouter.ai/api/v1/videos/${jobId}/content?index=0`,
-      {
-        headers: {
-          Authorization: `Bearer ${openRouterApiKey}`,
-        },
-        redirect: 'follow',
-      }
-    )
-
-    if (!upstream.ok) {
-      const detail = await upstream.text()
-      console.error('Showcase content fetch failed:', upstream.status, detail)
-      return NextResponse.json(
-        { error: 'Failed to fetch video content' },
-        { status: upstream.status }
-      )
+    const result = await fetchOpenRouterVideoBuffer(jobId)
+    if ('error' in result) {
+      return NextResponse.json({ error: result.error }, { status: result.status })
     }
 
-    const contentType = upstream.headers.get('content-type') || 'video/mp4'
-    const contentLength = upstream.headers.get('content-length')
-
-    const headers = new Headers({
-      'Content-Type': contentType,
-      'Cache-Control': 'public, max-age=3600',
-      'Content-Disposition': `inline; filename="dmf-showcase-${id}.mp4"`,
-    })
-    if (contentLength) headers.set('Content-Length', contentLength)
-
-    return new NextResponse(upstream.body, {
-      status: 200,
-      headers,
+    return serveBufferedVideo(result.buffer, {
+      request: req,
+      contentType: result.contentType,
+      cacheControl: 'public, max-age=3600',
+      filename: `dmf-showcase-${id}.mp4`,
     })
   } catch (error) {
     console.error('Showcase content proxy error:', error)
