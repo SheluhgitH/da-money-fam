@@ -176,6 +176,9 @@ export default function Navigation() {
               {!loading && (
                 user ? (
                   <div className="flex items-center gap-3 ml-2">
+                    <Link href="/ad-studio" className="text-xs uppercase tracking-widest text-gold hover:text-white transition-colors">
+                      Ad Studio
+                    </Link>
                     <Link href="/library" className="text-xs uppercase tracking-widest text-gold hover:text-white transition-colors">
                       Library
                     </Link>
@@ -258,6 +261,9 @@ export default function Navigation() {
               {!loading && (
                 user ? (
                   <>
+                    <Link href="/ad-studio" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
+                      Ad Studio
+                    </Link>
                     <Link href="/library" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
                       Library
                     </Link>

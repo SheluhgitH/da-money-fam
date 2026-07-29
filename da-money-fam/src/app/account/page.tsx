@@ -250,6 +250,12 @@ function AccountPageContent() {
             View Profile Dashboard
           </Link>
           <Link
+            href="/ad-studio"
+            className="block text-center py-3 border border-gold/30 text-gold rounded-full text-xs font-bold uppercase tracking-wider hover:bg-gold/10 transition-colors"
+          >
+            Ad Studio
+          </Link>
+          <Link
             href="/library"
             className="block text-center py-3 border border-gold/30 text-gold rounded-full text-xs font-bold uppercase tracking-wider hover:bg-gold/10 transition-colors"
           >
