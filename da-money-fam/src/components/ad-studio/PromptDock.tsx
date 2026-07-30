@@ -1,13 +1,67 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type { AdStudioController } from '@/hooks/useAdStudio'
 import LookDrawer from './LookDrawer'
 import StoryboardTimeline from './StoryboardTimeline'
+import { COIN_PACKAGES, packAdCopy } from '@/lib/coin-packages'
+
+function CoinPriceLabel({
+  effective,
+  base,
+  discounted,
+}: {
+  effective: number
+  base: number
+  discounted: boolean
+}) {
+  if (discounted && base !== effective) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <span className="line-through opacity-50">{base}</span>
+        <span>{effective}</span>
+      </span>
+    )
+  }
+  return <span>{effective}</span>
+}
 
 export default function PromptDock({ studio }: { studio: AdStudioController }) {
   const fileRef = useRef<HTMLInputElement>(null)
+  const [buyingId, setBuyingId] = useState<string | null>(null)
   const price = studio.pricing?.totalPriceCoins ?? studio.pricing?.priceCoins ?? 10
+  const perClip = studio.pricing?.priceCoins ?? 10
+  const discountPercent = studio.pricing?.discountPercent ?? 0
+  const discounted = discountPercent > 0
+  const units =
+    studio.mode === 'storyboard'
+      ? studio.sceneBriefs.length
+      : studio.variations
+  const showBreakdown = units > 1 && studio.pricing?.totalPriceCoins != null
+  const canAfford = studio.pricing?.canAfford !== false
+  const showBuy = studio.pricing?.isAuthenticated && !canAfford && !studio.generating
+
+  const lite = studio.pricing?.modelPrices?.lite
+  const fast = studio.pricing?.modelPrices?.fast
+  const durationPrices = studio.pricing?.durationPrices
+
+  const buyPack = async (packageId: string) => {
+    setBuyingId(packageId)
+    studio.setError(null)
+    try {
+      const res = await fetch('/api/coinz/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ package_id: packageId, return_path: '/ad-studio' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Coin purchase failed')
+      window.location.href = data.url
+    } catch (err) {
+      studio.setError(err instanceof Error ? err.message : 'Coin purchase failed')
+      setBuyingId(null)
+    }
+  }
 
   return (
     <div className="border-t border-gold/20 bg-black/90 backdrop-blur-xl">
@@ -156,9 +210,14 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                 ? 'bg-gold text-black border-gold'
                 : 'border-white/15 text-white/60'
             }`}
-            title="Seedance 1.5 Pro · 5 Coinz"
+            title="Seedance 1.5 Pro"
           >
-            Lite · 5
+            Lite ·{' '}
+            <CoinPriceLabel
+              effective={lite?.priceCoins ?? 5}
+              base={lite?.baseCoinsBeforeDiscount ?? 5}
+              discounted={discounted}
+            />
           </button>
           <button
             type="button"
@@ -168,24 +227,32 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                 ? 'bg-gold text-black border-gold'
                 : 'border-white/15 text-white/60'
             }`}
-            title="Seedance 2.0 Fast · 10 Coinz"
+            title="Seedance 2.0 Fast"
           >
-            Fast · 10
+            Fast ·{' '}
+            <CoinPriceLabel
+              effective={fast?.priceCoins ?? 10}
+              base={fast?.baseCoinsBeforeDiscount ?? 10}
+              discounted={discounted}
+            />
           </button>
-          {([6, 8, 10] as const).map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => studio.setDuration(d)}
-              className={`text-[10px] font-mono px-2.5 py-1 rounded-md border ${
-                studio.duration === d
-                  ? 'bg-gold text-black border-gold'
-                  : 'border-white/15 text-white/60'
-              }`}
-            >
-              {d}s
-            </button>
-          ))}
+          {([6, 8, 10] as const).map((d) => {
+            const dp = durationPrices?.[d]
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => studio.setDuration(d)}
+                className={`text-[10px] font-mono px-2.5 py-1 rounded-md border ${
+                  studio.duration === d
+                    ? 'bg-gold text-black border-gold'
+                    : 'border-white/15 text-white/60'
+                }`}
+              >
+                {d}s · {dp?.priceCoins ?? '—'}
+              </button>
+            )
+          })}
           <select
             value={studio.aspectRatio}
             onChange={(e) => studio.setAspectRatio(e.target.value)}
@@ -232,6 +299,39 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
           </button>
         </div>
 
+        {showBreakdown && (
+          <p className="text-[10px] text-white/40 font-mono">
+            {units} × {perClip} = {price} Coinz
+            {studio.pricing?.tierOrFanClub ? ` · ${studio.pricing.tierOrFanClub} discount` : ''}
+          </p>
+        )}
+
+        {showBuy && (
+          <div className="rounded-xl border border-gold/25 bg-gold/5 p-3 space-y-2">
+            <p className="text-[10px] uppercase tracking-widest text-gold/80">
+              Need more Coinz · {studio.pricing?.balance ?? 0} on hand · {price} required
+            </p>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              {COIN_PACKAGES.map((pkg) => (
+                <button
+                  key={pkg.id}
+                  type="button"
+                  disabled={buyingId !== null}
+                  onClick={() => buyPack(pkg.id)}
+                  className="flex-1 text-left px-3 py-2 rounded-lg border border-gold/30 hover:bg-gold hover:text-black transition-colors disabled:opacity-50"
+                >
+                  <span className="block text-[10px] font-bold uppercase tracking-wider">
+                    {buyingId === pkg.id ? 'Redirecting…' : packAdCopy(pkg)}
+                  </span>
+                  <span className="block text-[9px] opacity-70 mt-0.5">
+                    {pkg.amount} Coinz · ${pkg.price}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2">
           {studio.generating ? (
             <button
@@ -245,7 +345,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
             <button
               type="button"
               onClick={studio.generate}
-              disabled={!studio.canGenerate || !studio.pricing?.canAfford}
+              disabled={!studio.canGenerate || !canAfford}
               className="flex-1 py-3 rounded-full bg-gold text-black text-xs font-bold uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Generate · {price} Coinz

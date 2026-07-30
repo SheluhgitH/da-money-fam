@@ -133,7 +133,7 @@ export function useAdStudio(initialBrief = '') {
   const fetchPricing = useCallback(async () => {
     try {
       const res = await fetch(
-        `/api/video/quote?scenes=${sceneCount}&variations=${mode === 'single' ? variations : 1}&model=${modelKey}`
+        `/api/video/quote?scenes=${sceneCount}&variations=${mode === 'single' ? variations : 1}&model=${modelKey}&duration=${duration}`
       )
       if (res.ok) {
         const data: AdVideoPricingResponse = await res.json()
@@ -144,7 +144,7 @@ export function useAdStudio(initialBrief = '') {
     } catch {
       setPricing(null)
     }
-  }, [sceneCount, variations, mode, modelKey])
+  }, [sceneCount, variations, mode, modelKey, duration])
 
   const fetchLibrary = useCallback(async () => {
     try {
@@ -297,7 +297,7 @@ export function useAdStudio(initialBrief = '') {
       return
     }
     if (!pricing.canAfford) {
-      setError('Insufficient Coinz. Buy more in Coin Wallet.')
+      setError('Insufficient Coinz. Buy more below or use Buy Coinz.')
       return
     }
 

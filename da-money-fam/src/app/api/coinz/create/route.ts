@@ -2,12 +2,7 @@ import { NextResponse } from 'next/server'
 import { getStripe, getSiteUrl } from '@/lib/stripe'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getCurrentUser } from '@/lib/auth/user'
-
-const COIN_PACKAGES = [
-  { id: 'small', amount: 100, price: 10.00 },
-  { id: 'medium', amount: 500, price: 45.00 },
-  { id: 'large', amount: 1000, price: 80.00 },
-]
+import { getCoinPackage, sanitizeCoinReturnPath } from '@/lib/coin-packages'
 
 export async function POST(req: Request) {
   const ip = req.headers.get('x-forwarded-for') || 'anonymous'
@@ -18,13 +13,14 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { package_id } = await req.json()
+    const body = await req.json()
+    const { package_id, return_path } = body
 
     if (!package_id) {
       return NextResponse.json({ error: 'Package ID is required' }, { status: 400 })
     }
 
-    const coinPackage = COIN_PACKAGES.find((p) => p.id === package_id)
+    const coinPackage = getCoinPackage(package_id)
     if (!coinPackage) {
       return NextResponse.json({ error: 'Invalid package ID' }, { status: 400 })
     }
@@ -34,6 +30,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const returnPath = sanitizeCoinReturnPath(return_path)
     const stripe = getStripe()
     const siteUrl = getSiteUrl()
     const unitAmount = Math.round(coinPackage.price * 100)
@@ -48,7 +45,7 @@ export async function POST(req: Request) {
             currency: 'usd',
             product_data: {
               name: `${coinPackage.amount} DMF Coinz`,
-              description: `Purchase ${coinPackage.amount} DMF Coinz`,
+              description: `${coinPackage.label}: ≈ ${coinPackage.liteAds} Lite · ${coinPackage.fastAds} Fast ads (6s)`,
             },
             unit_amount: unitAmount,
           },
@@ -60,8 +57,8 @@ export async function POST(req: Request) {
         coin_amount: String(coinPackage.amount),
         type: 'coin_purchase',
       },
-      success_url: `${siteUrl}/account?status=success`,
-      cancel_url: `${siteUrl}/account?status=cancelled`,
+      success_url: `${siteUrl}${returnPath}?status=success`,
+      cancel_url: `${siteUrl}${returnPath}?status=cancelled`,
     })
 
     if (!session.url) {

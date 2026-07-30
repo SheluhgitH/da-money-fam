@@ -1,16 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthProvider'
-import { getUserCoins } from '@/lib/user-store'
-
-const COIN_PACKAGES = [
-  { id: 'small', amount: 100, price: 10.00 },
-  { id: 'medium', amount: 500, price: 45.00 },
-  { id: 'large', amount: 1000, price: 80.00 },
-]
+import { COIN_PACKAGES, packAdCopy } from '@/lib/coin-packages'
 
 export default function CoinWallet() {
   const { user, loading: authLoading } = useAuth()
@@ -47,17 +40,14 @@ export default function CoinWallet() {
   }, [user, authLoading])
 
   const handlePurchaseCoins = async (packageId: string) => {
-    if (!user) {
-      // Redirect to login if not authenticated
-      return
-    }
+    if (!user) return
     setPurchaseLoadingId(packageId)
     setError('')
     try {
       const res = await fetch('/api/coinz/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ package_id: packageId }),
+        body: JSON.stringify({ package_id: packageId, return_path: '/coin-wallet' }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Coin purchase failed')
@@ -81,7 +71,7 @@ export default function CoinWallet() {
       <div className="min-h-screen bg-matte-black flex flex-col items-center justify-center p-4">
         <p className="text-gray-400 mb-6">Sign in to manage your DMF Coinz.</p>
         <Link
-          href="/login"
+          href="/login?redirect=/coin-wallet"
           className="bg-gold text-black font-bold py-3 px-8 rounded-full uppercase tracking-wider hover:bg-white transition-colors"
         >
           Sign In
@@ -94,21 +84,32 @@ export default function CoinWallet() {
     <div className="min-h-screen bg-matte-black py-24 px-4">
       <div className="max-w-xl mx-auto glass-gold rounded-2xl p-8">
         <h1 className="font-serif text-3xl gold-gradient mb-2">My DMF Coinz</h1>
-        <p className="text-gray-400 text-sm mb-8">Current Balance: <span className="text-gold font-bold text-lg">{coinBalance} Coinz</span></p>
+        <p className="text-gray-400 text-sm mb-2">
+          Current Balance:{' '}
+          <span className="text-gold font-bold text-lg">{coinBalance} Coinz</span>
+        </p>
+        <p className="text-gray-500 text-xs mb-8">
+          Ad Studio: Lite from 5 Coinz · Fast from 10 Coinz (6s). Longer clips cost more.
+        </p>
 
         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
         <div className="space-y-4">
           {COIN_PACKAGES.map((pkg) => (
-            <div key={pkg.id} className="flex items-center justify-between glass rounded-lg p-4">
-              <div>
-                <h3 className="text-white font-bold">{pkg.amount} Coinz</h3>
-                <p className="text-gray-400 text-sm">${pkg.price.toFixed(2)}</p>
+            <div key={pkg.id} className="flex items-center justify-between glass rounded-lg p-4 gap-3">
+              <div className="min-w-0">
+                <h3 className="text-white font-bold">
+                  {packAdCopy(pkg)}
+                </h3>
+                <p className="text-gold text-sm font-mono mt-0.5">
+                  {pkg.amount} Coinz · ${pkg.price.toFixed(2)}
+                </p>
+                <p className="text-gray-500 text-[10px] uppercase tracking-wider mt-1">{pkg.label}</p>
               </div>
               <button
                 onClick={() => handlePurchaseCoins(pkg.id)}
                 disabled={purchaseLoadingId === pkg.id}
-                className="bg-gold text-black font-bold py-2 px-6 rounded-full uppercase tracking-wider text-xs hover:bg-white transition-colors disabled:opacity-50"
+                className="shrink-0 bg-gold text-black font-bold py-2 px-6 rounded-full uppercase tracking-wider text-xs hover:bg-white transition-colors disabled:opacity-50"
               >
                 {purchaseLoadingId === pkg.id ? 'Processing...' : 'Buy Coinz'}
               </button>
@@ -117,8 +118,11 @@ export default function CoinWallet() {
         </div>
 
         <p className="text-center mt-8">
+          <Link href="/ad-studio" className="text-gold text-sm hover:underline mr-4">
+            Ad Studio
+          </Link>
           <Link href="/" className="text-gold text-sm hover:underline">
-            Back to home
+            Back to Home
           </Link>
         </p>
       </div>

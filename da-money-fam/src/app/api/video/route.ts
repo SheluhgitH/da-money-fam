@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   let totalPrice = 0
 
   try {
-    const pricing = await getAdVideoCoinPrice(model.key)
+    const pricing = await getAdVideoCoinPrice(model.key, duration)
     if (!pricing.isAuthenticated) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }

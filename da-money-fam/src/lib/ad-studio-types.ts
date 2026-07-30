@@ -17,9 +17,19 @@ export interface AdVideoPricingResponse {
   canEnhance?: boolean
   scenes: number
   variations: number
+  durationSeconds?: number
   model?: string
   modelId?: string
   baseCoins?: number
+  baseCoinsBeforeDiscount?: number
+  modelPrices?: {
+    lite: { priceCoins: number; baseCoinsBeforeDiscount: number }
+    fast: { priceCoins: number; baseCoinsBeforeDiscount: number }
+  }
+  durationPrices?: Record<
+    number,
+    { priceCoins: number; baseCoinsBeforeDiscount: number }
+  >
 }
 
 export interface StoryboardScene {

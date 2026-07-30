@@ -7,7 +7,8 @@ import AdStudioShell from '@/components/ad-studio/AdStudioShell'
 function AdStudioInner() {
   const params = useSearchParams()
   const brief = params.get('brief') || ''
-  return <AdStudioShell initialBrief={brief} />
+  const checkoutStatus = params.get('status')
+  return <AdStudioShell initialBrief={brief} checkoutStatus={checkoutStatus} />
 }
 
 export default function AdStudioPage() {
