@@ -89,7 +89,7 @@ export default function CoinWallet() {
           <span className="text-gold font-bold text-lg">{coinBalance} Coinz</span>
         </p>
         <p className="text-gray-500 text-xs mb-8">
-          Ad Studio: Lite from 5 Coinz · Fast from 10 Coinz (6s). Longer clips cost more.
+          Ad Studio: Lite from 10 Coinz · Fast from 20 Coinz (6s). Longer clips cost more.
         </p>
 
         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}

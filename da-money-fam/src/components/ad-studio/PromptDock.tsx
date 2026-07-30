@@ -29,8 +29,8 @@ function CoinPriceLabel({
 export default function PromptDock({ studio }: { studio: AdStudioController }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [buyingId, setBuyingId] = useState<string | null>(null)
-  const price = studio.pricing?.totalPriceCoins ?? studio.pricing?.priceCoins ?? 10
-  const perClip = studio.pricing?.priceCoins ?? 10
+  const price = studio.pricing?.totalPriceCoins ?? studio.pricing?.priceCoins ?? 20
+  const perClip = studio.pricing?.priceCoins ?? 20
   const discountPercent = studio.pricing?.discountPercent ?? 0
   const discounted = discountPercent > 0
   const units =
@@ -214,8 +214,8 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
           >
             Lite ·{' '}
             <CoinPriceLabel
-              effective={lite?.priceCoins ?? 5}
-              base={lite?.baseCoinsBeforeDiscount ?? 5}
+              effective={lite?.priceCoins ?? 10}
+              base={lite?.baseCoinsBeforeDiscount ?? 10}
               discounted={discounted}
             />
           </button>
@@ -231,8 +231,8 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
           >
             Fast ·{' '}
             <CoinPriceLabel
-              effective={fast?.priceCoins ?? 10}
-              base={fast?.baseCoinsBeforeDiscount ?? 10}
+              effective={fast?.priceCoins ?? 20}
+              base={fast?.baseCoinsBeforeDiscount ?? 20}
               discounted={discounted}
             />
           </button>

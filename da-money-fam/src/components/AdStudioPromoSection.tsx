@@ -175,7 +175,7 @@ export default function AdStudioPromoSection() {
           Ads made by the Fam
         </h2>
         <p className="text-gray-400 text-sm md:text-base mt-3 max-w-xl mx-auto">
-          Latest clips from Seedance — make yours in Coinz, Lite from 5.
+          Latest clips from Seedance — make yours in Coinz, Lite from 10.
         </p>
         <Link
           href={ctaHref}

@@ -75,16 +75,16 @@ export async function getAdVideoCoinPrice(
   let tierOrFanClub: string | null = null
 
   if (fanClub) {
-    discountPercent = 30
+    discountPercent = 15
     tierOrFanClub = 'Fan Club'
   } else if (level >= 5) {
-    discountPercent = 30
+    discountPercent = 15
     tierOrFanClub = FAN_PERK_TIERS.find((t) => t.level === 5)?.title || null
   } else if (level >= 4) {
-    discountPercent = 20
+    discountPercent = 10
     tierOrFanClub = FAN_PERK_TIERS.find((t) => t.level === 4)?.title || null
   } else if (level >= 3) {
-    discountPercent = 10
+    discountPercent = 5
     tierOrFanClub = FAN_PERK_TIERS.find((t) => t.level === 3)?.title || null
   }
 
