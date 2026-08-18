@@ -31,8 +31,8 @@ export default function AboutFamSection() {
           className="relative aspect-[4/5] sm:aspect-[16/10] lg:aspect-[4/5] overflow-hidden rounded-2xl border border-gold/30 shadow-2xl shadow-gold/10"
         >
           <Image
-            src="/images/collective/collective-1.jpg"
-            alt="Da Money Fam — community, culture, and creative energy"
+            src="/images/collective/collective-14.jpg"
+            alt="Da Money Fam Collective 14"
             fill
             sizes="(max-width: 1024px) 100vw, 50vw"
             className="object-cover"

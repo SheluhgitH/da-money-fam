@@ -145,16 +145,26 @@ After env changes: **Deployments → ⋯ → Redeploy**.
 
 ---
 
-## 7. Kick stream videos (after each new VOD)
+## 7. Kick stream videos (auto-sync)
 
-Kick VOD links must use **`vod_id`** from the video URL — not the session slug.
+Stream VODs sync from Kick into Supabase on a Vercel Cron (`/api/kick/sync`, every 6 hours). The site reads the cache from `/api/kick/videos`.
 
-1. Open the VOD on Kick: `https://kick.com/jackpotwrld/videos/{vod_id}`
-2. Copy the `{vod_id}` segment (e.g. `019f9fd2-a128-7b26-bca4-96ed3e7ea297`)
-3. Add or update the entry in [`src/data/kick-videos.ts`](src/data/kick-videos.ts) with that `vodId` and `watchUrl`
-4. Deploy and verify `https://damoneyfam.com/api/kick/videos` — first video `watchUrl` must contain the vod_id
+**One-time setup**
 
-**Do not** use the session slug (e.g. `160002aa-dmf-cookout`) — those URLs 404.
+1. Run [`supabase/stream-videos.sql`](supabase/stream-videos.sql) in the Supabase SQL Editor
+2. Set `CRON_SECRET` in Vercel env vars (same random string you would use locally)
+3. Redeploy so the cron job is registered
+4. Trigger the first sync (do not wait for cron):
+
+```powershell
+Invoke-RestMethod -Uri "https://damoneyfam.com/api/kick/sync" -Headers @{ Authorization = "Bearer YOUR_CRON_SECRET" }
+```
+
+5. Confirm `https://damoneyfam.com/api/kick/videos` returns recent VODs whose `watchUrl` contains a `vod_id`
+
+**Emergency fallback:** [`src/data/kick-videos.ts`](src/data/kick-videos.ts) is used only if Kick and the cache are both empty.
+
+**Do not** use the session slug (e.g. `160002aa-dmf-cookout`) in watch URLs — those 404. Kick VOD links must use `vod_id`.
 
 ---
 

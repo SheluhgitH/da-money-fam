@@ -73,6 +73,14 @@ export default function HomePage() {
       </section>
 
       <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
+        <SongStore />
+      </section>
+
+      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
+        <MusicPlayer />
+      </section>
+
+      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
         <AboutFamSection />
       </section>
 
@@ -86,10 +94,6 @@ export default function HomePage() {
 
       <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
         <CollectiveCollage />
-      </section>
-
-      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
-        <SongStore />
       </section>
 
       <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
@@ -144,10 +148,6 @@ export default function HomePage() {
 
       <section className="relative">
         <HeroVideoSection />
-      </section>
-
-      <section className="relative py-10 md:py-16 lg:py-20 px-4 md:px-8 lg:px-16">
-        <MusicPlayer />
       </section>
 
       <Footer />
