@@ -6,7 +6,8 @@ import { useAdStudio } from '@/hooks/useAdStudio'
 import GenerationLibrary from './GenerationLibrary'
 import PreviewCanvas from './PreviewCanvas'
 import PromptDock from './PromptDock'
-import { COIN_PACKAGES } from '@/lib/coin-packages'
+import { COIN_PACKAGES, type CoinPackage } from '@/lib/coin-packages'
+import { packsFromSettings } from '@/lib/site-settings'
 
 export default function AdStudioShell({
   initialBrief = '',
@@ -18,8 +19,16 @@ export default function AdStudioShell({
   const studio = useAdStudio(initialBrief)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [buyOpen, setBuyOpen] = useState(false)
+  const [packs, setPacks] = useState<CoinPackage[]>(COIN_PACKAGES)
   const [buyingId, setBuyingId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/site-settings')
+      .then((r) => r.json())
+      .then((data) => setPacks(packsFromSettings(data.settings?.['ad_studio.packs'])))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (checkoutStatus !== 'success') return
@@ -109,7 +118,7 @@ export default function AdStudioShell({
 
       {buyOpen && studio.pricing?.isAuthenticated && (
         <div className="shrink-0 border-b border-gold/15 bg-black/80 px-4 py-3 flex flex-wrap gap-2">
-          {COIN_PACKAGES.map((pkg) => (
+          {packs.map((pkg) => (
             <button
               key={pkg.id}
               type="button"

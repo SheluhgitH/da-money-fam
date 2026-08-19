@@ -1,10 +1,11 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { AdStudioController } from '@/hooks/useAdStudio'
 import LookDrawer from './LookDrawer'
 import StoryboardTimeline from './StoryboardTimeline'
-import { COIN_PACKAGES, packAdCopy } from '@/lib/coin-packages'
+import { COIN_PACKAGES, packAdCopy, type CoinPackage } from '@/lib/coin-packages'
+import { packsFromSettings } from '@/lib/site-settings'
 
 function CoinPriceLabel({
   effective,
@@ -29,6 +30,14 @@ function CoinPriceLabel({
 export default function PromptDock({ studio }: { studio: AdStudioController }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [buyingId, setBuyingId] = useState<string | null>(null)
+  const [packs, setPacks] = useState<CoinPackage[]>(COIN_PACKAGES)
+
+  useEffect(() => {
+    fetch('/api/site-settings')
+      .then((r) => r.json())
+      .then((data) => setPacks(packsFromSettings(data.settings?.['ad_studio.packs'])))
+      .catch(() => {})
+  }, [])
   const price = studio.pricing?.totalPriceCoins ?? studio.pricing?.priceCoins ?? 20
   const perClip = studio.pricing?.priceCoins ?? 20
   const discountPercent = studio.pricing?.discountPercent ?? 0
@@ -312,7 +321,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
               Need more Coinz · {studio.pricing?.balance ?? 0} on hand · {price} required
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
-              {COIN_PACKAGES.map((pkg) => (
+              {packs.map((pkg) => (
                 <button
                   key={pkg.id}
                   type="button"

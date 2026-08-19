@@ -1,0 +1,12 @@
+node_modules
+.next
+discord-bot/node_modules
+**/node_modules
+**/.next
+.env*.local
+.env
+*.mp3
+*.m4a
+*.wav
+clothes to sell pics
+**/clothes to sell pics

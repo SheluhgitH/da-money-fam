@@ -55,6 +55,10 @@ export interface AdStudioGeneration {
   featured: boolean
   model: string
   created_at: string
+  admin_hidden?: boolean
+  admin_notes?: string | null
+  refunded_at?: string | null
+  refund_coinz?: number
 }
 
 export interface AdStudioShowcaseItem {

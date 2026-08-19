@@ -16,6 +16,7 @@ export async function GET(
   if (
     !gen ||
     gen.featured === false ||
+    gen.admin_hidden ||
     gen.status !== 'completed' ||
     !gen.video_urls?.length
   ) {

@@ -5,6 +5,7 @@ import { scrollToSection } from '../utils/scrollToSection'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import BackgroundVideo from './BackgroundVideo'
 import MagneticButton from './MagneticButton'
+import { asHeroSettings, type HomepageHeroSettings } from '@/lib/site-settings'
 
 interface TakeoverConfig {
   artistName: string
@@ -23,6 +24,7 @@ const activeTakeover: TakeoverConfig = {
 const HEADLINE = 'DA MONEY FAM'
 
 export default function HeroSection() {
+  const [hero, setHero] = useState<HomepageHeroSettings>(asHeroSettings(null))
   const isTakeover = activeTakeover.active
   const sectionRef = useRef<HTMLElement>(null)
   const mouseX = useMotionValue(0)
@@ -48,6 +50,13 @@ export default function HeroSection() {
     mouseX.set((e.clientX - rect.left) / rect.width - 0.5)
     mouseY.set((e.clientY - rect.top) / rect.height - 0.5)
   }
+
+  useEffect(() => {
+    fetch('/api/site-settings')
+      .then((r) => r.json())
+      .then((data) => setHero(asHeroSettings(data.settings?.['homepage.hero'])))
+      .catch(() => {})
+  }, [])
 
   return (
     <section
@@ -105,7 +114,7 @@ export default function HeroSection() {
           transition={{ duration: 1, delay: 0.4 }}
           className="text-gold uppercase tracking-[0.3em] sm:tracking-[0.5em] text-xs sm:text-sm md:text-base mb-4"
         >
-          {isTakeover ? `Featuring ${activeTakeover.artistName}` : 'Luxury Hip-Hop Collective'}
+          {isTakeover ? `Featuring ${activeTakeover.artistName}` : hero.kicker}
         </motion.p>
 
         {isTakeover ? (
@@ -119,7 +128,7 @@ export default function HeroSection() {
           </motion.h1>
         ) : (
           <h1 className="font-serif text-3xl sm:text-4xl md:text-6xl lg:text-8xl font-bold mb-4 sm:mb-6 holographic-text">
-            {HEADLINE.split('').map((char, i) => (
+            {(hero.headline || HEADLINE).split('').map((char, i) => (
               <motion.span
                 key={`${char}-${i}`}
                 initial={{ opacity: 0, y: 28 }}
@@ -141,7 +150,7 @@ export default function HeroSection() {
         >
           {isTakeover
             ? activeTakeover.tagline
-            : 'Setting trends in music, fashion, and culture since day one'}
+            : hero.tagline}
         </motion.p>
 
         <motion.div
@@ -157,7 +166,7 @@ export default function HeroSection() {
               rel="noopener noreferrer"
               className="block w-full sm:w-auto px-8 py-4 bg-gold text-matte-black font-bold uppercase tracking-widest text-sm hover:bg-gold-light transition-colors duration-300 neon-border text-center"
             >
-              Listen Now
+              {hero.primaryCta}
             </a>
           </MagneticButton>
 
@@ -167,7 +176,7 @@ export default function HeroSection() {
               onClick={() => scrollToSection('store')}
               className="w-full sm:w-auto px-8 py-4 glass text-white font-bold uppercase tracking-widest text-sm hover:bg-white/10 transition-colors duration-300 border border-gold/50"
             >
-              Shop The Drop
+              {hero.secondaryCta}
             </button>
           </MagneticButton>
         </motion.div>

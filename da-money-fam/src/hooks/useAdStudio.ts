@@ -261,6 +261,10 @@ export function useAdStudio(initialBrief = '') {
   }
 
   const setFeatured = async (item: AdStudioGeneration, featured: boolean) => {
+    if (item.admin_hidden && featured) {
+      setError('This ad was hidden by an admin and cannot be featured.')
+      return
+    }
     try {
       const res = await fetch('/api/video/library', {
         method: 'POST',

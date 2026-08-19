@@ -4,8 +4,20 @@ import { useEffect, useMemo, useState } from 'react'
 import type { OrderStatus, PaymentSettings, PurchaseOrder, MerchOrder, ServiceOrder, Song } from '@/types/store'
 import NewSongForm from './NewSongForm'
 import EditSongForm from './EditSongForm'
+import AdStudioAdmin from './AdStudioAdmin'
+import SiteSettingsPanel from './SiteSettingsPanel'
 
-type Tab = 'overview' | 'songs' | 'orders' | 'merch' | 'services' | 'settings' | 'new' | 'edit'
+type Tab =
+  | 'overview'
+  | 'ad-studio'
+  | 'site'
+  | 'songs'
+  | 'orders'
+  | 'merch'
+  | 'services'
+  | 'settings'
+  | 'new'
+  | 'edit'
 type OrderFilter = 'all' | OrderStatus
 
 function formatDate(iso: string) {
@@ -83,6 +95,16 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     loadData()
+    const params = new URLSearchParams(window.location.search)
+    const section = params.get('section') as Tab | null
+    if (
+      section &&
+      ['overview', 'ad-studio', 'site', 'songs', 'orders', 'merch', 'services', 'settings', 'new'].includes(
+        section
+      )
+    ) {
+      setTab(section)
+    }
   }, [])
 
   const stats = useMemo(() => {
@@ -110,6 +132,9 @@ export default function AdminDashboard() {
   const switchTab = (next: Tab) => {
     setTab(next)
     if (next !== 'edit') setEditingSong(null)
+    const url = new URL(window.location.href)
+    url.searchParams.set('section', next === 'edit' ? 'songs' : next)
+    window.history.replaceState({}, '', url.toString())
   }
 
   const startEdit = (song: Song) => {
@@ -240,6 +265,8 @@ export default function AdminDashboard() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'overview', label: 'Overview' },
+    { id: 'ad-studio', label: 'Ad Studio' },
+    { id: 'site', label: 'Site' },
     { id: 'songs', label: 'Songs' },
     { id: 'orders', label: 'Song Orders' },
     { id: 'merch', label: 'Merch Orders' },
@@ -249,13 +276,14 @@ export default function AdminDashboard() {
   ]
 
   return (
-    <div>
-      <div className="flex flex-wrap gap-2 mb-8">
+    <div className="flex flex-col lg:flex-row gap-6">
+      <aside className="lg:w-56 shrink-0">
+        <nav className="flex lg:flex-col flex-wrap gap-2">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => switchTab(t.id)}
-            className={`px-4 py-2 rounded-full text-sm uppercase tracking-wider transition-colors ${
+            className={`px-4 py-2 rounded-full text-sm uppercase tracking-wider transition-colors text-left ${
               tab === t.id || (tab === 'edit' && t.id === 'songs')
                 ? 'bg-gold text-black'
                 : 'bg-white/5 text-gray-300 hover:text-white'
@@ -264,7 +292,9 @@ export default function AdminDashboard() {
             {t.label}
           </button>
         ))}
-      </div>
+        </nav>
+      </aside>
+      <div className="flex-1 min-w-0">
 
       {message && (
         <div className="mb-6 p-4 bg-gold/10 border border-gold/30 rounded-lg text-sm text-gold break-all flex items-start justify-between gap-4">
@@ -279,7 +309,11 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {loading ? (
+      {tab === 'ad-studio' ? (
+        <AdStudioAdmin />
+      ) : tab === 'site' ? (
+        <SiteSettingsPanel />
+      ) : loading ? (
         <p className="text-gray-500">Loading...</p>
       ) : tab === 'overview' ? (
         <div className="space-y-8">
@@ -297,10 +331,16 @@ export default function AdminDashboard() {
               <h3 className="font-serif text-xl text-white mb-4">Quick Actions</h3>
               <div className="flex flex-wrap gap-3">
                 <button
-                  onClick={() => switchTab('new')}
-                  className="px-4 py-2 rounded-full bg-gold text-black text-sm font-bold uppercase tracking-wider"
+                  onClick={() => switchTab('ad-studio')}
+                  className="px-4 py-2 rounded-full bg-white/10 text-sm hover:bg-white/20"
                 >
-                  Add Song
+                  Ad Studio
+                </button>
+                <button
+                  onClick={() => switchTab('site')}
+                  className="px-4 py-2 rounded-full bg-white/10 text-sm hover:bg-white/20"
+                >
+                  Site settings
                 </button>
                 <button
                   onClick={() => switchTab('songs')}
@@ -568,6 +608,7 @@ export default function AdminDashboard() {
           </button>
         </form>
       ) : null}
+      </div>
     </div>
   )
 }

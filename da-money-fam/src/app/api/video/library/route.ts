@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/user'
 import {
   createAdStudioGeneration,
+  getAdStudioGeneration,
   listAdStudioGenerations,
   updateAdStudioGeneration,
 } from '@/lib/ad-studio-jobs'
@@ -30,6 +31,15 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     if (body.id && body.patch) {
+      if (body.patch.featured === true) {
+        const current = await getAdStudioGeneration(user.id, body.id)
+        if (current?.admin_hidden) {
+          return NextResponse.json(
+            { error: 'This ad was hidden by an admin and cannot be featured.' },
+            { status: 403 }
+          )
+        }
+      }
       const updated = await updateAdStudioGeneration(user.id, body.id, body.patch)
       if (!updated) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 })

@@ -42,6 +42,10 @@ function mapRow(data: Record<string, unknown>): AdStudioGeneration {
     featured: data.featured !== false,
     model: data.model ? String(data.model) : DEFAULT_MODEL,
     created_at: String(data.created_at),
+    admin_hidden: Boolean(data.admin_hidden),
+    admin_notes: data.admin_notes ? String(data.admin_notes) : null,
+    refunded_at: data.refunded_at ? String(data.refunded_at) : null,
+    refund_coinz: data.refund_coinz != null ? Number(data.refund_coinz) : undefined,
   }
 }
 
@@ -76,6 +80,7 @@ export async function listFeaturedGenerations(limit = 12): Promise<AdStudioGener
       .select('*')
       .eq('featured', true)
       .eq('status', 'completed')
+      .or('admin_hidden.is.null,admin_hidden.eq.false')
       .order('created_at', { ascending: false })
       .limit(limit * 2)
 
@@ -86,7 +91,7 @@ export async function listFeaturedGenerations(limit = 12): Promise<AdStudioGener
 
     return (data || [])
       .map((row) => mapRow(row as Record<string, unknown>))
-      .filter((row) => row.video_urls.length > 0)
+      .filter((row) => row.video_urls.length > 0 && !row.admin_hidden)
       .slice(0, limit)
   }
 
@@ -95,6 +100,7 @@ export async function listFeaturedGenerations(limit = 12): Promise<AdStudioGener
     .filter(
       (r) =>
         r.featured !== false &&
+        !r.admin_hidden &&
         r.status === 'completed' &&
         Array.isArray(r.video_urls) &&
         r.video_urls.length > 0
@@ -169,6 +175,7 @@ export async function createAdStudioGeneration(input: {
     featured: input.featured !== false,
     model: input.model || DEFAULT_MODEL,
     created_at: now,
+    admin_hidden: false,
   }
 
   if (isSupabaseConfigured()) {

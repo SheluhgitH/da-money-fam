@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { getStripe, getSiteUrl } from '@/lib/stripe'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getCurrentUser } from '@/lib/auth/user'
-import { getCoinPackage, sanitizeCoinReturnPath } from '@/lib/coin-packages'
+import { sanitizeCoinReturnPath } from '@/lib/coin-packages'
+import { getResolvedCoinPackage } from '@/lib/site-settings'
 
 export async function POST(req: Request) {
   const ip = req.headers.get('x-forwarded-for') || 'anonymous'
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Package ID is required' }, { status: 400 })
     }
 
-    const coinPackage = getCoinPackage(package_id)
+    const coinPackage = await getResolvedCoinPackage(package_id)
     if (!coinPackage) {
       return NextResponse.json({ error: 'Invalid package ID' }, { status: 400 })
     }

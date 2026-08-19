@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthProvider'
-import { COIN_PACKAGES, packAdCopy } from '@/lib/coin-packages'
+import { COIN_PACKAGES, packAdCopy, type CoinPackage } from '@/lib/coin-packages'
+import { packsFromSettings } from '@/lib/site-settings'
 
 export default function CoinWallet() {
   const { user, loading: authLoading } = useAuth()
@@ -11,6 +12,7 @@ export default function CoinWallet() {
   const [loading, setLoading] = useState(true)
   const [purchaseLoadingId, setPurchaseLoadingId] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [packs, setPacks] = useState<CoinPackage[]>(COIN_PACKAGES)
 
   const fetchCoinBalance = async () => {
     if (!user) {
@@ -32,6 +34,13 @@ export default function CoinWallet() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetch('/api/site-settings')
+      .then((r) => r.json())
+      .then((data) => setPacks(packsFromSettings(data.settings?.['ad_studio.packs'])))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!authLoading) {
@@ -95,7 +104,7 @@ export default function CoinWallet() {
         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
         <div className="space-y-4">
-          {COIN_PACKAGES.map((pkg) => (
+          {packs.map((pkg) => (
             <div key={pkg.id} className="flex items-center justify-between glass rounded-lg p-4 gap-3">
               <div className="min-w-0">
                 <h3 className="text-white font-bold">

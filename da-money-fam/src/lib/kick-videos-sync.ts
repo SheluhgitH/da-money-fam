@@ -1,6 +1,29 @@
-import { VERIFIED_KICK_VIDEOS } from '@/data/kick-videos'
-import { createServiceClient } from '@/lib/supabase/server'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { createClient } from '@supabase/supabase-js'
+import { VERIFIED_KICK_VIDEOS, HIDDEN_STREAM_VIDEO_IDS } from '@/data/kick-videos'
 import { KICK_CHANNEL_SLUG, buildKickWatchUrl, type KickVideo } from '@/lib/streams'
+import { asHiddenStreamIds, loadSiteSettingsMap } from '@/lib/site-settings'
+
+const execFileAsync = promisify(execFile)
+
+async function getHiddenStreamIdSet(): Promise<Set<string>> {
+  try {
+    const map = await loadSiteSettingsMap()
+    return new Set(Array.from(HIDDEN_STREAM_VIDEO_IDS).concat(asHiddenStreamIds(map['streams.hidden_ids'])))
+  } catch {
+    return new Set(HIDDEN_STREAM_VIDEO_IDS)
+  }
+}
+
+function createKickCacheClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return null
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+}
 
 const FETCH_TIMEOUT_MS = 12000
 const VIDEO_LIMIT = 12
@@ -64,19 +87,47 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
   }
 }
 
-async function fetchVideoDetail(uuid: string): Promise<KickVideoDetail | null> {
+async function fetchKickJsonViaCurl(url: string): Promise<unknown | null> {
+  const curlBin = process.platform === 'win32' ? 'curl.exe' : 'curl'
   try {
-    const res = await fetchWithTimeout(
-      `https://kick.com/api/v1/video/${uuid}`,
-      { headers: KICK_HEADERS, cache: 'no-store' },
-      FETCH_TIMEOUT_MS
+    const { stdout } = await execFileAsync(
+      curlBin,
+      [
+        '-sS',
+        '-A',
+        KICK_HEADERS['User-Agent'],
+        '-H',
+        'Accept: application/json',
+        '-H',
+        `Referer: ${KICK_HEADERS.Referer}`,
+        url,
+      ],
+      { timeout: FETCH_TIMEOUT_MS, maxBuffer: 2 * 1024 * 1024 }
     )
-    if (!res.ok) return null
-    return (await res.json()) as KickVideoDetail
+    if (!stdout || stdout.includes('Request blocked')) return null
+    return JSON.parse(stdout)
   } catch (error) {
-    console.error(`Kick video detail fetch error for ${uuid}:`, error)
+    console.error('Kick curl fetch error:', error)
     return null
   }
+}
+
+async function fetchKickJson(url: string): Promise<unknown | null> {
+  try {
+    const res = await fetchWithTimeout(url, { headers: KICK_HEADERS, cache: 'no-store' }, FETCH_TIMEOUT_MS)
+    if (res.ok) return await res.json()
+    console.error(`Kick fetch returned ${res.status} ${res.statusText} for ${url}`)
+  } catch (error) {
+    console.error(`Kick fetch error for ${url}:`, error)
+  }
+
+  return fetchKickJsonViaCurl(url)
+}
+
+async function fetchVideoDetail(uuid: string): Promise<KickVideoDetail | null> {
+  const data = await fetchKickJson(`https://kick.com/api/v1/video/${uuid}`)
+  if (!data || typeof data !== 'object') return null
+  return data as KickVideoDetail
 }
 
 function resolveVodId(detail: KickVideoDetail | null): string | null {
@@ -104,10 +155,12 @@ function buildVideo(item: KickApiVideo, vodId: string): KickVideo {
 }
 
 async function mapKickVideos(data: KickApiVideo[]): Promise<KickVideo[]> {
+  const hidden = await getHiddenStreamIdSet()
   const results = await Promise.allSettled(
     data.map(async (item) => {
       const uuid = item.video?.uuid
       if (!uuid) return null
+      if (hidden.has(uuid)) return null
 
       const detail = await fetchVideoDetail(uuid)
       const vodId = resolveVodId(detail)
@@ -135,19 +188,12 @@ async function mapKickVideos(data: KickApiVideo[]): Promise<KickVideo[]> {
 }
 
 async function fetchKickListOnce(): Promise<KickApiVideo[] | null> {
-  const res = await fetchWithTimeout(
-    `https://kick.com/api/v2/channels/${KICK_CHANNEL_SLUG}/videos`,
-    { headers: KICK_HEADERS, cache: 'no-store' },
-    FETCH_TIMEOUT_MS
-  )
-
-  if (!res.ok) {
-    console.error(`Kick videos API returned ${res.status} ${res.statusText}`)
+  const data = await fetchKickJson(`https://kick.com/api/v2/channels/${KICK_CHANNEL_SLUG}/videos`)
+  if (!Array.isArray(data)) {
+    console.error('Kick videos API returned no array')
     return null
   }
-
-  const data = (await res.json()) as KickApiVideo[]
-  return Array.isArray(data) ? data : []
+  return data as KickApiVideo[]
 }
 
 export async function fetchKickVideosFromApi(): Promise<KickVideo[]> {
@@ -205,7 +251,7 @@ export async function loadCachedStreamVideos(): Promise<{
   lastSyncedAt: string | null
   stale: boolean
 }> {
-  const supabase = createServiceClient()
+  const supabase = createKickCacheClient()
   if (!supabase) {
     return { videos: [], lastSyncedAt: null, stale: true }
   }
@@ -221,7 +267,8 @@ export async function loadCachedStreamVideos(): Promise<{
     return { videos: [], lastSyncedAt: null, stale: true }
   }
 
-  const rows = data as StreamVideoRow[]
+  const hidden = await getHiddenStreamIdSet()
+  const rows = (data as StreamVideoRow[]).filter((row) => !hidden.has(row.id))
   const lastSyncedAt = rows.reduce((latest, row) => {
     if (!latest || row.synced_at > latest) return row.synced_at
     return latest
@@ -240,14 +287,18 @@ export async function loadCachedStreamVideos(): Promise<{
 export async function upsertStreamVideos(videos: KickVideo[]): Promise<number> {
   if (videos.length === 0) return 0
 
-  const supabase = createServiceClient()
+  const supabase = createKickCacheClient()
   if (!supabase) return 0
 
   const now = new Date().toISOString()
-  const rows = videos.map((video) => ({
-    ...videoToRow(video),
-    synced_at: now,
-  }))
+  const hidden = await getHiddenStreamIdSet()
+  const rows = videos
+    .filter((video) => !hidden.has(video.id))
+    .map((video) => ({
+      ...videoToRow(video),
+      synced_at: now,
+    }))
+  if (rows.length === 0) return 0
 
   const { error } = await supabase.from('stream_videos').upsert(rows, { onConflict: 'id' })
   if (error) {
@@ -317,5 +368,5 @@ export async function getStreamVideosForApi(): Promise<KickVideo[]> {
     return cached.videos
   }
 
-  return VERIFIED_KICK_VIDEOS
+  return sortVideosNewestFirst(VERIFIED_KICK_VIDEOS)
 }

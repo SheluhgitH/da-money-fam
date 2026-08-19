@@ -6,6 +6,7 @@ import {
   SEEDANCE_MODELS,
   type SeedanceModelKey,
 } from '@/lib/seedance-models'
+import { asPricingSettings, loadSiteSettingsMap } from '@/lib/site-settings'
 
 /** @deprecated Prefer model.baseCoins via resolveSeedanceModel */
 export const BASE_AD_VIDEO_COIN_PRICE = 10
@@ -40,11 +41,12 @@ export function computeAdClipCoinPrice(input: {
 export function previewAdClipCoinPrice(
   modelKey: SeedanceModelKey,
   durationSeconds: number,
-  discountPercent: number
+  discountPercent: number,
+  baseCoinsOverride?: number
 ): { priceCoins: number; baseCoinsBeforeDiscount: number } {
   const model = SEEDANCE_MODELS[modelKey]
   return computeAdClipCoinPrice({
-    baseCoins: model.baseCoins,
+    baseCoins: baseCoinsOverride ?? model.baseCoins,
     durationSeconds,
     discountPercent,
   })
@@ -70,12 +72,15 @@ export async function getAdVideoCoinPrice(
   const model = resolveSeedanceModel(modelInput ?? DEFAULT_SEEDANCE_MODEL)
   const duration = normalizePricingDuration(durationSeconds)
   const { level, fanClub, isAuthenticated } = await getUserEntitlements()
+  const settings = asPricingSettings((await loadSiteSettingsMap())['ad_studio.pricing'])
+  const baseCoins =
+    model.key === 'lite' ? settings.liteBaseCoins : settings.fastBaseCoins
 
   let discountPercent = 0
   let tierOrFanClub: string | null = null
 
   if (fanClub) {
-    discountPercent = 15
+    discountPercent = settings.fanClubDiscountPercent
     tierOrFanClub = 'Fan Club'
   } else if (level >= 5) {
     discountPercent = 15
@@ -89,7 +94,7 @@ export async function getAdVideoCoinPrice(
   }
 
   const { priceCoins, baseCoinsBeforeDiscount } = computeAdClipCoinPrice({
-    baseCoins: model.baseCoins,
+    baseCoins,
     durationSeconds: duration,
     discountPercent,
   })
@@ -103,7 +108,7 @@ export async function getAdVideoCoinPrice(
     userCoins: 0,
     modelKey: model.key,
     modelId: model.id,
-    baseCoins: model.baseCoins,
+    baseCoins,
     durationSeconds: duration,
   }
 }

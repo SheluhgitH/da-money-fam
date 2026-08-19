@@ -13,8 +13,8 @@ export default function AdminPage() {
     <div className="max-w-7xl mx-auto px-4 py-10">
       <div className="flex items-center justify-between mb-10">
         <div>
-          <h1 className="font-serif text-4xl gold-gradient">Store Admin</h1>
-          <p className="text-gray-400 text-sm mt-2">Manage songs, orders, and payment settings</p>
+          <h1 className="font-serif text-4xl gold-gradient">Command Center</h1>
+          <p className="text-gray-400 text-sm mt-2">Ad Studio, site settings, catalog, and orders</p>
         </div>
         <div className="flex gap-3">
           <Link href="/" className="text-sm text-gold hover:text-white transition-colors">

@@ -4,6 +4,7 @@ import { getAdVideoCoinPrice, previewAdClipCoinPrice } from '@/lib/ad-studio-pri
 import { getUserCoins } from '@/lib/user-store'
 import { isActiveFanClubMember } from '@/lib/fan-club'
 import { resolveSeedanceModel } from '@/lib/seedance-models'
+import { asPricingSettings, loadSiteSettingsMap } from '@/lib/site-settings'
 
 export async function GET(req: Request) {
   const user = await getCurrentUser()
@@ -19,12 +20,23 @@ export async function GET(req: Request) {
     const duration = Number(searchParams.get('duration')) || 6
 
     const pricing = await getAdVideoCoinPrice(model.key, duration)
+    const studioPricing = asPricingSettings((await loadSiteSettingsMap())['ad_studio.pricing'])
     const userCoins = await getUserCoins(user.id)
     const fanClub = await isActiveFanClubMember(user.id)
     const totalPriceCoins = pricing.priceCoins * scenes * variations
 
-    const litePreview = previewAdClipCoinPrice('lite', pricing.durationSeconds, pricing.discountPercent)
-    const fastPreview = previewAdClipCoinPrice('fast', pricing.durationSeconds, pricing.discountPercent)
+    const litePreview = previewAdClipCoinPrice(
+      'lite',
+      pricing.durationSeconds,
+      pricing.discountPercent,
+      studioPricing.liteBaseCoins
+    )
+    const fastPreview = previewAdClipCoinPrice(
+      'fast',
+      pricing.durationSeconds,
+      pricing.discountPercent,
+      studioPricing.fastBaseCoins
+    )
 
     return NextResponse.json({
       priceCoins: pricing.priceCoins,
@@ -48,9 +60,9 @@ export async function GET(req: Request) {
         fast: fastPreview,
       },
       durationPrices: {
-        6: previewAdClipCoinPrice(model.key, 6, pricing.discountPercent),
-        8: previewAdClipCoinPrice(model.key, 8, pricing.discountPercent),
-        10: previewAdClipCoinPrice(model.key, 10, pricing.discountPercent),
+        6: previewAdClipCoinPrice(model.key, 6, pricing.discountPercent, pricing.baseCoins),
+        8: previewAdClipCoinPrice(model.key, 8, pricing.discountPercent, pricing.baseCoins),
+        10: previewAdClipCoinPrice(model.key, 10, pricing.discountPercent, pricing.baseCoins),
       },
     })
   } catch (error) {

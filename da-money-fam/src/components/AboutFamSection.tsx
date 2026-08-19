@@ -1,8 +1,10 @@
 'use client'
 
 import Image from 'next/image'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { scrollRevealViewport } from '@/lib/motion'
+import { asAboutSettings } from '@/lib/site-settings'
 
 const HIGHLIGHTS = [
   {
@@ -20,6 +22,15 @@ const HIGHLIGHTS = [
 ] as const
 
 export default function AboutFamSection() {
+  const [imageUrl, setImageUrl] = useState('/images/collective/collective-14.jpg')
+
+  useEffect(() => {
+    fetch('/api/site-settings')
+      .then((r) => r.json())
+      .then((data) => setImageUrl(asAboutSettings(data.settings?.['homepage.about']).imageUrl))
+      .catch(() => {})
+  }, [])
+
   return (
     <section id="about" className="max-w-7xl mx-auto">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
@@ -30,14 +41,19 @@ export default function AboutFamSection() {
           transition={{ duration: 0.6 }}
           className="relative aspect-[4/5] sm:aspect-[16/10] lg:aspect-[4/5] overflow-hidden rounded-2xl border border-gold/30 shadow-2xl shadow-gold/10"
         >
-          <Image
-            src="/images/collective/collective-14.jpg"
-            alt="Da Money Fam Collective 14"
-            fill
-            sizes="(max-width: 1024px) 100vw, 50vw"
-            className="object-cover"
-            priority
-          />
+          {imageUrl.startsWith('http') ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imageUrl} alt="Da Money Fam Collective" className="absolute inset-0 h-full w-full object-cover" />
+          ) : (
+            <Image
+              src={imageUrl}
+              alt="Da Money Fam Collective"
+              fill
+              sizes="(max-width: 1024px) 100vw, 50vw"
+              className="object-cover"
+              priority
+            />
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
           <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8">
             <p className="text-gold text-[10px] font-bold tracking-[0.35em] uppercase mb-2">
