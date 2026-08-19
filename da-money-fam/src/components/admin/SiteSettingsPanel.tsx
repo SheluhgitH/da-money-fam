@@ -10,6 +10,11 @@ import {
   type HomepageAboutSettings,
   type HomepageHeroSettings,
 } from '@/lib/site-settings'
+import {
+  asHomepageSections,
+  HOMEPAGE_SECTION_META,
+  type HomepageSectionConfig,
+} from '@/lib/homepage-sections'
 
 export default function SiteSettingsPanel() {
   const [hero, setHero] = useState<HomepageHeroSettings>(asHeroSettings(null))
@@ -17,6 +22,7 @@ export default function SiteSettingsPanel() {
   const [pricing, setPricing] = useState<AdStudioPricingSettings>(asPricingSettings(null))
   const [hiddenIds, setHiddenIds] = useState('')
   const [packJson, setPackJson] = useState('')
+  const [sections, setSections] = useState<HomepageSectionConfig[]>(asHomepageSections(null))
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -30,6 +36,7 @@ export default function SiteSettingsPanel() {
         setPricing(asPricingSettings(s['ad_studio.pricing']))
         setHiddenIds(asHiddenStreamIds(s['streams.hidden_ids']).join('\n'))
         setPackJson(JSON.stringify(s['ad_studio.packs'] || {}, null, 2))
+        setSections(asHomepageSections(s['homepage.sections']))
       })
       .catch(() => setMessage('Failed to load settings'))
   }, [])
@@ -55,6 +62,7 @@ export default function SiteSettingsPanel() {
           'homepage.about': about,
           'ad_studio.pricing': pricing,
           'ad_studio.packs': packs,
+          'homepage.sections': sections,
           'streams.hidden_ids': hiddenIds
             .split(/[\n,]+/)
             .map((s) => s.trim())
@@ -135,6 +143,58 @@ export default function SiteSettingsPanel() {
           rows={8}
           className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-xs text-white font-mono"
         />
+      </section>
+
+      <section className="glass rounded-xl p-5 space-y-3">
+        <h3 className="font-serif text-xl text-gold">Homepage sections</h3>
+        <p className="text-[11px] text-gray-500">Reorder or hide blocks below the hero. Hero stays first.</p>
+        <ul className="space-y-2">
+          {sections.map((row, index) => (
+            <li
+              key={row.id}
+              className="flex items-center gap-2 bg-black/30 border border-white/10 rounded-lg px-3 py-2"
+            >
+              <span className="flex-1 text-sm text-white">{HOMEPAGE_SECTION_META[row.id].label}</span>
+              <button
+                type="button"
+                disabled={index === 0}
+                onClick={() => {
+                  const next = [...sections]
+                  ;[next[index - 1], next[index]] = [next[index], next[index - 1]]
+                  setSections(next)
+                }}
+                className="text-[10px] uppercase px-2 py-1 rounded bg-white/10 disabled:opacity-30"
+              >
+                Up
+              </button>
+              <button
+                type="button"
+                disabled={index === sections.length - 1}
+                onClick={() => {
+                  const next = [...sections]
+                  ;[next[index + 1], next[index]] = [next[index], next[index + 1]]
+                  setSections(next)
+                }}
+                className="text-[10px] uppercase px-2 py-1 rounded bg-white/10 disabled:opacity-30"
+              >
+                Down
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = [...sections]
+                  next[index] = { ...row, hidden: !row.hidden }
+                  setSections(next)
+                }}
+                className={`text-[10px] uppercase px-2 py-1 rounded ${
+                  row.hidden ? 'bg-white/10 text-gray-400' : 'bg-gold/20 text-gold'
+                }`}
+              >
+                {row.hidden ? 'Hidden' : 'Visible'}
+              </button>
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="glass rounded-xl p-5 space-y-3">

@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { randomUUID, createHash, timingSafeEqual } from 'crypto'
-import type { PaymentSettings, PurchaseOrder, MerchOrder, ServiceOrder, Song, PublicSong, UserProfile, UserStats } from '@/types/store'
+import type { PaymentSettings, PurchaseOrder, MerchOrder, MerchOrderStatus, ServiceOrder, ServiceOrderStatus, Song, PublicSong, UserProfile, UserStats } from '@/types/store'
 import { createServiceClient } from '@/lib/supabase/server'
 import { isMissingSupabaseTable } from '@/lib/supabase/errors'
 import { getPrivateAudioDir, getContentType, uploadAudioToStorage } from '@/lib/audio'
@@ -13,6 +13,19 @@ function isSupabaseConfigured() {
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
     process.env.SUPABASE_SERVICE_ROLE_KEY
   )
+}
+
+const MERCH_STATUSES: MerchOrderStatus[] = ['paid', 'packing', 'shipped', 'fulfilled', 'rejected']
+const SERVICE_STATUSES: ServiceOrderStatus[] = ['deposit_paid', 'in_progress', 'completed', 'cancelled']
+
+function asMerchStatus(value: unknown): MerchOrderStatus {
+  return MERCH_STATUSES.includes(value as MerchOrderStatus) ? (value as MerchOrderStatus) : 'paid'
+}
+
+function asServiceStatus(value: unknown): ServiceOrderStatus {
+  return SERVICE_STATUSES.includes(value as ServiceOrderStatus)
+    ? (value as ServiceOrderStatus)
+    : 'deposit_paid'
 }
 
 async function readJsonFile<T>(filename: string, fallback: T): Promise<T> {
@@ -525,7 +538,8 @@ export async function getMerchOrderByStripeSession(sessionId: string): Promise<M
         buyer_name: String(data.buyer_name),
         stripe_session_id: String(data.stripe_session_id),
         user_id: data.user_id ? String(data.user_id) : null,
-        status: 'paid',
+        status: asMerchStatus(data.status),
+        admin_notes: data.admin_notes ? String(data.admin_notes) : null,
         created_at: String(data.created_at),
       }
     }
@@ -554,7 +568,8 @@ export async function getAllMerchOrders(): Promise<MerchOrder[]> {
         buyer_name: String(row.buyer_name),
         stripe_session_id: String(row.stripe_session_id),
         user_id: row.user_id ? String(row.user_id) : null,
-        status: 'paid' as const,
+        status: asMerchStatus(row.status),
+        admin_notes: row.admin_notes ? String(row.admin_notes) : null,
         created_at: String(row.created_at),
       }))
     }
@@ -622,7 +637,8 @@ export async function createMerchOrder(input: {
         buyer_name: String(data.buyer_name),
         stripe_session_id: String(data.stripe_session_id),
         user_id: data.user_id ? String(data.user_id) : null,
-        status: 'paid',
+        status: asMerchStatus(data.status),
+        admin_notes: data.admin_notes ? String(data.admin_notes) : null,
         created_at: String(data.created_at),
       }
     }
@@ -633,6 +649,46 @@ export async function createMerchOrder(input: {
   orders.unshift(order)
   await writeJsonFile('merch-orders.json', orders)
   return order
+}
+
+export async function updateMerchOrder(
+  id: string,
+  updates: { status?: MerchOrderStatus; admin_notes?: string }
+): Promise<MerchOrder | null> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('merch_orders')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .maybeSingle()
+    if (error && !isMissingSupabaseTable(error)) throw new Error(error.message)
+    if (data) {
+      return {
+        id: String(data.id),
+        merch_id: String(data.merch_id),
+        merch_name: String(data.merch_name),
+        price: Number(data.price),
+        size: data.size ? String(data.size) : null,
+        shipping_address: data.shipping_address ? String(data.shipping_address) : null,
+        buyer_email: String(data.buyer_email),
+        buyer_name: String(data.buyer_name),
+        stripe_session_id: String(data.stripe_session_id),
+        user_id: data.user_id ? String(data.user_id) : null,
+        status: asMerchStatus(data.status),
+        admin_notes: data.admin_notes ? String(data.admin_notes) : null,
+        created_at: String(data.created_at),
+      }
+    }
+  }
+
+  const orders = await readJsonFile<MerchOrder[]>('merch-orders.json', [])
+  const idx = orders.findIndex((o) => o.id === id)
+  if (idx < 0) return null
+  orders[idx] = { ...orders[idx], ...updates }
+  await writeJsonFile('merch-orders.json', orders)
+  return orders[idx]
 }
 
 export async function getAllServiceOrders(): Promise<ServiceOrder[]> {
@@ -652,7 +708,8 @@ export async function getAllServiceOrders(): Promise<ServiceOrder[]> {
         buyer_name: String(row.buyer_name),
         stripe_session_id: String(row.stripe_session_id),
         user_id: row.user_id ? String(row.user_id) : null,
-        status: 'deposit_paid' as const,
+        status: asServiceStatus(row.status),
+        admin_notes: row.admin_notes ? String(row.admin_notes) : null,
         created_at: String(row.created_at),
       }))
     }
@@ -710,7 +767,8 @@ export async function createServiceOrder(input: {
         buyer_name: String(data.buyer_name),
         stripe_session_id: String(data.stripe_session_id),
         user_id: data.user_id ? String(data.user_id) : null,
-        status: 'deposit_paid',
+        status: asServiceStatus(data.status),
+        admin_notes: data.admin_notes ? String(data.admin_notes) : null,
         created_at: String(data.created_at),
       }
     }
@@ -721,6 +779,44 @@ export async function createServiceOrder(input: {
   orders.unshift(order)
   await writeJsonFile('service-orders.json', orders)
   return order
+}
+
+export async function updateServiceOrder(
+  id: string,
+  updates: { status?: ServiceOrderStatus; admin_notes?: string }
+): Promise<ServiceOrder | null> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('service_orders')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .maybeSingle()
+    if (error && !isMissingSupabaseTable(error)) throw new Error(error.message)
+    if (data) {
+      return {
+        id: String(data.id),
+        package_slug: String(data.package_slug),
+        package_name: String(data.package_name),
+        deposit_amount: Number(data.deposit_amount),
+        buyer_email: String(data.buyer_email),
+        buyer_name: String(data.buyer_name),
+        stripe_session_id: String(data.stripe_session_id),
+        user_id: data.user_id ? String(data.user_id) : null,
+        status: asServiceStatus(data.status),
+        admin_notes: data.admin_notes ? String(data.admin_notes) : null,
+        created_at: String(data.created_at),
+      }
+    }
+  }
+
+  const orders = await readJsonFile<ServiceOrder[]>('service-orders.json', [])
+  const idx = orders.findIndex((o) => o.id === id)
+  if (idx < 0) return null
+  orders[idx] = { ...orders[idx], ...updates }
+  await writeJsonFile('service-orders.json', orders)
+  return orders[idx]
 }
 
 export async function saveUploadedFile(

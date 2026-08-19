@@ -134,6 +134,9 @@ export default function AdStudioShell({
               </span>
             </button>
           ))}
+          <p className="w-full text-[10px] text-white/35">
+            Lite is cheaper and faster drafts. Fast is higher quality, more Coinz.
+          </p>
           <button
             type="button"
             onClick={() => setBuyOpen(false)}

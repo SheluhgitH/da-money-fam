@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import { SEEDANCE_MODELS } from '@/lib/seedance-models'
 import { COIN_PACKAGES, type CoinPackage } from '@/lib/coin-packages'
 import { HIDDEN_STREAM_VIDEO_IDS } from '@/data/kick-videos'
+import { DEFAULT_HOMEPAGE_SECTIONS } from '@/lib/homepage-sections'
 
 export type SiteSettingsMap = Record<string, unknown>
 
@@ -55,6 +56,7 @@ export function defaultSiteSettings(): SiteSettingsMap {
     'homepage.about': {
       imageUrl: '/images/collective/collective-14.jpg',
     },
+    'homepage.sections': DEFAULT_HOMEPAGE_SECTIONS,
     'streams.hidden_ids': Array.from(HIDDEN_STREAM_VIDEO_IDS),
   }
 }

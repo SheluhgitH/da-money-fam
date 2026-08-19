@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import type { OrderStatus, PaymentSettings, PurchaseOrder, MerchOrder, ServiceOrder, Song } from '@/types/store'
+import type { OrderStatus, PaymentSettings, PurchaseOrder, MerchOrder, MerchOrderStatus, ServiceOrder, ServiceOrderStatus, Song } from '@/types/store'
 import NewSongForm from './NewSongForm'
 import EditSongForm from './EditSongForm'
 import AdStudioAdmin from './AdStudioAdmin'
@@ -48,6 +48,7 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [merchOrders, setMerchOrders] = useState<MerchOrder[]>([])
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([])
+  const [studioStats, setStudioStats] = useState<{ today: number; failRate: number; failedToday: number } | null>(null)
   const [settings, setSettings] = useState<PaymentSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -56,12 +57,13 @@ export default function AdminDashboard() {
     setLoading(true)
     setMessage('')
     try {
-      const [songsRes, ordersRes, merchRes, serviceRes, settingsRes] = await Promise.all([
+      const [songsRes, ordersRes, merchRes, serviceRes, settingsRes, studioRes] = await Promise.all([
         fetch('/api/admin/songs'),
         fetch('/api/admin/orders'),
         fetch('/api/admin/merch-orders'),
         fetch('/api/admin/service-orders'),
         fetch('/api/admin/payment-settings'),
+        fetch('/api/admin/ad-studio?limit=1'),
       ])
 
       if (songsRes.status === 401 || ordersRes.status === 401) {
@@ -75,6 +77,7 @@ export default function AdminDashboard() {
       const merchData = merchRes.ok ? await merchRes.json() : { orders: [] }
       const serviceData = serviceRes.ok ? await serviceRes.json() : { orders: [] }
       const settingsData = await settingsRes.json()
+      const studioData = studioRes.ok ? await studioRes.json() : { stats: null }
 
       if (!songsRes.ok) {
         setMessage(songsData.error || 'Failed to load songs')
@@ -85,6 +88,7 @@ export default function AdminDashboard() {
       setMerchOrders(merchData.orders || [])
       setServiceOrders(serviceData.orders || [])
       setSettings(settingsData.settings || null)
+      setStudioStats(studioData.stats || null)
     } catch (error) {
       console.error(error)
       setMessage('Failed to load admin data')
@@ -247,6 +251,60 @@ export default function AdminDashboard() {
     setMessage('Download link copied to clipboard')
   }
 
+  const updateMerch = async (order: MerchOrder, status: MerchOrderStatus, sendEmail = false) => {
+    const res = await fetch('/api/admin/merch-orders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: order.id, status, admin_notes: order.admin_notes, send_email: sendEmail }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) {
+      setMessage(`Merch order ${status}`)
+      loadData()
+    } else {
+      setMessage(data.error || 'Failed to update merch order')
+    }
+  }
+
+  const saveMerchNotes = async (order: MerchOrder, notes: string) => {
+    const res = await fetch('/api/admin/merch-orders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: order.id, admin_notes: notes }),
+    })
+    if (res.ok) {
+      setMessage('Merch notes saved')
+      loadData()
+    }
+  }
+
+  const updateService = async (order: ServiceOrder, status: ServiceOrderStatus, sendEmail = false) => {
+    const res = await fetch('/api/admin/service-orders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: order.id, status, admin_notes: order.admin_notes, send_email: sendEmail }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) {
+      setMessage(`Service order ${status}`)
+      loadData()
+    } else {
+      setMessage(data.error || 'Failed to update service order')
+    }
+  }
+
+  const saveServiceNotes = async (order: ServiceOrder, notes: string) => {
+    const res = await fetch('/api/admin/service-orders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: order.id, admin_notes: notes }),
+    })
+    if (res.ok) {
+      setMessage('Service notes saved')
+      loadData()
+    }
+  }
+
   const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!settings) return
@@ -324,6 +382,11 @@ export default function AdminDashboard() {
             <StatCard label="Est. Revenue" value={`$${stats.revenue.toFixed(2)}`} hint={`${stats.delivered} delivered`} />
             <StatCard label="Merch Orders" value={stats.merchCount} hint={`$${stats.merchRevenue.toFixed(2)} merch`} />
             <StatCard label="Service Deposits" value={stats.serviceCount} hint={`$${stats.serviceRevenue.toFixed(2)} deposits`} />
+            <StatCard
+              label="Ad Studio today"
+              value={studioStats?.today ?? '—'}
+              hint={studioStats ? `${studioStats.failedToday} failed · ${studioStats.failRate}% fail` : 'Load Ad Studio'}
+            />
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -491,26 +554,20 @@ export default function AdminDashboard() {
             <p className="text-gray-500">No merch orders yet.</p>
           ) : (
             merchOrders.map((order) => (
-              <div key={order.id} className="glass rounded-xl p-4 space-y-2">
-                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <h3 className="font-bold">{order.merch_name}</h3>
-                    <p className="text-sm text-gray-400">
-                      {order.buyer_name} · {order.buyer_email}
-                    </p>
-                    {order.size && (
-                      <p className="text-xs text-gold mt-1 uppercase tracking-wider">Size: {order.size}</p>
-                    )}
-                    <p className="text-xs text-gray-500 mt-1">{formatDate(order.created_at)}</p>
-                    {order.shipping_address && (
-                      <p className="text-xs text-gray-400 mt-2 whitespace-pre-line">
-                        Ship to: {order.shipping_address}
-                      </p>
-                    )}
-                  </div>
-                  <p className="text-gold font-mono text-lg shrink-0">${order.price.toFixed(2)}</p>
-                </div>
-              </div>
+              <CommerceOrderCard
+                key={order.id}
+                title={order.merch_name}
+                subtitle={`${order.buyer_name} · ${order.buyer_email}`}
+                extra={order.size ? `Size: ${order.size}` : undefined}
+                address={order.shipping_address}
+                createdAt={order.created_at}
+                amount={`$${order.price.toFixed(2)}`}
+                status={order.status}
+                notes={order.admin_notes || ''}
+                statuses={['paid', 'packing', 'shipped', 'fulfilled', 'rejected']}
+                onStatus={(status, email) => updateMerch(order, status as MerchOrderStatus, email)}
+                onSaveNotes={(notes) => saveMerchNotes(order, notes)}
+              />
             ))
           )}
         </div>
@@ -520,19 +577,18 @@ export default function AdminDashboard() {
             <p className="text-gray-500">No service deposits yet.</p>
           ) : (
             serviceOrders.map((order) => (
-              <div key={order.id} className="glass rounded-xl p-4 space-y-2">
-                <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <h3 className="font-bold">{order.package_name}</h3>
-                    <p className="text-sm text-gray-400">
-                      {order.buyer_name} · {order.buyer_email}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">{formatDate(order.created_at)}</p>
-                    <p className="text-xs text-gold mt-1 uppercase tracking-wider">{order.status}</p>
-                  </div>
-                  <p className="text-gold font-mono text-lg shrink-0">${order.deposit_amount.toFixed(2)}</p>
-                </div>
-              </div>
+              <CommerceOrderCard
+                key={order.id}
+                title={order.package_name}
+                subtitle={`${order.buyer_name} · ${order.buyer_email}`}
+                createdAt={order.created_at}
+                amount={`$${order.deposit_amount.toFixed(2)}`}
+                status={order.status}
+                notes={order.admin_notes || ''}
+                statuses={['deposit_paid', 'in_progress', 'completed', 'cancelled']}
+                onStatus={(status, email) => updateService(order, status as ServiceOrderStatus, email)}
+                onSaveNotes={(notes) => saveServiceNotes(order, notes)}
+              />
             ))
           )}
         </div>
@@ -695,6 +751,87 @@ function OrderCard({
             Save
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function CommerceOrderCard({
+  title,
+  subtitle,
+  extra,
+  address,
+  createdAt,
+  amount,
+  status,
+  notes: initialNotes,
+  statuses,
+  onStatus,
+  onSaveNotes,
+}: {
+  title: string
+  subtitle: string
+  extra?: string
+  address?: string | null
+  createdAt: string
+  amount: string
+  status: string
+  notes: string
+  statuses: string[]
+  onStatus: (status: string, sendEmail: boolean) => void
+  onSaveNotes: (notes: string) => void
+}) {
+  const [notes, setNotes] = useState(initialNotes)
+  return (
+    <div className="glass rounded-xl p-4 space-y-3">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h3 className="font-bold">{title}</h3>
+          <p className="text-sm text-gray-400">{subtitle}</p>
+          {extra && <p className="text-xs text-gold mt-1 uppercase tracking-wider">{extra}</p>}
+          <p className="text-xs text-gray-500 mt-1">{formatDate(createdAt)}</p>
+          {address && (
+            <p className="text-xs text-gray-400 mt-2 whitespace-pre-line">Ship to: {address}</p>
+          )}
+          <p className="text-xs text-gold mt-2 uppercase tracking-wider">{status.replace('_', ' ')}</p>
+        </div>
+        <p className="text-gold font-mono text-lg shrink-0">{amount}</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {statuses.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => onStatus(s, false)}
+            className={`text-[10px] uppercase tracking-wider px-3 py-1 rounded-full ${
+              status === s ? 'bg-gold text-black' : 'bg-white/10 text-gray-300'
+            }`}
+          >
+            {s.replace('_', ' ')}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => onStatus(status, true)}
+          className="text-[10px] uppercase tracking-wider px-3 py-1 rounded-full bg-blue-500/20 text-blue-200"
+        >
+          Email buyer
+        </button>
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Internal notes"
+          className="flex-1 bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm"
+        />
+        <button
+          type="button"
+          onClick={() => onSaveNotes(notes)}
+          className="text-xs px-3 py-2 rounded-full bg-white/10 hover:bg-white/20 shrink-0"
+        >
+          Save
+        </button>
       </div>
     </div>
   )

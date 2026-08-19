@@ -105,6 +105,47 @@ export async function sendServiceAdminNotification(input: {
   })
 }
 
+export async function sendMerchStatusEmail(order: {
+  buyer_email: string
+  buyer_name: string
+  merch_name: string
+  status: string
+  size?: string | null
+}) {
+  const resend = getResend()
+  if (!resend) return
+  await resend.emails.send({
+    from: FROM,
+    to: order.buyer_email,
+    subject: `DMF merch update: ${order.merch_name}`,
+    html: `
+      <h2>Order update</h2>
+      <p>Hi ${order.buyer_name},</p>
+      <p>Your order for <strong>${order.merch_name}</strong>${order.size ? ` (${order.size})` : ''} is now <strong>${order.status.replace('_', ' ')}</strong>.</p>
+    `,
+  })
+}
+
+export async function sendServiceStatusEmail(order: {
+  buyer_email: string
+  buyer_name: string
+  package_name: string
+  status: string
+}) {
+  const resend = getResend()
+  if (!resend) return
+  await resend.emails.send({
+    from: FROM,
+    to: order.buyer_email,
+    subject: `DMF services update: ${order.package_name}`,
+    html: `
+      <h2>Project update</h2>
+      <p>Hi ${order.buyer_name},</p>
+      <p>Your <strong>${order.package_name}</strong> project is now <strong>${order.status.replace('_', ' ')}</strong>.</p>
+    `,
+  })
+}
+
 export async function sendWallpaperWelcomeEmail(input: {
   email: string
   packUrl: string

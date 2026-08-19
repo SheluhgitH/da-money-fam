@@ -70,6 +70,9 @@ export interface PurchaseOrder {
   updated_at: string
 }
 
+export type MerchOrderStatus = 'paid' | 'packing' | 'shipped' | 'fulfilled' | 'rejected'
+export type ServiceOrderStatus = 'deposit_paid' | 'in_progress' | 'completed' | 'cancelled'
+
 export interface MerchOrder {
   id: string
   merch_id: string
@@ -81,7 +84,8 @@ export interface MerchOrder {
   buyer_name: string
   stripe_session_id: string
   user_id?: string | null
-  status: 'paid'
+  status: MerchOrderStatus
+  admin_notes?: string | null
   created_at: string
 }
 
@@ -94,7 +98,8 @@ export interface ServiceOrder {
   buyer_name: string
   stripe_session_id: string
   user_id?: string | null
-  status: 'deposit_paid'
+  status: ServiceOrderStatus
+  admin_notes?: string | null
   created_at: string
 }
 
