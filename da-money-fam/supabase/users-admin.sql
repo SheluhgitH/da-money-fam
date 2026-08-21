@@ -2,7 +2,9 @@
 
 alter table public.profiles
   add column if not exists email text,
-  add column if not exists fan_club_manual boolean not null default false;
+  add column if not exists fan_club_manual boolean not null default false,
+  add column if not exists created_at timestamptz not null default now(),
+  add column if not exists avatar_url text;
 
 update public.profiles p
 set email = u.email

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { listFeaturedGenerations } from '@/lib/ad-studio-jobs'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const rows = await listFeaturedGenerations(12)

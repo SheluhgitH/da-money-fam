@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/user'
+import { completeGenerationByJobId } from '@/lib/ad-studio-jobs'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { jobId: string } }
 ) {
   const user = await getCurrentUser()
@@ -42,6 +45,21 @@ export async function GET(
       status === 'completed' || status === 'succeeded'
         ? `/api/video/${jobId}/content`
         : null
+
+    if (videoUrl) {
+      const { searchParams } = new URL(req.url)
+      const generationId = searchParams.get('generationId')
+      try {
+        await completeGenerationByJobId({
+          userId: user.id,
+          jobId,
+          videoUrl,
+          generationId,
+        })
+      } catch (e) {
+        console.error('Failed to auto-complete generation:', e)
+      }
+    }
 
     return NextResponse.json({
       status,

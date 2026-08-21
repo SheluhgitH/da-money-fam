@@ -245,3 +245,53 @@ export async function updateAdStudioGeneration(
   await writeLocal(rows)
   return rows[idx]
 }
+
+/**
+ * Mark a generation completed when a Seedance job finishes.
+ * Prefers generationId when provided; otherwise finds a row whose scenes contain jobId.
+ */
+export async function completeGenerationByJobId(input: {
+  userId: string
+  jobId: string
+  videoUrl: string
+  generationId?: string | null
+}): Promise<AdStudioGeneration | null> {
+  const { userId, jobId, videoUrl, generationId } = input
+
+  let target: AdStudioGeneration | null = null
+  if (generationId) {
+    target = await getAdStudioGeneration(userId, generationId)
+  }
+
+  if (!target) {
+    const rows = await listAdStudioGenerations(userId, 40)
+    target =
+      rows.find(
+        (r) =>
+          (r.status === 'processing' || r.status === 'pending' || !r.video_urls?.length) &&
+          r.scenes.some((s) => s.jobId === jobId)
+      ) || null
+  }
+
+  if (!target) return null
+
+  // Already completed with this URL — no-op
+  if (target.status === 'completed' && target.video_urls.includes(videoUrl)) {
+    return target
+  }
+
+  const urls = target.video_urls.includes(videoUrl)
+    ? target.video_urls
+    : [...target.video_urls, videoUrl]
+
+  const scenes = target.scenes.map((s) =>
+    s.jobId === jobId ? { ...s, videoUrl, status: 'completed' as const } : s
+  )
+
+  return updateAdStudioGeneration(userId, target.id, {
+    status: 'completed',
+    video_urls: urls,
+    thumbnail_url: urls[0] || target.thumbnail_url,
+    scenes,
+  })
+}

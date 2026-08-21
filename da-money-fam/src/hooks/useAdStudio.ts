@@ -80,7 +80,8 @@ async function extractLastFrame(videoUrl: string): Promise<string | null> {
 
 async function pollJob(
   jobId: string,
-  signal: AbortSignal
+  signal: AbortSignal,
+  generationId?: string | null
 ): Promise<{ status: string; videoUrl: string | null }> {
   const start = Date.now()
   let delay = 2000
@@ -90,7 +91,8 @@ async function pollJob(
       throw new Error('Generation timed out. Please try again.')
     }
 
-    const res = await fetch(`/api/video/${jobId}`, { signal })
+    const qs = generationId ? `?generationId=${encodeURIComponent(generationId)}` : ''
+    const res = await fetch(`/api/video/${jobId}${qs}`, { signal })
     if (!res.ok) {
       await new Promise((r) => setTimeout(r, delay))
       delay = Math.min(8000, delay + 1000)
@@ -585,7 +587,7 @@ export function useAdStudio(initialBrief = '') {
             jobId = contData.jobId
           }
 
-          const polled = await pollJob(jobId, controller.signal)
+          const polled = await pollJob(jobId, controller.signal, storyboardId)
           if (!polled.videoUrl) throw new Error('No video URL returned')
 
           completedUrls.push(polled.videoUrl)
@@ -650,12 +652,13 @@ export function useAdStudio(initialBrief = '') {
 
         const jobs: Array<{ jobId: string }> = data.jobs || [{ jobId: data.jobId }]
         const urls: string[] = []
+        const generationId = data.generationId as string | undefined
 
         for (let i = 0; i < jobs.length; i++) {
           setStatusText(
             jobs.length > 1 ? `Variant ${i + 1} of ${jobs.length} · Rendering…` : 'Rendering…'
           )
-          const polled = await pollJob(jobs[i].jobId, controller.signal)
+          const polled = await pollJob(jobs[i].jobId, controller.signal, generationId)
           if (polled.videoUrl) urls.push(polled.videoUrl)
         }
 
