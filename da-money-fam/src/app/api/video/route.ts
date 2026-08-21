@@ -28,6 +28,7 @@ export async function POST(req: Request) {
     variations,
     saveToLibrary,
     model: modelInput,
+    enhancedPrompt,
   } = body
 
   const userBrief =
@@ -83,6 +84,10 @@ export async function POST(req: Request) {
           brief: userBrief,
           creative: creative as Partial<CreativeSelections> | undefined,
           enhance: wantsEnhance,
+          enhancedPrompt:
+            typeof enhancedPrompt === 'string' && enhancedPrompt.trim()
+              ? enhancedPrompt.trim()
+              : null,
           duration,
           aspect_ratio,
           reference_images: refSource,

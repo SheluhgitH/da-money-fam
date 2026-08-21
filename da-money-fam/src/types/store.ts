@@ -51,6 +51,27 @@ export interface SongComment {
   level?: number
   priority?: boolean
   fan_club?: boolean
+  active_cosmetics?: string[]
+}
+
+export interface UserCosmetic {
+  id: string
+  user_id: string
+  cosmetic_slug: string
+  enabled: boolean
+  revealed_at: string | null
+  granted_at: string
+  granted_by: string | null
+  admin_note: string | null
+  gift_message: string | null
+}
+
+export interface UserProfile {
+  id: string
+  display_name: string | null
+  avatar_url: string | null
+  created_at: string
+  active_cosmetics?: string[]
 }
 
 export interface PurchaseOrder {
@@ -115,13 +136,6 @@ export interface StoreData {
   songs: Song[]
   orders: PurchaseOrder[]
   payment_settings: PaymentSettings
-}
-
-export interface UserProfile {
-  id: string
-  display_name: string | null
-  avatar_url: string | null
-  created_at: string
 }
 
 export interface UserStats {

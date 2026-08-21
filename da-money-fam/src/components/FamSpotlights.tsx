@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import { scrollRevealViewport } from '@/lib/motion'
+import DisplayNameFlair from '@/components/profile/DisplayNameFlair'
 
 type Spotlight = {
   display_name: string
   avatar_url: string | null
   level: number
+  active_cosmetics?: string[]
 }
 
 export default function FamSpotlights() {
@@ -58,7 +60,14 @@ export default function FamSpotlights() {
                 L{fan.level}
               </span>
             </div>
-            <p className="text-white text-sm font-semibold truncate">{fan.display_name}</p>
+            <p className="text-white text-sm font-semibold truncate">
+              <DisplayNameFlair
+                name={fan.display_name}
+                cosmetics={fan.active_cosmetics}
+                size="sm"
+                nameClassName="text-white text-sm font-semibold"
+              />
+            </p>
             <p className="text-purple-300 text-[9px] font-bold uppercase tracking-wider mt-1">Fam</p>
           </motion.div>
         ))}

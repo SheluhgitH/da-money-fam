@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthProvider'
 import UserAvatar from '@/components/UserAvatar'
 import DailyCheckInPrompt from '@/components/DailyCheckInPrompt'
 import ReferralHub from '@/components/ReferralHub'
+import DisplayNameFlair from '@/components/profile/DisplayNameFlair'
 import { XP_PER_LEVEL } from '@/lib/fan-perks'
 import type { PublicSong, UserProfile, UserStats } from '@/types/store'
 
@@ -21,6 +22,7 @@ export default function ProfilePage() {
   const [ownedCount, setOwnedCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [activeCosmetics, setActiveCosmetics] = useState<string[]>([])
 
   const loadStats = () => {
     fetch('/api/user/stats')
@@ -47,19 +49,21 @@ export default function ProfilePage() {
       fetch('/api/favorites'),
       fetch('/api/songs'),
       fetch('/api/library'),
+      fetch('/api/user/cosmetics'),
     ])
-      .then(async ([profileRes, statsRes, favRes, songsRes, libraryRes]) => {
+      .then(async ([profileRes, statsRes, favRes, songsRes, libraryRes, cosmeticsRes]) => {
         if (!profileRes.ok) {
           const body = await profileRes.json().catch(() => ({}))
           throw new Error(body.error || 'Failed to load profile')
         }
 
-        const [profileData, statsData, favData, songsData, libraryData] = await Promise.all([
+        const [profileData, statsData, favData, songsData, libraryData, cosmeticsData] = await Promise.all([
           profileRes.json(),
           statsRes.ok ? statsRes.json() : { stats: null },
           favRes.ok ? favRes.json() : { favorites: [] },
           songsRes.ok ? songsRes.json() : { songs: [] },
           libraryRes.ok ? libraryRes.json() : { library: [] },
+          cosmeticsRes.ok ? cosmeticsRes.json() : { active: [] },
         ])
 
         setProfile(profileData.profile || null)
@@ -69,6 +73,7 @@ export default function ProfilePage() {
         const allSongs: PublicSong[] = songsData.songs || []
         setFavorites(allSongs.filter((s) => favoriteIds.includes(s.id)))
         setOwnedCount((libraryData.library || []).length)
+        setActiveCosmetics(Array.isArray(cosmeticsData.active) ? cosmeticsData.active : [])
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : 'Failed to load profile')
@@ -132,7 +137,12 @@ export default function ProfilePage() {
             <div className="text-center sm:text-left flex-1">
               <p className="text-gold text-xs uppercase tracking-[4px] mb-2">DMF Fan Profile</p>
               <h1 className="font-serif text-3xl md:text-4xl gold-gradient mb-1 flex items-center justify-center sm:justify-start gap-3 flex-wrap">
-                {profile.display_name || 'Fan'}
+                <DisplayNameFlair
+                  name={profile.display_name || 'Fan'}
+                  cosmetics={activeCosmetics}
+                  size="lg"
+                  nameClassName="font-serif text-3xl md:text-4xl gold-gradient"
+                />
                 {stats && stats.level >= 2 && (
                   <span className="text-[10px] font-extrabold uppercase tracking-wider bg-purple-500/30 text-purple-200 border border-purple-400/40 px-2.5 py-1 rounded-full">
                     Fam Regular

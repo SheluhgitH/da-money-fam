@@ -3,10 +3,13 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAdStudio } from '@/hooks/useAdStudio'
+import { useImageStudio } from '@/hooks/useImageStudio'
 import GenerationLibrary from './GenerationLibrary'
 import PreviewCanvas from './PreviewCanvas'
 import PromptDock from './PromptDock'
-import { COIN_PACKAGES, type CoinPackage } from '@/lib/coin-packages'
+import ImageStudioPanel from './ImageStudioPanel'
+import ImageLibrary from './ImageLibrary'
+import { COIN_PACKAGES, packAdCopy, type CoinPackage } from '@/lib/coin-packages'
 import { packsFromSettings } from '@/lib/site-settings'
 
 export default function AdStudioShell({
@@ -17,6 +20,8 @@ export default function AdStudioShell({
   checkoutStatus?: string | null
 }) {
   const studio = useAdStudio(initialBrief)
+  const images = useImageStudio()
+  const [studioTab, setStudioTab] = useState<'video' | 'images'>('video')
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [buyOpen, setBuyOpen] = useState(false)
   const [packs, setPacks] = useState<CoinPackage[]>(COIN_PACKAGES)
@@ -35,6 +40,7 @@ export default function AdStudioShell({
     let cancelled = false
     ;(async () => {
       await studio.fetchPricing()
+      await images.fetchQuote()
       if (!cancelled) {
         setToast('Coinz updated')
         window.setTimeout(() => setToast(null), 4000)
@@ -46,7 +52,6 @@ export default function AdStudioShell({
     return () => {
       cancelled = true
     }
-    // Only run when returning from Stripe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkoutStatus])
 
@@ -68,6 +73,18 @@ export default function AdStudioShell({
     }
   }
 
+  const useImageForVideo = (url: string) => {
+    studio.addReferenceFromUrl(url, true)
+    setStudioTab('video')
+    setToast('Image added as video reference')
+    window.setTimeout(() => setToast(null), 3000)
+  }
+
+  const balance =
+    studioTab === 'images'
+      ? images.quote?.balance
+      : studio.pricing?.balance
+
   return (
     <div className="h-[100dvh] flex flex-col bg-[#050505] text-white overflow-hidden">
       <div className="pointer-events-none fixed inset-0 opacity-40 bg-[radial-gradient(ellipse_at_top,_rgba(255,215,0,0.08),_transparent_50%)]" />
@@ -78,7 +95,31 @@ export default function AdStudioShell({
           </Link>
           <span className="text-white/20">/</span>
           <h1 className="text-sm font-serif text-gold truncate">Ad Studio</h1>
-          {studio.statusText && (
+          <div className="flex gap-1 ml-1">
+            <button
+              type="button"
+              onClick={() => setStudioTab('video')}
+              className={`text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                studioTab === 'video'
+                  ? 'bg-gold text-black border-gold'
+                  : 'border-gold/25 text-gold/70'
+              }`}
+            >
+              Video
+            </button>
+            <button
+              type="button"
+              onClick={() => setStudioTab('images')}
+              className={`text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                studioTab === 'images'
+                  ? 'bg-gold text-black border-gold'
+                  : 'border-gold/25 text-gold/70'
+              }`}
+            >
+              Images
+            </button>
+          </div>
+          {studioTab === 'video' && studio.statusText && (
             <span className="hidden sm:inline text-[10px] uppercase tracking-widest text-gold/60 border border-gold/20 px-2 py-1 rounded-full truncate animate-pulse">
               {studio.statusText}
             </span>
@@ -97,10 +138,10 @@ export default function AdStudioShell({
           >
             Library
           </button>
-          {studio.pricing?.isAuthenticated && (
+          {(studio.pricing?.isAuthenticated || images.quote) && (
             <>
               <span className="text-[10px] font-mono text-gold/80 border border-gold/20 px-2 py-1 rounded-md">
-                {studio.pricing.balance} Coinz
+                {balance ?? '—'} Coinz
               </span>
               <button
                 type="button"
@@ -117,7 +158,7 @@ export default function AdStudioShell({
         </div>
       </header>
 
-      {buyOpen && studio.pricing?.isAuthenticated && (
+      {buyOpen && (
         <div className="shrink-0 border-b border-gold/15 bg-black/80 px-4 py-3 flex flex-wrap gap-2">
           {packs.map((pkg) => (
             <button
@@ -128,16 +169,13 @@ export default function AdStudioShell({
               className="px-3 py-2 rounded-lg border border-gold/30 text-left hover:bg-gold hover:text-black transition-colors disabled:opacity-50"
             >
               <span className="block text-[10px] font-bold uppercase tracking-wider">
-                {buyingId === pkg.id ? 'Redirecting…' : `≈ ${pkg.liteAds} Lite · ${pkg.fastAds} Fast`}
+                {buyingId === pkg.id ? 'Redirecting…' : packAdCopy(pkg)}
               </span>
               <span className="block text-[9px] opacity-70">
                 {pkg.amount} Coinz · ${pkg.price}
               </span>
             </button>
           ))}
-          <p className="w-full text-[10px] text-white/35">
-            Lite is cheaper and faster drafts. Fast is higher quality, more Coinz.
-          </p>
           <button
             type="button"
             onClick={() => setBuyOpen(false)}
@@ -148,7 +186,7 @@ export default function AdStudioShell({
         </div>
       )}
 
-      {!studio.pricing?.isAuthenticated ? (
+      {!studio.pricing?.isAuthenticated && studioTab === 'video' ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
           <p className="text-white/60 text-sm">Sign in to generate ads with Coinz.</p>
           <Link
@@ -157,6 +195,21 @@ export default function AdStudioShell({
           >
             Sign in
           </Link>
+        </div>
+      ) : studioTab === 'images' ? (
+        <div className="flex-1 flex min-h-0 relative z-10">
+          <aside className="hidden md:flex w-64 lg:w-72 border-r border-gold/15 flex-col bg-black/50 backdrop-blur-sm">
+            <p className="px-3 pt-3 text-[10px] uppercase tracking-widest text-gold/50">Images</p>
+            <ImageLibrary
+              items={images.library}
+              onSelect={(url) => images.setPreviewUrl(url)}
+              onEdit={(url) => images.useImageAsEdit(url)}
+              onUseForVideo={useImageForVideo}
+            />
+          </aside>
+          <div className="flex-1 flex flex-col min-w-0 min-h-0">
+            <ImageStudioPanel images={images} onUseForVideo={useImageForVideo} />
+          </div>
         </div>
       ) : (
         <div className="flex-1 flex min-h-0 relative z-10">
@@ -179,7 +232,25 @@ export default function AdStudioShell({
             className="absolute inset-y-0 left-0 w-[80%] max-w-xs bg-matte-black border-r border-gold/20"
             onClick={(e) => e.stopPropagation()}
           >
-            <GenerationLibrary studio={studio} onCloseMobile={() => setLibraryOpen(false)} />
+            {studioTab === 'images' ? (
+              <ImageLibrary
+                items={images.library}
+                onSelect={(url) => {
+                  images.setPreviewUrl(url)
+                  setLibraryOpen(false)
+                }}
+                onEdit={(url) => {
+                  images.useImageAsEdit(url)
+                  setLibraryOpen(false)
+                }}
+                onUseForVideo={(url) => {
+                  useImageForVideo(url)
+                  setLibraryOpen(false)
+                }}
+              />
+            ) : (
+              <GenerationLibrary studio={studio} onCloseMobile={() => setLibraryOpen(false)} />
+            )}
           </div>
         </div>
       )}

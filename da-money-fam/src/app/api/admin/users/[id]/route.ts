@@ -6,9 +6,13 @@ import {
   getCoinzLedger,
   getUserCoins,
   getUserStats,
+  getUserCosmetics,
+  grantCosmetic,
+  revokeCosmetic,
 } from '@/lib/user-store'
 import { setManualFanClub, getFanSubscription } from '@/lib/fan-club'
 import { writeAdminAudit } from '@/lib/site-settings'
+import { isCosmeticSlug, sanitizeGiftMessage } from '@/lib/profile-cosmetics'
 import { Resend } from 'resend'
 
 export const dynamic = 'force-dynamic'
@@ -44,7 +48,7 @@ export async function GET(
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
-  const [stats, coinz, ledger, sub, songOrders, merchOrders, serviceOrders, gens] =
+  const [stats, coinz, ledger, sub, songOrders, merchOrders, serviceOrders, gens, cosmetics] =
     await Promise.all([
       getUserStats(id),
       getUserCoins(id),
@@ -72,6 +76,7 @@ export async function GET(
         .from('ad_studio_generations')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', id),
+      getUserCosmetics(id),
     ])
 
   const stripeActive =
@@ -95,6 +100,7 @@ export async function GET(
       merch_orders: merchOrders.data || [],
       service_orders: serviceOrders.data || [],
       ad_studio_count: gens.count ?? 0,
+      cosmetics,
     },
   })
 }
@@ -181,6 +187,43 @@ export async function PATCH(
       entity: 'user',
       entityId: id,
       payload: { subject: body.email_subject },
+    })
+  }
+
+  if (body.grant_cosmetic != null) {
+    if (!isCosmeticSlug(body.grant_cosmetic)) {
+      return NextResponse.json({ error: 'Invalid cosmetic slug' }, { status: 400 })
+    }
+    const giftMessage = sanitizeGiftMessage(body.gift_message)
+    const adminNote = typeof body.admin_note === 'string' ? body.admin_note.trim() : null
+    const cosmetic = await grantCosmetic(id, body.grant_cosmetic, {
+      giftMessage,
+      adminNote,
+    })
+    result.cosmetic = cosmetic
+    await writeAdminAudit({
+      action: 'grant_cosmetic',
+      entity: 'user',
+      entityId: id,
+      payload: {
+        slug: body.grant_cosmetic,
+        gift_message: giftMessage,
+        admin_note: adminNote,
+      },
+    })
+  }
+
+  if (body.revoke_cosmetic != null) {
+    if (!isCosmeticSlug(body.revoke_cosmetic)) {
+      return NextResponse.json({ error: 'Invalid cosmetic slug' }, { status: 400 })
+    }
+    await revokeCosmetic(id, body.revoke_cosmetic)
+    result.revoked = body.revoke_cosmetic
+    await writeAdminAudit({
+      action: 'revoke_cosmetic',
+      entity: 'user',
+      entityId: id,
+      payload: { slug: body.revoke_cosmetic },
     })
   }
 

@@ -32,6 +32,24 @@ function AccountPageContent() {
   const [fanClubActive, setFanClubActive] = useState(false)
   const [fanClubStatus, setFanClubStatus] = useState<string | null>(null)
   const [portalLoading, setPortalLoading] = useState(false)
+  const [cosmetics, setCosmetics] = useState<
+    Array<{
+      cosmetic_slug: string
+      enabled: boolean
+      label: string
+      description: string
+    }>
+  >([])
+  const [cosmeticBusy, setCosmeticBusy] = useState<string | null>(null)
+
+  const loadCosmetics = () => {
+    fetch('/api/user/cosmetics')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        setCosmetics(Array.isArray(data?.cosmetics) ? data.cosmetics : [])
+      })
+      .catch(() => setCosmetics([]))
+  }
 
   useEffect(() => {
     if (authLoading) return
@@ -64,6 +82,8 @@ function AccountPageContent() {
         setFanClubActive(false)
         setFanClubStatus(null)
       })
+
+    loadCosmetics()
   }, [user, authLoading, router])
 
   useEffect(() => {
@@ -115,6 +135,29 @@ function AccountPageContent() {
       setMessage('Failed to update profile')
     }
     setSaving(false)
+  }
+
+  const toggleCosmetic = async (slug: string, enabled: boolean) => {
+    setCosmeticBusy(slug)
+    try {
+      const res = await fetch('/api/user/cosmetics', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, enabled }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to update flair')
+      }
+      setCosmetics((prev) =>
+        prev.map((c) => (c.cosmetic_slug === slug ? { ...c, enabled } : c))
+      )
+      window.dispatchEvent(new Event('dmf-profile-updated'))
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Failed to update flair')
+    } finally {
+      setCosmeticBusy(null)
+    }
   }
 
   const handleSignOut = async () => {
@@ -213,6 +256,33 @@ function AccountPageContent() {
         </form>
 
         <div className="mt-8 pt-8 border-t border-white/10 space-y-3">
+          <div className="p-4 rounded-xl border border-gold/20 bg-gold/5 mb-4">
+            <p className="text-gold text-[10px] font-bold uppercase tracking-wider mb-1">Profile Flair</p>
+            {cosmetics.length === 0 ? (
+              <p className="text-gray-500 text-sm">No gifted flair yet</p>
+            ) : (
+              <ul className="space-y-3 mt-3">
+                {cosmetics.map((c) => (
+                  <li key={c.cosmetic_slug} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-white text-sm font-semibold truncate">{c.label}</p>
+                      <p className="text-gray-500 text-xs truncate">{c.description}</p>
+                    </div>
+                    <label className="inline-flex relative items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        className="sr-only peer"
+                        checked={c.enabled}
+                        disabled={cosmeticBusy === c.cosmetic_slug}
+                        onChange={(e) => toggleCosmetic(c.cosmetic_slug, e.target.checked)}
+                      />
+                      <div className="w-11 h-6 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gold peer-disabled:opacity-40" />
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <div className="p-4 rounded-xl border border-purple-400/20 bg-purple-900/10 mb-4">
             <p className="text-purple-200 text-[10px] font-bold uppercase tracking-wider mb-1">DMF Fan Club</p>
             {fanClubActive ? (

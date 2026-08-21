@@ -9,7 +9,7 @@ import {
 import { asPricingSettings, loadSiteSettingsMap } from '@/lib/site-settings'
 
 /** @deprecated Prefer model.baseCoins via resolveSeedanceModel */
-export const BASE_AD_VIDEO_COIN_PRICE = 10
+export const BASE_AD_VIDEO_COIN_PRICE = 20
 
 const ALLOWED_DURATIONS = new Set([6, 8, 10])
 

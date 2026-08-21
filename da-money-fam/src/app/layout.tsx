@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/react'
 import { AuthProvider } from '@/contexts/AuthProvider'
 import { SiteSettingsProvider } from '@/contexts/SiteSettingsProvider'
 import CheckoutReturnHandler from '@/components/CheckoutReturnHandler'
+import CosmeticGiftReveal from '@/components/profile/CosmeticGiftReveal'
 import FallingObjects from '@/components/FallingObjects'
 import GoogleAnalytics from '@/components/GoogleAnalytics'
 import './globals.css'
@@ -43,6 +44,7 @@ export default function RootLayout({
         <SiteSettingsProvider>
           <AuthProvider>
             <CheckoutReturnHandler />
+            <CosmeticGiftReveal />
             {children}
           </AuthProvider>
           <FallingObjects />

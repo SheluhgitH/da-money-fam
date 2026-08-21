@@ -60,6 +60,7 @@ export async function submitSeedanceJob(input: {
   brief: string
   creative?: Partial<CreativeSelections> | null
   enhance?: boolean
+  enhancedPrompt?: string | null
   duration: number
   aspect_ratio?: string
   reference_images?: unknown
@@ -84,10 +85,13 @@ export async function submitSeedanceJob(input: {
       : null
   const firstFrame = explicitFirstFrame ?? firstFrameFromRefs
 
+  const refUrls = toInputReferences(input.reference_images).map((r) => r.image_url.url)
   const finalPrompt = await resolveAdPrompt({
     brief: input.brief,
     creative: input.creative,
     enhance: input.enhance === true,
+    referenceUrls: refUrls,
+    enhancedPrompt: input.enhancedPrompt,
   })
 
   const response = await fetch('https://openrouter.ai/api/v1/videos', {

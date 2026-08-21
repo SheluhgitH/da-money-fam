@@ -136,6 +136,10 @@ export function useAdStudio(initialBrief = '') {
   const [presets, setPresets] = useState<AdStudioPreset[]>([])
   const [queue, setQueue] = useState<QueuedGenerationJob[]>([])
   const [progressStep, setProgressStep] = useState(0)
+  const [enhancedPreview, setEnhancedPreview] = useState<string | null>(null)
+  const [basePreview, setBasePreview] = useState<string | null>(null)
+  const [enhancePreviewLoading, setEnhancePreviewLoading] = useState(false)
+  const [enhancePreviewOpen, setEnhancePreviewOpen] = useState(false)
 
   const abortRef = useRef<AbortController | null>(null)
   const queueBusyRef = useRef(false)
@@ -256,6 +260,67 @@ export function useAdStudio(initialBrief = '') {
     setCreative((prev) => ({ ...prev, [row]: optionId }))
   }
 
+  const applyTemplate = (briefText: string, creativePatch?: Partial<CreativeSelections>) => {
+    if (!brief.trim()) {
+      setBrief(briefText)
+    } else {
+      setBrief((prev) => `${prev.trim()}\n${briefText}`)
+    }
+    if (creativePatch) {
+      setCreative((prev) => ({ ...prev, ...creativePatch }))
+    }
+    setEnhancedPreview(null)
+    setBasePreview(null)
+  }
+
+  const previewEnhance = async () => {
+    if (!pricing?.canEnhance) {
+      setError('Enhance preview requires Fan Club.')
+      return
+    }
+    const scenePayload =
+      mode === 'storyboard'
+        ? { scenes: sceneBriefs.map((b) => ({ brief: b })), creative }
+        : { brief, creative }
+    setEnhancePreviewLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/video/enhance-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...scenePayload,
+          reference_urls: references
+            .map((r) => r.url)
+            .filter((u) => u.startsWith('http://') || u.startsWith('https://')),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Enhance preview failed')
+      if (data.mode === 'storyboard') {
+        setBasePreview((data.basePrompts || []).join('\n\n—\n\n'))
+        setEnhancedPreview((data.enhancedPrompts || []).join('\n\n—\n\n'))
+      } else {
+        setBasePreview(data.basePrompt || null)
+        setEnhancedPreview(data.enhancedPrompt || null)
+      }
+      setEnhancePreviewOpen(true)
+      setEnhance(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Enhance preview failed')
+    } finally {
+      setEnhancePreviewLoading(false)
+    }
+  }
+
+  const addReferenceFromUrl = (url: string, useAsFirstFrame = false) => {
+    setReferences((prev) => {
+      if (prev.length >= MAX_REFERENCE_IMAGES) return prev
+      if (prev.some((r) => r.url === url)) return prev
+      return [...prev, { url, useAsFirstFrame }]
+    })
+  }
+
   const addReferenceFiles = (files: FileList | null) => {
     if (!files?.length) return
     const remaining = MAX_REFERENCE_IMAGES - references.length
@@ -275,13 +340,31 @@ export function useAdStudio(initialBrief = '') {
           setError(`${file.name} is too large. Max 4MB per image.`)
           return
         }
+        const localPreview = URL.createObjectURL(file)
+        setReferences((prev) => {
+          if (prev.length >= MAX_REFERENCE_IMAGES) return prev
+          return [...prev, { url: localPreview, useAsFirstFrame: false }]
+        })
+
         const reader = new FileReader()
-        reader.onload = () => {
-          if (typeof reader.result === 'string') {
-            setReferences((prev) => {
-              if (prev.length >= MAX_REFERENCE_IMAGES) return prev
-              return [...prev, { url: reader.result as string, useAsFirstFrame: false }]
+        reader.onload = async () => {
+          if (typeof reader.result !== 'string') return
+          try {
+            const res = await fetch('/api/ad-studio/upload-ref', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ dataUrl: reader.result }),
             })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || 'Upload failed')
+            setReferences((prev) =>
+              prev.map((r) => (r.url === localPreview ? { ...r, url: data.url as string } : r))
+            )
+            URL.revokeObjectURL(localPreview)
+          } catch (err) {
+            setReferences((prev) => prev.filter((r) => r.url !== localPreview))
+            URL.revokeObjectURL(localPreview)
+            setError(err instanceof Error ? err.message : 'Reference upload failed')
           }
         }
         reader.readAsDataURL(file)
@@ -554,6 +637,7 @@ export function useAdStudio(initialBrief = '') {
             variations,
             saveToLibrary: true,
             model: modelKey,
+            enhancedPrompt: enhance && enhancedPreview ? enhancedPreview : null,
           }),
           signal: controller.signal,
         })
@@ -641,6 +725,14 @@ export function useAdStudio(initialBrief = '') {
     setCreativeOption,
     enhance,
     setEnhance,
+    enhancedPreview,
+    basePreview,
+    enhancePreviewLoading,
+    enhancePreviewOpen,
+    setEnhancePreviewOpen,
+    previewEnhance,
+    applyTemplate,
+    addReferenceFromUrl,
     duration,
     setDuration,
     aspectRatio,

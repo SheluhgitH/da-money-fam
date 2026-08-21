@@ -15,11 +15,19 @@ import {
   HOMEPAGE_SECTION_META,
   type HomepageSectionConfig,
 } from '@/lib/homepage-sections'
+import { IMAGE_MODELS, IMAGE_TIERS, type ImageTier } from '@/lib/image-models'
+import { asImageModelSettings, TIER_FLOOR, type ImageModelOverrides } from '@/lib/image-pricing'
 
 export default function SiteSettingsPanel() {
   const [hero, setHero] = useState<HomepageHeroSettings>(asHeroSettings(null))
   const [about, setAbout] = useState<HomepageAboutSettings>(asAboutSettings(null))
   const [pricing, setPricing] = useState<AdStudioPricingSettings>(asPricingSettings(null))
+  const [imageModels, setImageModels] = useState<ImageModelOverrides>({
+    draft: { baseCoins: 4 },
+    fast: { baseCoins: 4 },
+    edit: { baseCoins: 6 },
+    smart: { baseCoins: 10 },
+  })
   const [hiddenIds, setHiddenIds] = useState('')
   const [packJson, setPackJson] = useState('')
   const [sections, setSections] = useState<HomepageSectionConfig[]>(asHomepageSections(null))
@@ -34,6 +42,13 @@ export default function SiteSettingsPanel() {
         setHero(asHeroSettings(s['homepage.hero']))
         setAbout(asAboutSettings(s['homepage.about']))
         setPricing(asPricingSettings(s['ad_studio.pricing']))
+        setImageModels({
+          draft: { baseCoins: 4 },
+          fast: { baseCoins: 4 },
+          edit: { baseCoins: 6 },
+          smart: { baseCoins: 10 },
+          ...asImageModelSettings(s['ad_studio.image_models']),
+        })
         setHiddenIds(asHiddenStreamIds(s['streams.hidden_ids']).join('\n'))
         setPackJson(JSON.stringify(s['ad_studio.packs'] || {}, null, 2))
         setSections(asHomepageSections(s['homepage.sections']))
@@ -61,6 +76,17 @@ export default function SiteSettingsPanel() {
           'homepage.hero': hero,
           'homepage.about': about,
           'ad_studio.pricing': pricing,
+          'ad_studio.image_models': Object.fromEntries(
+            IMAGE_TIERS.map((t) => [
+              t,
+              {
+                baseCoins: Math.max(
+                  TIER_FLOOR[t],
+                  Number(imageModels[t]?.baseCoins) || TIER_FLOOR[t]
+                ),
+              },
+            ])
+          ),
           'ad_studio.packs': packs,
           'homepage.sections': sections,
           'streams.hidden_ids': hiddenIds
@@ -132,6 +158,25 @@ export default function SiteSettingsPanel() {
             value={pricing.fanClubDiscountPercent}
             onChange={(n) => setPricing({ ...pricing, fanClubDiscountPercent: n })}
           />
+        </div>
+      </section>
+
+      <section className="glass rounded-xl p-5 space-y-3">
+        <h3 className="font-serif text-xl text-gold">Image Studio Coinz (floors 4/4/6/10)</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {IMAGE_TIERS.map((t: ImageTier) => (
+            <NumField
+              key={t}
+              label={`${IMAGE_MODELS[t].label} (${t})`}
+              value={Number(imageModels[t]?.baseCoins) || TIER_FLOOR[t]}
+              onChange={(n) =>
+                setImageModels({
+                  ...imageModels,
+                  [t]: { baseCoins: Math.max(TIER_FLOOR[t], n) },
+                })
+              }
+            />
+          ))}
         </div>
       </section>
 

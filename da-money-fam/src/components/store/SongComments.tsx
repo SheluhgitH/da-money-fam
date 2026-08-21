@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import type { SongComment } from '@/types/store'
 import { useAuth } from '@/contexts/AuthProvider'
 import UserAvatar from '@/components/UserAvatar'
+import DisplayNameFlair from '@/components/profile/DisplayNameFlair'
 
 type SongCommentsProps = {
   songId: string
@@ -158,7 +159,12 @@ export default function SongComments({ songId, initialCount = 0, defaultExpanded
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs text-gold font-semibold flex items-center gap-1.5 flex-wrap">
-                        {comment.display_name || 'Fan'}
+                        <DisplayNameFlair
+                          name={comment.display_name || 'Fan'}
+                          cosmetics={comment.active_cosmetics}
+                          size="sm"
+                          nameClassName="text-xs text-gold font-semibold"
+                        />
                         {(comment.level ?? 1) >= 2 && (
                           <span className="text-[8px] font-extrabold uppercase tracking-wider bg-purple-500/30 text-purple-200 px-1.5 py-0.5 rounded-full">
                             Fam

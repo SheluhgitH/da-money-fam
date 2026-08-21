@@ -35,6 +35,17 @@ export default function AdStudioAdmin() {
   const [notes, setNotes] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const [imageTiers, setImageTiers] = useState<
+    Array<{
+      tier: string
+      label: string
+      gens: number
+      avgUsdCost: number
+      avgRealRevenueUsd: number
+      impliedMargin: number | null
+      overBuffer: boolean
+    }>
+  >([])
 
   const load = async () => {
     setLoading(true)
@@ -46,8 +57,19 @@ export default function AdStudioAdmin() {
     setLoading(false)
   }
 
+  const loadImageMargin = async () => {
+    try {
+      const res = await fetch('/api/admin/ad-studio/images')
+      const data = await res.json()
+      if (res.ok) setImageTiers(data.tiers || [])
+    } catch {
+      /* ignore */
+    }
+  }
+
   useEffect(() => {
     load()
+    loadImageMargin()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status])
 
@@ -93,6 +115,30 @@ export default function AdStudioAdmin() {
           <Stat label="Coinz spent today" value={stats.coinzSpentToday} />
           <Stat label="Failed today" value={stats.failedToday} />
           <Stat label="Fail rate" value={`${stats.failRate}%`} />
+        </div>
+      )}
+
+      {imageTiers.length > 0 && (
+        <div className="glass rounded-xl p-4 space-y-2">
+          <p className="text-xs uppercase tracking-wider text-gold">Image margin (7d, USD)</p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+            {imageTiers.map((t) => (
+              <div
+                key={t.tier}
+                className={`rounded-lg p-3 bg-black/40 border ${
+                  t.overBuffer ? 'border-red-400/50' : 'border-white/10'
+                }`}
+              >
+                <p className="text-[10px] uppercase text-gray-500">{t.label}</p>
+                <p className="text-sm text-white mt-1">
+                  {t.gens} gens · margin {t.impliedMargin != null ? `${t.impliedMargin}%` : '—'}
+                </p>
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  cost ${t.avgUsdCost} · rev ${t.avgRealRevenueUsd}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { GIFT_MESSAGE_MAX, PROFILE_COSMETICS } from '@/lib/profile-cosmetics'
 
 type UserRow = {
   id: string
@@ -13,6 +14,16 @@ type UserRow = {
   xp: number
   coinz: number
   created_at: string
+}
+
+type CosmeticRow = {
+  id: string
+  cosmetic_slug: string
+  enabled: boolean
+  gift_message: string | null
+  admin_note: string | null
+  granted_at: string
+  revealed_at: string | null
 }
 
 type UserDetail = UserRow & {
@@ -30,6 +41,7 @@ type UserDetail = UserRow & {
   merch_orders?: Array<{ id: string; merch_name: string; status: string; price: number }>
   service_orders?: Array<{ id: string; package_name: string; status: string }>
   ad_studio_count?: number
+  cosmetics?: CosmeticRow[]
 }
 
 export default function UsersAdmin() {
@@ -44,6 +56,9 @@ export default function UsersAdmin() {
   const [emailSubject, setEmailSubject] = useState('')
   const [emailBody, setEmailBody] = useState('')
   const [busy, setBusy] = useState(false)
+  const [giftSlug, setGiftSlug] = useState(PROFILE_COSMETICS[0].slug)
+  const [giftMessage, setGiftMessage] = useState('')
+  const [giftAdminNote, setGiftAdminNote] = useState('')
 
   const load = useCallback(async (search = q) => {
     setLoading(true)
@@ -76,6 +91,8 @@ export default function UsersAdmin() {
     setCoinNote('')
     setEmailSubject('')
     setEmailBody('')
+    setGiftMessage('')
+    setGiftAdminNote('')
   }
 
   const patch = async (body: Record<string, unknown>) => {
@@ -99,6 +116,9 @@ export default function UsersAdmin() {
       setBusy(false)
     }
   }
+
+  const cosmeticLabel = (slug: string) =>
+    PROFILE_COSMETICS.find((c) => c.slug === slug)?.label || slug
 
   return (
     <div className="space-y-6">
@@ -181,6 +201,84 @@ export default function UsersAdmin() {
                 <span className="text-[11px] text-gray-500">
                   Stripe: {selected.stripe_fan_status || 'none'}
                 </span>
+              </div>
+
+              <div className="space-y-3 border-t border-white/10 pt-4">
+                <p className="text-xs uppercase tracking-wider text-gray-500">Profile Flair</p>
+                <div className="flex flex-wrap gap-2">
+                  {(selected.cosmetics || []).length === 0 ? (
+                    <p className="text-xs text-gray-500">No flair gifted yet.</p>
+                  ) : (
+                    (selected.cosmetics || []).map((c) => (
+                      <div
+                        key={c.id}
+                        className="flex items-center gap-2 rounded-full border border-gold/30 bg-gold/10 px-3 py-1.5 max-w-full"
+                      >
+                        <span className="text-xs text-gold font-semibold truncate">
+                          {cosmeticLabel(c.cosmetic_slug)}
+                          {!c.enabled ? ' (off)' : ''}
+                          {!c.revealed_at ? ' · pending reveal' : ''}
+                        </span>
+                        {c.gift_message && (
+                          <span className="text-[10px] text-zinc-400 truncate max-w-[120px]" title={c.gift_message}>
+                            &ldquo;{c.gift_message}&rdquo;
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => patch({ revoke_cosmetic: c.cosmetic_slug })}
+                          className="text-[10px] uppercase text-red-300 hover:text-red-200"
+                        >
+                          Revoke
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <select
+                    value={giftSlug}
+                    onChange={(e) => setGiftSlug(e.target.value as typeof giftSlug)}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+                  >
+                    {PROFILE_COSMETICS.map((c) => (
+                      <option key={c.slug} value={c.slug}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                  <textarea
+                    value={giftMessage}
+                    onChange={(e) => setGiftMessage(e.target.value.slice(0, GIFT_MESSAGE_MAX))}
+                    rows={2}
+                    placeholder="Gift message shown to user (optional)"
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm"
+                  />
+                  <p className="text-[10px] text-gray-600 text-right">
+                    {giftMessage.length}/{GIFT_MESSAGE_MAX}
+                  </p>
+                  <input
+                    value={giftAdminNote}
+                    onChange={(e) => setGiftAdminNote(e.target.value)}
+                    placeholder="Internal admin note (optional)"
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      patch({
+                        grant_cosmetic: giftSlug,
+                        gift_message: giftMessage || null,
+                        admin_note: giftAdminNote || null,
+                      })
+                    }
+                    className="px-4 py-2 rounded-full bg-gold text-black text-xs font-bold uppercase"
+                  >
+                    Gift flair
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2 border-t border-white/10 pt-4">

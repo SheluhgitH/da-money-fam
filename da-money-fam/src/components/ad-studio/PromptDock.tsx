@@ -6,6 +6,11 @@ import LookDrawer from './LookDrawer'
 import StoryboardTimeline from './StoryboardTimeline'
 import { COIN_PACKAGES, packAdCopy, type CoinPackage } from '@/lib/coin-packages'
 import { packsFromSettings } from '@/lib/site-settings'
+import {
+  AD_PROMPT_TEMPLATES,
+  PROMPT_TEMPLATE_GROUPS,
+  type PromptTemplateGroup,
+} from '@/lib/ad-prompt-templates'
 
 function CoinPriceLabel({
   effective,
@@ -31,6 +36,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [buyingId, setBuyingId] = useState<string | null>(null)
   const [packs, setPacks] = useState<CoinPackage[]>(COIN_PACKAGES)
+  const [templateGroup, setTemplateGroup] = useState<PromptTemplateGroup | 'all'>('all')
 
   useEffect(() => {
     fetch('/api/site-settings')
@@ -38,8 +44,8 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
       .then((data) => setPacks(packsFromSettings(data.settings?.['ad_studio.packs'])))
       .catch(() => {})
   }, [])
-  const price = studio.pricing?.totalPriceCoins ?? studio.pricing?.priceCoins ?? 20
-  const perClip = studio.pricing?.priceCoins ?? 20
+  const price = studio.pricing?.totalPriceCoins ?? studio.pricing?.priceCoins ?? 40
+  const perClip = studio.pricing?.priceCoins ?? 40
   const discountPercent = studio.pricing?.discountPercent ?? 0
   const discounted = discountPercent > 0
   const units =
@@ -53,6 +59,11 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
   const lite = studio.pricing?.modelPrices?.lite
   const fast = studio.pricing?.modelPrices?.fast
   const durationPrices = studio.pricing?.durationPrices
+
+  const templates =
+    templateGroup === 'all'
+      ? AD_PROMPT_TEMPLATES
+      : AD_PROMPT_TEMPLATES.filter((t) => t.group === templateGroup)
 
   const buyPack = async (packageId: string) => {
     setBuyingId(packageId)
@@ -117,6 +128,51 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
             Storyboard
           </button>
         </div>
+
+        {studio.mode === 'single' && (
+          <div className="space-y-2">
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+              <button
+                type="button"
+                onClick={() => setTemplateGroup('all')}
+                className={`shrink-0 text-[9px] uppercase tracking-wider px-2 py-1 rounded-full border ${
+                  templateGroup === 'all'
+                    ? 'border-gold text-gold'
+                    : 'border-white/10 text-white/40'
+                }`}
+              >
+                Starters
+              </button>
+              {PROMPT_TEMPLATE_GROUPS.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setTemplateGroup(g.id)}
+                  className={`shrink-0 text-[9px] uppercase tracking-wider px-2 py-1 rounded-full border ${
+                    templateGroup === g.id
+                      ? 'border-gold text-gold'
+                      : 'border-white/10 text-white/40'
+                  }`}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto pb-1">
+              {templates.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => studio.applyTemplate(t.brief, t.creative)}
+                  className="shrink-0 text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-gold/20 text-gold/70 hover:border-gold/50"
+                  title={t.brief}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {studio.mode === 'single' && (
           <div className="relative">

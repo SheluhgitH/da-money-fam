@@ -43,6 +43,12 @@ export function defaultSiteSettings(): SiteSettingsMap {
       fanClubDiscountPercent: 15,
       durations: [6, 8, 10],
     },
+    'ad_studio.image_models': {
+      draft: { baseCoins: 4 },
+      fast: { baseCoins: 4 },
+      edit: { baseCoins: 6 },
+      smart: { baseCoins: 10 },
+    },
     'ad_studio.packs': Object.fromEntries(
       COIN_PACKAGES.map((p) => [p.id, { amount: p.amount, price: p.price, label: p.label }])
     ),
@@ -164,7 +170,8 @@ export function packsFromSettings(value: unknown): CoinPackage[] {
   if (ids.length === 0) return COIN_PACKAGES
   return ids.map((id) => {
     const row = obj[id] || {}
-    const amount = Number(row.amount) || 50
+    const amount = Number(row.amount) || 100
+    const draftBase = 4
     return {
       id,
       amount,
@@ -172,6 +179,7 @@ export function packsFromSettings(value: unknown): CoinPackage[] {
       label: String(row.label || id),
       liteAds: Math.max(1, Math.floor(amount / SEEDANCE_MODELS.lite.baseCoins)),
       fastAds: Math.max(1, Math.floor(amount / SEEDANCE_MODELS.fast.baseCoins)),
+      draftImages: Math.max(1, Math.floor(amount / draftBase)),
     }
   })
 }

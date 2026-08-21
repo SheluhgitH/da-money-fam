@@ -1,10 +1,15 @@
 import { promises as fs } from 'fs'
 import path from 'path'
 import { createServiceClient } from '@/lib/supabase/server'
-import type { UserProfile, UserStats, LibraryItem, SongComment } from '@/types/store'
+import type { UserProfile, UserStats, LibraryItem, SongComment, UserCosmetic } from '@/types/store'
 import { getAllOrders, getSongById, linkGuestOrdersToUser } from '@/lib/store'
 import { levelFromXp, applyXpMultiplier } from '@/lib/fan-perks'
 import { isActiveFanClubMember } from '@/lib/fan-club'
+import {
+  isCosmeticSlug,
+  sanitizeGiftMessage,
+  type CosmeticSlug,
+} from '@/lib/profile-cosmetics'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 
@@ -455,6 +460,7 @@ export async function getSongComments(songId: string): Promise<SongComment[]> {
 
     const userIds = Array.from(new Set((data || []).map((row) => String(row.user_id))))
     const profileMap = new Map<string, UserProfile>()
+    const cosmeticsMap = await getActiveCosmeticsForUsers(userIds)
 
     if (userIds.length > 0) {
       const { data: profiles } = await supabase
@@ -482,12 +488,16 @@ export async function getSongComments(songId: string): Promise<SongComment[]> {
         created_at: String(row.created_at),
         display_name: profile?.display_name ?? null,
         avatar_url: profile?.avatar_url ?? null,
+        active_cosmetics: cosmeticsMap.get(String(row.user_id)) || [],
       }
     })
   }
 
   const comments = await readJsonFile<SongComment[]>('song-comments.json', [])
   const profiles = await readJsonFile<UserProfile[]>('user-profiles.json', [])
+  const cosmeticsMap = await getActiveCosmeticsForUsers(
+    comments.filter((c) => c.song_id === songId).map((c) => c.user_id)
+  )
   return comments
     .filter((c) => c.song_id === songId)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -497,6 +507,7 @@ export async function getSongComments(songId: string): Promise<SongComment[]> {
         ...c,
         display_name: profile?.display_name ?? c.display_name ?? null,
         avatar_url: profile?.avatar_url ?? c.avatar_url ?? null,
+        active_cosmetics: cosmeticsMap.get(c.user_id) || [],
       }
     })
 }
@@ -523,6 +534,7 @@ export async function addSongComment(
     if (error) throw new Error(error.message)
 
     const profile = await getUserProfile(userId)
+    const cosmeticsMap = await getActiveCosmeticsForUsers([userId])
     return {
       id: String(data.id),
       song_id: String(data.song_id),
@@ -531,11 +543,13 @@ export async function addSongComment(
       created_at: String(data.created_at),
       display_name: profile?.display_name ?? null,
       avatar_url: profile?.avatar_url ?? null,
+      active_cosmetics: cosmeticsMap.get(userId) || [],
     }
   }
 
   const comments = await readJsonFile<SongComment[]>('song-comments.json', [])
   const profile = await getUserProfile(userId)
+  const cosmeticsMap = await getActiveCosmeticsForUsers([userId])
   const comment: SongComment = {
     id: `comment-${Date.now()}`,
     song_id: songId,
@@ -544,6 +558,7 @@ export async function addSongComment(
     created_at: now,
     display_name: profile?.display_name ?? null,
     avatar_url: profile?.avatar_url ?? null,
+    active_cosmetics: cosmeticsMap.get(userId) || [],
   }
   comments.push(comment)
   await writeJsonFile('song-comments.json', comments)
@@ -621,4 +636,218 @@ export async function getSongFavoriteCounts(songIds: string[]): Promise<Record<s
     }
   }
   return counts
+}
+
+function mapCosmeticRow(row: Record<string, unknown>): UserCosmetic {
+  return {
+    id: String(row.id),
+    user_id: String(row.user_id),
+    cosmetic_slug: String(row.cosmetic_slug),
+    enabled: Boolean(row.enabled),
+    revealed_at: row.revealed_at ? String(row.revealed_at) : null,
+    granted_at: String(row.granted_at),
+    granted_by: row.granted_by ? String(row.granted_by) : null,
+    admin_note: row.admin_note ? String(row.admin_note) : null,
+    gift_message: row.gift_message ? String(row.gift_message) : null,
+  }
+}
+
+export async function getUserCosmetics(userId: string): Promise<UserCosmetic[]> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('user_profile_cosmetics')
+      .select('*')
+      .eq('user_id', userId)
+      .order('granted_at', { ascending: false })
+    if (error) throw new Error(error.message)
+    return (data || []).map((row) => mapCosmeticRow(row as Record<string, unknown>))
+  }
+
+  const all = await readJsonFile<UserCosmetic[]>('user-cosmetics.json', [])
+  return all
+    .filter((c) => c.user_id === userId)
+    .sort((a, b) => new Date(b.granted_at).getTime() - new Date(a.granted_at).getTime())
+}
+
+export async function getActiveCosmeticsForUsers(
+  userIds: string[]
+): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>()
+  if (userIds.length === 0) return map
+
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data } = await supabase
+      .from('user_profile_cosmetics')
+      .select('user_id, cosmetic_slug')
+      .in('user_id', userIds)
+      .eq('enabled', true)
+
+    for (const row of data || []) {
+      const uid = String(row.user_id)
+      const list = map.get(uid) || []
+      list.push(String(row.cosmetic_slug))
+      map.set(uid, list)
+    }
+    return map
+  }
+
+  const all = await readJsonFile<UserCosmetic[]>('user-cosmetics.json', [])
+  for (const c of all) {
+    if (!c.enabled || !userIds.includes(c.user_id)) continue
+    const list = map.get(c.user_id) || []
+    list.push(c.cosmetic_slug)
+    map.set(c.user_id, list)
+  }
+  return map
+}
+
+export async function grantCosmetic(
+  userId: string,
+  slug: CosmeticSlug,
+  opts?: {
+    giftMessage?: string | null
+    adminNote?: string | null
+    grantedBy?: string | null
+  }
+): Promise<UserCosmetic> {
+  if (!isCosmeticSlug(slug)) throw new Error('Invalid cosmetic slug')
+  const giftMessage = sanitizeGiftMessage(opts?.giftMessage ?? null)
+  const adminNote =
+    typeof opts?.adminNote === 'string' && opts.adminNote.trim()
+      ? opts.adminNote.trim().slice(0, 500)
+      : null
+  const now = new Date().toISOString()
+
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('user_profile_cosmetics')
+      .upsert(
+        {
+          user_id: userId,
+          cosmetic_slug: slug,
+          enabled: true,
+          revealed_at: null,
+          granted_at: now,
+          granted_by: opts?.grantedBy || null,
+          admin_note: adminNote,
+          gift_message: giftMessage,
+        },
+        { onConflict: 'user_id,cosmetic_slug' }
+      )
+      .select('*')
+      .single()
+    if (error) throw new Error(error.message)
+    return mapCosmeticRow(data as Record<string, unknown>)
+  }
+
+  const all = await readJsonFile<UserCosmetic[]>('user-cosmetics.json', [])
+  const index = all.findIndex((c) => c.user_id === userId && c.cosmetic_slug === slug)
+  const row: UserCosmetic = {
+    id: index >= 0 ? all[index].id : `cosmetic-${Date.now()}`,
+    user_id: userId,
+    cosmetic_slug: slug,
+    enabled: true,
+    revealed_at: null,
+    granted_at: now,
+    granted_by: opts?.grantedBy || null,
+    admin_note: adminNote,
+    gift_message: giftMessage,
+  }
+  if (index >= 0) all[index] = row
+  else all.push(row)
+  await writeJsonFile('user-cosmetics.json', all)
+  return row
+}
+
+export async function revokeCosmetic(userId: string, slug: CosmeticSlug): Promise<void> {
+  if (!isCosmeticSlug(slug)) throw new Error('Invalid cosmetic slug')
+
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { error } = await supabase
+      .from('user_profile_cosmetics')
+      .delete()
+      .eq('user_id', userId)
+      .eq('cosmetic_slug', slug)
+    if (error) throw new Error(error.message)
+    return
+  }
+
+  const all = await readJsonFile<UserCosmetic[]>('user-cosmetics.json', [])
+  await writeJsonFile(
+    'user-cosmetics.json',
+    all.filter((c) => !(c.user_id === userId && c.cosmetic_slug === slug))
+  )
+}
+
+export async function setCosmeticEnabled(
+  userId: string,
+  slug: CosmeticSlug,
+  enabled: boolean
+): Promise<UserCosmetic> {
+  if (!isCosmeticSlug(slug)) throw new Error('Invalid cosmetic slug')
+
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('user_profile_cosmetics')
+      .update({ enabled })
+      .eq('user_id', userId)
+      .eq('cosmetic_slug', slug)
+      .select('*')
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    if (!data) throw new Error('Cosmetic not found')
+    return mapCosmeticRow(data as Record<string, unknown>)
+  }
+
+  const all = await readJsonFile<UserCosmetic[]>('user-cosmetics.json', [])
+  const index = all.findIndex((c) => c.user_id === userId && c.cosmetic_slug === slug)
+  if (index < 0) throw new Error('Cosmetic not found')
+  all[index] = { ...all[index], enabled }
+  await writeJsonFile('user-cosmetics.json', all)
+  return all[index]
+}
+
+export async function markCosmeticRevealed(
+  userId: string,
+  slugs: CosmeticSlug[],
+  opts?: { enable?: boolean }
+): Promise<void> {
+  const unique = Array.from(new Set(slugs.filter(isCosmeticSlug)))
+  if (unique.length === 0) return
+  const now = new Date().toISOString()
+  const enable = opts?.enable
+
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const patch: Record<string, unknown> = { revealed_at: now }
+    if (typeof enable === 'boolean') patch.enabled = enable
+    const { error } = await supabase
+      .from('user_profile_cosmetics')
+      .update(patch)
+      .eq('user_id', userId)
+      .in('cosmetic_slug', unique)
+      .is('revealed_at', null)
+    if (error) throw new Error(error.message)
+    return
+  }
+
+  const all = await readJsonFile<UserCosmetic[]>('user-cosmetics.json', [])
+  let changed = false
+  for (let i = 0; i < all.length; i++) {
+    const c = all[i]
+    if (c.user_id !== userId || !unique.includes(c.cosmetic_slug as CosmeticSlug)) continue
+    if (c.revealed_at) continue
+    all[i] = {
+      ...c,
+      revealed_at: now,
+      ...(typeof enable === 'boolean' ? { enabled: enable } : {}),
+    }
+    changed = true
+  }
+  if (changed) await writeJsonFile('user-cosmetics.json', all)
 }

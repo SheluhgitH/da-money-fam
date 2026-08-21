@@ -71,6 +71,43 @@ export default function LookDrawer({ studio }: { studio: AdStudioController }) {
             </a>
           )}
         </div>
+
+        {studio.pricing?.canEnhance && (
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={
+                studio.enhancePreviewLoading ||
+                (studio.mode === 'single'
+                  ? !studio.brief.trim()
+                  : !studio.sceneBriefs.every((b) => b.trim()))
+              }
+              onClick={() => studio.previewEnhance()}
+              className="text-[10px] uppercase tracking-wider px-3 py-2 rounded-full border border-gold/40 text-gold hover:bg-gold hover:text-black transition-colors disabled:opacity-40"
+            >
+              {studio.enhancePreviewLoading ? 'Enhancing…' : 'Preview enhance'}
+            </button>
+            {studio.enhancePreviewOpen && (studio.basePreview || studio.enhancedPreview) && (
+              <div className="grid sm:grid-cols-2 gap-2 text-[10px]">
+                <div className="rounded-lg border border-white/10 bg-black/40 p-2">
+                  <p className="uppercase tracking-wider text-white/40 mb-1">Your brief</p>
+                  <p className="text-white/70 whitespace-pre-wrap">{studio.basePreview}</p>
+                </div>
+                <div className="rounded-lg border border-gold/25 bg-gold/5 p-2">
+                  <p className="uppercase tracking-wider text-gold/60 mb-1">AI prompt</p>
+                  <p className="text-gold/90 whitespace-pre-wrap">{studio.enhancedPreview}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => studio.setEnhancePreviewOpen(false)}
+                  className="sm:col-span-2 text-[9px] text-white/40 uppercase tracking-wider"
+                >
+                  Hide preview
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

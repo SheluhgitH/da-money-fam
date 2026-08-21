@@ -15,14 +15,14 @@ export const SEEDANCE_MODELS: Record<SeedanceModelKey, SeedanceModelConfig> = {
     key: 'fast',
     id: 'bytedance/seedance-2.0-fast',
     label: 'Fast',
-    baseCoins: 20,
+    baseCoins: 40,
     resolution: '480p',
   },
   lite: {
     key: 'lite',
     id: 'bytedance/seedance-1-5-pro',
     label: 'Lite',
-    baseCoins: 10,
+    baseCoins: 20,
     resolution: '480p',
   },
 }

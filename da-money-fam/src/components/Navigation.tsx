@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthProvider'
 import { useSiteSettings } from '@/contexts/SiteSettingsProvider'
 import UserAvatar from '@/components/UserAvatar'
 import DailyCheckInPrompt from '@/components/DailyCheckInPrompt'
+import DisplayNameFlair from '@/components/profile/DisplayNameFlair'
 import type { UserProfile } from '@/types/store'
 
 export default function Navigation() {
@@ -20,6 +21,7 @@ export default function Navigation() {
   const { user, loading, signOut } = useAuth()
   const { showAnimations, toggleAnimations } = useSiteSettings()
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [activeCosmetics, setActiveCosmetics] = useState<string[]>([])
 
   useEffect(() => {
     const dismissed = sessionStorage.getItem('dmf-promo-dismissed')
@@ -56,6 +58,7 @@ export default function Navigation() {
   useEffect(() => {
     if (!user) {
       setProfile(null)
+      setActiveCosmetics([])
       return
     }
 
@@ -64,6 +67,10 @@ export default function Navigation() {
         .then((r) => (r.ok ? r.json() : null))
         .then((data) => setProfile(data?.profile || null))
         .catch(() => setProfile(null))
+      fetch('/api/user/cosmetics')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => setActiveCosmetics(Array.isArray(data?.active) ? data.active : []))
+        .catch(() => setActiveCosmetics([]))
     }
 
     loadProfile()
@@ -285,7 +292,12 @@ export default function Navigation() {
                         email={user.email}
                         size="sm"
                       />
-                      <span>{profile?.display_name || 'Profile'}</span>
+                      <DisplayNameFlair
+                        name={profile?.display_name || 'Profile'}
+                        cosmetics={activeCosmetics}
+                        size="sm"
+                        nameClassName="uppercase tracking-widest"
+                      />
                     </Link>
                     <Link href="/account" className="text-lg uppercase tracking-widest text-gray-400" onClick={() => setIsMenuOpen(false)}>
                       Account Settings

@@ -4,6 +4,7 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import type { UserProfile, UserStats } from '@/types/store'
 import { levelFromXp } from '@/lib/fan-perks'
+import { getActiveCosmeticsForUsers } from '@/lib/user-store'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,7 @@ type Spotlight = {
   display_name: string
   avatar_url: string | null
   level: number
+  active_cosmetics: string[]
 }
 
 function isSupabaseConfigured() {
@@ -45,23 +47,23 @@ export async function GET() {
 
       const userIds = eligible.map((r) => String(r.user_id))
       if (userIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, display_name, avatar_url')
-          .in('id', userIds)
+        const [{ data: profiles }, cosmeticsMap] = await Promise.all([
+          supabase.from('profiles').select('id, display_name, avatar_url').in('id', userIds),
+          getActiveCosmeticsForUsers(userIds),
+        ])
 
-        const profileMap = new Map(
-          (profiles || []).map((p) => [String(p.id), p])
-        )
+        const profileMap = new Map((profiles || []).map((p) => [String(p.id), p]))
 
         for (const row of eligible) {
-          const profile = profileMap.get(String(row.user_id))
+          const uid = String(row.user_id)
+          const profile = profileMap.get(uid)
           const name = profile?.display_name ? String(profile.display_name).trim() : ''
           if (!name) continue
           spotlights.push({
             display_name: name,
             avatar_url: profile?.avatar_url ? String(profile.avatar_url) : null,
             level: Number(row.level) || levelFromXp(Number(row.xp) || 0),
+            active_cosmetics: cosmeticsMap.get(uid) || [],
           })
           if (spotlights.length >= 8) break
         }
@@ -74,6 +76,8 @@ export async function GET() {
         .filter((s) => s.level >= 2)
         .sort((a, b) => b.xp - a.xp)
 
+      const cosmeticsMap = await getActiveCosmeticsForUsers(eligible.map((s) => s.user_id))
+
       for (const s of eligible) {
         const profile = profiles.find((p) => p.id === s.user_id)
         const name = profile?.display_name?.trim()
@@ -82,6 +86,7 @@ export async function GET() {
           display_name: name,
           avatar_url: profile?.avatar_url ?? null,
           level: s.level,
+          active_cosmetics: cosmeticsMap.get(s.user_id) || [],
         })
         if (spotlights.length >= 8) break
       }
