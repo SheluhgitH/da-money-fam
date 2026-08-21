@@ -8,7 +8,15 @@ function AdStudioInner() {
   const params = useSearchParams()
   const brief = params.get('brief') || ''
   const checkoutStatus = params.get('status')
-  return <AdStudioShell initialBrief={brief} checkoutStatus={checkoutStatus} />
+  const tabParam = params.get('tab')
+  const initialTab = tabParam === 'images' || tabParam === 'image' ? 'images' : 'video'
+  return (
+    <AdStudioShell
+      initialBrief={brief}
+      checkoutStatus={checkoutStatus}
+      initialTab={initialTab}
+    />
+  )
 }
 
 export default function AdStudioPage() {

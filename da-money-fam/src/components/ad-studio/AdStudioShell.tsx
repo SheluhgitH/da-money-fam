@@ -15,24 +15,36 @@ import { packsFromSettings } from '@/lib/site-settings'
 export default function AdStudioShell({
   initialBrief = '',
   checkoutStatus = null,
+  initialTab = 'video',
 }: {
   initialBrief?: string
   checkoutStatus?: string | null
+  initialTab?: 'video' | 'images'
 }) {
   const studio = useAdStudio(initialBrief)
   const images = useImageStudio()
-  const [studioTab, setStudioTab] = useState<'video' | 'images'>('video')
+  const [studioTab, setStudioTab] = useState<'video' | 'images'>(initialTab)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [buyOpen, setBuyOpen] = useState(false)
   const [packs, setPacks] = useState<CoinPackage[]>(COIN_PACKAGES)
   const [buyingId, setBuyingId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [showImageTip, setShowImageTip] = useState(false)
 
   useEffect(() => {
     fetch('/api/site-settings')
       .then((r) => r.json())
       .then((data) => setPacks(packsFromSettings(data.settings?.['ad_studio.packs'])))
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('dmf-image-studio-tip') === '1') return
+      setShowImageTip(true)
+    } catch {
+      /* ignore */
+    }
   }, [])
 
   useEffect(() => {
@@ -55,6 +67,15 @@ export default function AdStudioShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkoutStatus])
 
+  const dismissImageTip = () => {
+    setShowImageTip(false)
+    try {
+      sessionStorage.setItem('dmf-image-studio-tip', '1')
+    } catch {
+      /* ignore */
+    }
+  }
+
   const buyPack = async (packageId: string) => {
     setBuyingId(packageId)
     try {
@@ -73,7 +94,7 @@ export default function AdStudioShell({
     }
   }
 
-  const useImageForVideo = (url: string) => {
+  const applyImageForVideo = (url: string) => {
     studio.addReferenceFromUrl(url, true)
     setStudioTab('video')
     setToast('Image added as video reference')
@@ -99,7 +120,7 @@ export default function AdStudioShell({
             <button
               type="button"
               onClick={() => setStudioTab('video')}
-              className={`text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+              className={`text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border ${
                 studioTab === 'video'
                   ? 'bg-gold text-black border-gold'
                   : 'border-gold/25 text-gold/70'
@@ -109,14 +130,17 @@ export default function AdStudioShell({
             </button>
             <button
               type="button"
-              onClick={() => setStudioTab('images')}
-              className={`text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+              onClick={() => {
+                setStudioTab('images')
+                dismissImageTip()
+              }}
+              className={`text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border ${
                 studioTab === 'images'
                   ? 'bg-gold text-black border-gold'
                   : 'border-gold/25 text-gold/70'
               }`}
             >
-              Images
+              Image Studio
             </button>
           </div>
           {studioTab === 'video' && studio.statusText && (
@@ -157,6 +181,33 @@ export default function AdStudioShell({
           </Link>
         </div>
       </header>
+
+      {showImageTip && studioTab === 'video' && (
+        <div className="shrink-0 border-b border-gold/20 bg-gold/10 px-4 py-2 flex items-center justify-between gap-3 relative z-10">
+          <p className="text-[11px] text-gold">
+            New: generate ad stills in <span className="font-bold">Image Studio</span>
+          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setStudioTab('images')
+                dismissImageTip()
+              }}
+              className="text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-full bg-gold text-black font-bold"
+            >
+              Open
+            </button>
+            <button
+              type="button"
+              onClick={dismissImageTip}
+              className="text-[10px] uppercase tracking-wider text-gold/60 hover:text-gold"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {buyOpen && (
         <div className="shrink-0 border-b border-gold/15 bg-black/80 px-4 py-3 flex flex-wrap gap-2">
@@ -204,11 +255,11 @@ export default function AdStudioShell({
               items={images.library}
               onSelect={(url) => images.setPreviewUrl(url)}
               onEdit={(url) => images.useImageAsEdit(url)}
-              onUseForVideo={useImageForVideo}
+              onUseForVideo={applyImageForVideo}
             />
           </aside>
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
-            <ImageStudioPanel images={images} onUseForVideo={useImageForVideo} />
+            <ImageStudioPanel images={images} onUseForVideo={applyImageForVideo} />
           </div>
         </div>
       ) : (
@@ -244,7 +295,7 @@ export default function AdStudioShell({
                   setLibraryOpen(false)
                 }}
                 onUseForVideo={(url) => {
-                  useImageForVideo(url)
+                  applyImageForVideo(url)
                   setLibraryOpen(false)
                 }}
               />

@@ -15,8 +15,7 @@ import {
   HOMEPAGE_SECTION_META,
   type HomepageSectionConfig,
 } from '@/lib/homepage-sections'
-import { IMAGE_MODELS, IMAGE_TIERS, type ImageTier } from '@/lib/image-models'
-import { asImageModelSettings, TIER_FLOOR, type ImageModelOverrides } from '@/lib/image-pricing'
+import { IMAGE_MODELS, IMAGE_TIERS, type ImageTier, asImageModelSettings, TIER_FLOOR, type ImageModelOverrides } from '@/lib/image-models'
 
 export default function SiteSettingsPanel() {
   const [hero, setHero] = useState<HomepageHeroSettings>(asHeroSettings(null))

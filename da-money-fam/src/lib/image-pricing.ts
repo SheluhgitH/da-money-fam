@@ -1,6 +1,8 @@
 import { COIN_RETAIL_USD } from '@/lib/coin-economy'
 import {
   IMAGE_MODELS,
+  TIER_FLOOR,
+  asImageModelSettings,
   type ImageTier,
   resolveImageModel,
 } from '@/lib/image-models'
@@ -8,32 +10,12 @@ import { getUserEntitlements } from '@/lib/user-entitlements'
 import { loadSiteSettingsMap } from '@/lib/site-settings'
 import { createHmac, timingSafeEqual } from 'crypto'
 
+export { TIER_FLOOR, asImageModelSettings, type ImageModelOverrides } from '@/lib/image-models'
+
 const SAFETY_MULTIPLIER = 1.4
 const TARGET_GROSS_MARGIN = 0.55
 const QUOTE_TTL_MS = 5 * 60 * 1000
 const IMAGE_DISCOUNT_CAP = 10
-
-export const TIER_FLOOR: Record<ImageTier, number> = {
-  draft: 4,
-  fast: 4,
-  edit: 6,
-  smart: 10,
-}
-
-export type ImageModelOverrides = Partial<Record<ImageTier, { baseCoins?: number }>>
-
-export function asImageModelSettings(value: unknown): ImageModelOverrides {
-  if (!value || typeof value !== 'object') return {}
-  const out: ImageModelOverrides = {}
-  for (const tier of Object.keys(IMAGE_MODELS) as ImageTier[]) {
-    const row = (value as Record<string, unknown>)[tier]
-    if (row && typeof row === 'object' && 'baseCoins' in row) {
-      const n = Number((row as { baseCoins: unknown }).baseCoins)
-      if (Number.isFinite(n) && n > 0) out[tier] = { baseCoins: n }
-    }
-  }
-  return out
-}
 
 export function coinPriceForImage(tier: ImageTier, usdEstimate: number, overrideCoins?: number): number {
   const buffered = usdEstimate * SAFETY_MULTIPLIER

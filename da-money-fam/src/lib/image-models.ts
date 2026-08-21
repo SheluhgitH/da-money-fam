@@ -57,6 +57,28 @@ export const IMAGE_MODELS: Record<ImageTier, ImageModelConfig> = {
 
 export const DEFAULT_IMAGE_TIER: ImageTier = 'fast'
 
+export const TIER_FLOOR: Record<ImageTier, number> = {
+  draft: 4,
+  fast: 4,
+  edit: 6,
+  smart: 10,
+}
+
+export type ImageModelOverrides = Partial<Record<ImageTier, { baseCoins?: number }>>
+
+export function asImageModelSettings(value: unknown): ImageModelOverrides {
+  if (!value || typeof value !== 'object') return {}
+  const out: ImageModelOverrides = {}
+  for (const tier of Object.keys(IMAGE_MODELS) as ImageTier[]) {
+    const row = (value as Record<string, unknown>)[tier]
+    if (row && typeof row === 'object' && 'baseCoins' in row) {
+      const n = Number((row as { baseCoins: unknown }).baseCoins)
+      if (Number.isFinite(n) && n > 0) out[tier] = { baseCoins: n }
+    }
+  }
+  return out
+}
+
 export function resolveImageModel(input: unknown): ImageModelConfig {
   if (typeof input === 'string' && input in IMAGE_MODELS) {
     return IMAGE_MODELS[input as ImageTier]
