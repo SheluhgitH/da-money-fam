@@ -6,16 +6,22 @@ import NewSongForm from './NewSongForm'
 import EditSongForm from './EditSongForm'
 import AdStudioAdmin from './AdStudioAdmin'
 import SiteSettingsPanel from './SiteSettingsPanel'
+import UsersAdmin from './UsersAdmin'
+import ActivityLogPanel from './ActivityLogPanel'
+import BlogAdminPanel from './BlogAdminPanel'
 
 type Tab =
   | 'overview'
   | 'ad-studio'
+  | 'users'
   | 'site'
   | 'songs'
   | 'orders'
   | 'merch'
   | 'services'
   | 'settings'
+  | 'activity'
+  | 'blog'
   | 'new'
   | 'edit'
 type OrderFilter = 'all' | OrderStatus
@@ -49,6 +55,11 @@ export default function AdminDashboard() {
   const [merchOrders, setMerchOrders] = useState<MerchOrder[]>([])
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([])
   const [studioStats, setStudioStats] = useState<{ today: number; failRate: number; failedToday: number } | null>(null)
+  const [overviewExtra, setOverviewExtra] = useState<{
+    usersTotal: number
+    signupsWeek: number
+    coinzSoldApprox: number
+  } | null>(null)
   const [settings, setSettings] = useState<PaymentSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -57,14 +68,16 @@ export default function AdminDashboard() {
     setLoading(true)
     setMessage('')
     try {
-      const [songsRes, ordersRes, merchRes, serviceRes, settingsRes, studioRes] = await Promise.all([
-        fetch('/api/admin/songs'),
-        fetch('/api/admin/orders'),
-        fetch('/api/admin/merch-orders'),
-        fetch('/api/admin/service-orders'),
-        fetch('/api/admin/payment-settings'),
-        fetch('/api/admin/ad-studio?limit=1'),
-      ])
+      const [songsRes, ordersRes, merchRes, serviceRes, settingsRes, studioRes, overviewRes] =
+        await Promise.all([
+          fetch('/api/admin/songs'),
+          fetch('/api/admin/orders'),
+          fetch('/api/admin/merch-orders'),
+          fetch('/api/admin/service-orders'),
+          fetch('/api/admin/payment-settings'),
+          fetch('/api/admin/ad-studio?limit=1'),
+          fetch('/api/admin/overview'),
+        ])
 
       if (songsRes.status === 401 || ordersRes.status === 401) {
         setMessage('Session expired. Please log in again.')
@@ -78,6 +91,7 @@ export default function AdminDashboard() {
       const serviceData = serviceRes.ok ? await serviceRes.json() : { orders: [] }
       const settingsData = await settingsRes.json()
       const studioData = studioRes.ok ? await studioRes.json() : { stats: null }
+      const overviewData = overviewRes.ok ? await overviewRes.json() : null
 
       if (!songsRes.ok) {
         setMessage(songsData.error || 'Failed to load songs')
@@ -89,6 +103,15 @@ export default function AdminDashboard() {
       setServiceOrders(serviceData.orders || [])
       setSettings(settingsData.settings || null)
       setStudioStats(studioData.stats || null)
+      setOverviewExtra(
+        overviewData
+          ? {
+              usersTotal: overviewData.usersTotal || 0,
+              signupsWeek: overviewData.signupsWeek || 0,
+              coinzSoldApprox: overviewData.coinzSoldApprox || 0,
+            }
+          : null
+      )
     } catch (error) {
       console.error(error)
       setMessage('Failed to load admin data')
@@ -103,7 +126,7 @@ export default function AdminDashboard() {
     const section = params.get('section') as Tab | null
     if (
       section &&
-      ['overview', 'ad-studio', 'site', 'songs', 'orders', 'merch', 'services', 'settings', 'new'].includes(
+      ['overview', 'ad-studio', 'users', 'site', 'songs', 'orders', 'merch', 'services', 'settings', 'activity', 'blog', 'new'].includes(
         section
       )
     ) {
@@ -324,11 +347,14 @@ export default function AdminDashboard() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'ad-studio', label: 'Ad Studio' },
+    { id: 'users', label: 'Users' },
     { id: 'site', label: 'Site' },
     { id: 'songs', label: 'Songs' },
     { id: 'orders', label: 'Song Orders' },
     { id: 'merch', label: 'Merch Orders' },
     { id: 'services', label: 'Service Orders' },
+    { id: 'blog', label: 'Blog' },
+    { id: 'activity', label: 'Activity' },
     { id: 'settings', label: 'Payment' },
     { id: 'new', label: 'Add Song' },
   ]
@@ -369,8 +395,14 @@ export default function AdminDashboard() {
 
       {tab === 'ad-studio' ? (
         <AdStudioAdmin />
+      ) : tab === 'users' ? (
+        <UsersAdmin />
       ) : tab === 'site' ? (
         <SiteSettingsPanel />
+      ) : tab === 'activity' ? (
+        <ActivityLogPanel />
+      ) : tab === 'blog' ? (
+        <BlogAdminPanel />
       ) : loading ? (
         <p className="text-gray-500">Loading...</p>
       ) : tab === 'overview' ? (
@@ -387,6 +419,12 @@ export default function AdminDashboard() {
               value={studioStats?.today ?? '—'}
               hint={studioStats ? `${studioStats.failedToday} failed · ${studioStats.failRate}% fail` : 'Load Ad Studio'}
             />
+            <StatCard label="Users" value={overviewExtra?.usersTotal ?? '—'} hint={`${overviewExtra?.signupsWeek ?? 0} new this week`} />
+            <StatCard
+              label="Coinz granted (7d)"
+              value={overviewExtra?.coinzSoldApprox ?? '—'}
+              hint="From purchase ledger entries"
+            />
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -398,6 +436,12 @@ export default function AdminDashboard() {
                   className="px-4 py-2 rounded-full bg-white/10 text-sm hover:bg-white/20"
                 >
                   Ad Studio
+                </button>
+                <button
+                  onClick={() => switchTab('users')}
+                  className="px-4 py-2 rounded-full bg-white/10 text-sm hover:bg-white/20"
+                >
+                  Manage Users
                 </button>
                 <button
                   onClick={() => switchTab('site')}

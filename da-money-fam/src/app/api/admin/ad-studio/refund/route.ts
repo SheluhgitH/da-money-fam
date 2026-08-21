@@ -44,7 +44,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Nothing to refund' }, { status: 400 })
   }
 
-  const newBalance = await creditUserCoins(String(gen.user_id), amount)
+  const newBalance = await creditUserCoins(String(gen.user_id), amount, {
+    reason: 'refund',
+    referenceId: id,
+    adminNote: 'Ad Studio admin refund',
+  })
   const now = new Date().toISOString()
 
   const { data: updated, error: updateError } = await supabase

@@ -92,7 +92,34 @@ export async function getFanSubscription(userId: string): Promise<FanSubscriptio
   }
 }
 
+export async function hasManualFanClub(userId: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data } = await supabase
+      .from('profiles')
+      .select('fan_club_manual')
+      .eq('id', userId)
+      .maybeSingle()
+    return Boolean(data?.fan_club_manual)
+  }
+  return false
+}
+
+export async function setManualFanClub(userId: string, enabled: boolean): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { error } = await supabase
+      .from('profiles')
+      .update({ fan_club_manual: enabled })
+      .eq('id', userId)
+    if (error) throw new Error(error.message)
+    return
+  }
+  throw new Error('Database not configured')
+}
+
 export async function isActiveFanClubMember(userId: string): Promise<boolean> {
+  if (await hasManualFanClub(userId)) return true
   const sub = await getFanSubscription(userId)
   if (!sub || sub.status !== 'active') return false
   if (sub.current_period_end && new Date(sub.current_period_end) < new Date()) return false

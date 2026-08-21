@@ -69,8 +69,9 @@ export default function AdStudioShell({
   }
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-matte-black text-white overflow-hidden">
-      <header className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-gold/15 bg-black/60">
+    <div className="h-[100dvh] flex flex-col bg-[#050505] text-white overflow-hidden">
+      <div className="pointer-events-none fixed inset-0 opacity-40 bg-[radial-gradient(ellipse_at_top,_rgba(255,215,0,0.08),_transparent_50%)]" />
+      <header className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-gold/15 bg-black/70 backdrop-blur-md relative z-10">
         <div className="flex items-center gap-3 min-w-0">
           <Link href="/" className="text-gold font-serif text-sm tracking-[0.15em] uppercase shrink-0">
             DMF
@@ -78,7 +79,7 @@ export default function AdStudioShell({
           <span className="text-white/20">/</span>
           <h1 className="text-sm font-serif text-gold truncate">Ad Studio</h1>
           {studio.statusText && (
-            <span className="hidden sm:inline text-[10px] uppercase tracking-widest text-gold/60 border border-gold/20 px-2 py-1 rounded-full truncate">
+            <span className="hidden sm:inline text-[10px] uppercase tracking-widest text-gold/60 border border-gold/20 px-2 py-1 rounded-full truncate animate-pulse">
               {studio.statusText}
             </span>
           )}
@@ -158,14 +159,16 @@ export default function AdStudioShell({
           </Link>
         </div>
       ) : (
-        <div className="flex-1 flex min-h-0">
-          <aside className="hidden md:flex w-64 lg:w-72 border-r border-gold/15 flex-col bg-black/40">
+        <div className="flex-1 flex min-h-0 relative z-10">
+          <aside className="hidden md:flex w-64 lg:w-72 border-r border-gold/15 flex-col bg-black/50 backdrop-blur-sm">
             <GenerationLibrary studio={studio} />
           </aside>
 
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
             <PreviewCanvas studio={studio} />
-            <PromptDock studio={studio} />
+            <div className="shrink-0 border-t border-gold/20 bg-black/80 backdrop-blur-xl shadow-[0_-20px_60px_rgba(0,0,0,0.6)]">
+              <PromptDock studio={studio} />
+            </div>
           </div>
         </div>
       )}

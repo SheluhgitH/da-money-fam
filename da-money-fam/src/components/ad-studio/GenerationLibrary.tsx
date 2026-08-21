@@ -1,5 +1,6 @@
 'use client'
 
+import { motion } from 'framer-motion'
 import type { AdStudioController } from '@/hooks/useAdStudio'
 import type { AdStudioGeneration } from '@/lib/ad-studio-types'
 import { resolveSeedanceModel } from '@/lib/seedance-models'
@@ -14,6 +15,36 @@ export default function GenerationLibrary({
   const select = (item: AdStudioGeneration) => {
     studio.selectLibraryItem(item)
     onCloseMobile?.()
+  }
+
+  const download = async (item: AdStudioGeneration) => {
+    const url = item.video_urls?.[0]
+    if (!url) return
+    try {
+      const proxy = `/api/video/showcase/${item.id}/content`
+      const res = await fetch(proxy)
+      if (!res.ok) {
+        window.open(url, '_blank')
+        return
+      }
+      const blob = await res.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `dmf-ad-${item.id.slice(0, 8)}.mp4`
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch {
+      window.open(url, '_blank')
+    }
+  }
+
+  const copyLink = async (item: AdStudioGeneration) => {
+    const share = `${window.location.origin}/api/video/showcase/${item.id}/content`
+    try {
+      await navigator.clipboard.writeText(share)
+    } catch {
+      /* ignore */
+    }
   }
 
   return (
@@ -36,14 +67,17 @@ export default function GenerationLibrary({
             Generations appear here. Create your first ad with the prompt dock below.
           </p>
         ) : (
-          studio.library.map((item) => {
+          studio.library.map((item, index) => {
             const thumb = item.video_urls?.[0]
             const active = studio.selectedLibraryId === item.id
             const onSite = item.featured !== false
             const modelLabel = resolveSeedanceModel(item.model).label
             return (
-              <div
+              <motion.div
                 key={item.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(index * 0.04, 0.3) }}
                 className={`rounded-xl border overflow-hidden transition-colors ${
                   active ? 'border-gold bg-gold/10' : 'border-white/10 bg-white/[0.03]'
                 }`}
@@ -84,12 +118,12 @@ export default function GenerationLibrary({
                     </p>
                   </div>
                 </button>
-                <div className="px-2 pb-2 flex gap-1">
+                <div className="px-2 pb-2 flex flex-wrap gap-1">
                   {item.status === 'failed' ? (
                     <button
                       type="button"
                       onClick={() => studio.remixFromLibrary(item)}
-                      className="flex-1 text-[9px] uppercase tracking-wider py-1 rounded border border-red-400/40 text-red-300 hover:bg-red-500 hover:text-white transition-colors"
+                      className="flex-1 text-[9px] uppercase tracking-wider py-1 rounded border border-red-400/40 text-red-300"
                     >
                       Retry
                     </button>
@@ -103,33 +137,42 @@ export default function GenerationLibrary({
                     </button>
                   )}
                   {item.status === 'completed' && item.video_urls?.length > 0 && (
-                    <button
-                      type="button"
-                      disabled={Boolean(item.admin_hidden)}
-                      onClick={() => {
-                        if (item.admin_hidden) return
-                        studio.setFeatured(item, !onSite)
-                      }}
-                      className={`flex-1 text-[9px] uppercase tracking-wider py-1 rounded border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                        item.admin_hidden
-                          ? 'border-white/10 text-white/30'
-                          : onSite
-                            ? 'border-gold/40 text-gold bg-gold/10'
-                            : 'border-white/15 text-white/45 hover:border-gold/30'
-                      }`}
-                      title={
-                        item.admin_hidden
-                          ? 'Hidden by admin — cannot feature on site'
-                          : onSite
-                            ? 'Showing on damoneyfam.com — click to hide'
-                            : 'Hidden from site — click to show'
-                      }
-                    >
-                      {item.admin_hidden ? 'Admin hide' : onSite ? 'On site' : 'Hidden'}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => download(item)}
+                        className="flex-1 text-[9px] uppercase tracking-wider py-1 rounded border border-white/15 text-white/55 hover:border-gold/40"
+                      >
+                        Download
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyLink(item)}
+                        className="text-[9px] uppercase tracking-wider py-1 px-2 rounded border border-white/15 text-white/45"
+                      >
+                        Link
+                      </button>
+                      <button
+                        type="button"
+                        disabled={Boolean(item.admin_hidden)}
+                        onClick={() => {
+                          if (item.admin_hidden) return
+                          studio.setFeatured(item, !onSite)
+                        }}
+                        className={`flex-1 text-[9px] uppercase tracking-wider py-1 rounded border transition-colors disabled:opacity-40 ${
+                          item.admin_hidden
+                            ? 'border-white/10 text-white/30'
+                            : onSite
+                              ? 'border-gold/40 text-gold bg-gold/10'
+                              : 'border-white/15 text-white/45'
+                        }`}
+                      >
+                        {item.admin_hidden ? 'Admin hide' : onSite ? 'On site' : 'Hidden'}
+                      </button>
+                    </>
                   )}
                 </div>
-              </div>
+              </motion.div>
             )
           })
         )}

@@ -165,33 +165,49 @@ export async function awardXp(userId: string, amount: number): Promise<UserStats
   })
 }
 
-export async function creditUserCoins(userId: string, amount: number): Promise<number> {
-  if (isSupabaseConfigured()) {
-    const supabase = createServiceClient()!
-    const { data: existing } = await supabase
-      .from('user_coins')
-      .select('amount')
-      .eq('user_id', userId)
-      .maybeSingle()
+export type CoinzLedgerReason =
+  | 'admin_grant'
+  | 'admin_deduct'
+  | 'purchase'
+  | 'ad_studio'
+  | 'refund'
+  | 'other'
 
-    const newAmount = (existing ? Number(existing.amount) : 0) + amount
-    const { data, error } = await supabase
-      .from('user_coins')
-      .upsert({ user_id: userId, amount: newAmount }, { onConflict: 'user_id' })
-      .select('amount')
-      .single()
-    if (error) throw new Error(error.message)
-    return Number(data.amount)
-  }
-
-  const coins = await readJsonFile<Record<string, number>>('user-coins.json', {})
-  coins[userId] = (coins[userId] || 0) + amount
-  await writeJsonFile('user-coins.json', coins)
-  return coins[userId]
+export interface CoinzLedgerEntry {
+  id: string
+  user_id: string
+  amount: number
+  balance_after: number
+  reason: string
+  reference_id: string | null
+  admin_note: string | null
+  created_at: string
 }
 
-export async function debitUserCoins(userId: string, amount: number): Promise<number> {
-  if (amount <= 0) throw new Error('Amount must be positive')
+async function writeCoinzLedger(
+  userId: string,
+  amount: number,
+  balanceAfter: number,
+  meta?: { reason?: CoinzLedgerReason | string; referenceId?: string; adminNote?: string }
+) {
+  if (!isSupabaseConfigured()) return
+  const supabase = createServiceClient()!
+  await supabase.from('coinz_ledger').insert({
+    user_id: userId,
+    amount,
+    balance_after: balanceAfter,
+    reason: meta?.reason || 'other',
+    reference_id: meta?.referenceId || null,
+    admin_note: meta?.adminNote || null,
+  })
+}
+
+export async function adjustUserCoins(
+  userId: string,
+  delta: number,
+  meta?: { reason?: CoinzLedgerReason | string; referenceId?: string; adminNote?: string }
+): Promise<number> {
+  if (!delta) throw new Error('Amount must be non-zero')
 
   if (isSupabaseConfigured()) {
     const supabase = createServiceClient()!
@@ -201,30 +217,97 @@ export async function debitUserCoins(userId: string, amount: number): Promise<nu
       .eq('user_id', userId)
       .maybeSingle()
 
-    const currentAmount = existing ? Number(existing.amount) : 0
-    if (currentAmount < amount) {
-      throw new Error('Insufficient Coinz')
-    }
+    const current = existing ? Number(existing.amount) : 0
+    const next = current + delta
+    if (next < 0) throw new Error('Insufficient Coinz')
 
-    const nextAmount = currentAmount - amount
     const { data, error } = await supabase
       .from('user_coins')
-      .upsert({ user_id: userId, amount: nextAmount }, { onConflict: 'user_id', ignoreDuplicates: false })
+      .upsert({ user_id: userId, amount: next }, { onConflict: 'user_id' })
       .select('amount')
       .single()
-
     if (error) throw new Error(error.message)
-    return Number(data.amount)
+
+    const balance = Number(data.amount)
+    await writeCoinzLedger(userId, delta, balance, meta)
+    return balance
   }
 
   const coins = await readJsonFile<Record<string, number>>('user-coins.json', {})
-  const currentAmount = coins[userId] || 0
-  if (currentAmount < amount) {
-    throw new Error('Insufficient Coinz')
-  }
-  coins[userId] = currentAmount - amount
+  const current = coins[userId] || 0
+  const next = current + delta
+  if (next < 0) throw new Error('Insufficient Coinz')
+  coins[userId] = next
   await writeJsonFile('user-coins.json', coins)
-  return coins[userId]
+
+  const ledger = await readJsonFile<CoinzLedgerEntry[]>('coinz-ledger.json', [])
+  ledger.unshift({
+    id: crypto.randomUUID(),
+    user_id: userId,
+    amount: delta,
+    balance_after: next,
+    reason: meta?.reason || 'other',
+    reference_id: meta?.referenceId || null,
+    admin_note: meta?.adminNote || null,
+    created_at: new Date().toISOString(),
+  })
+  await writeJsonFile('coinz-ledger.json', ledger.slice(0, 500))
+  return next
+}
+
+export async function getCoinzLedger(userId: string, limit = 40): Promise<CoinzLedgerEntry[]> {
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data, error } = await supabase
+      .from('coinz_ledger')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    if (error) {
+      console.error('getCoinzLedger:', error.message)
+      return []
+    }
+    return (data || []).map((row) => ({
+      id: String(row.id),
+      user_id: String(row.user_id),
+      amount: Number(row.amount),
+      balance_after: Number(row.balance_after),
+      reason: String(row.reason),
+      reference_id: row.reference_id ? String(row.reference_id) : null,
+      admin_note: row.admin_note ? String(row.admin_note) : null,
+      created_at: String(row.created_at),
+    }))
+  }
+
+  const ledger = await readJsonFile<CoinzLedgerEntry[]>('coinz-ledger.json', [])
+  return ledger.filter((e) => e.user_id === userId).slice(0, limit)
+}
+
+export async function creditUserCoins(
+  userId: string,
+  amount: number,
+  meta?: { reason?: CoinzLedgerReason | string; referenceId?: string; adminNote?: string }
+): Promise<number> {
+  if (amount <= 0) throw new Error('Amount must be positive')
+  return adjustUserCoins(userId, amount, {
+    reason: meta?.reason || 'other',
+    referenceId: meta?.referenceId,
+    adminNote: meta?.adminNote,
+  })
+}
+
+export async function debitUserCoins(
+  userId: string,
+  amount: number,
+  meta?: { reason?: CoinzLedgerReason | string; referenceId?: string; adminNote?: string }
+): Promise<number> {
+  if (amount <= 0) throw new Error('Amount must be positive')
+  return adjustUserCoins(userId, -amount, {
+    reason: meta?.reason || 'ad_studio',
+    referenceId: meta?.referenceId,
+    adminNote: meta?.adminNote,
+  })
 }
 
 export async function getUserFavorites(userId: string): Promise<string[]> {

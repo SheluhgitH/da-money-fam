@@ -73,7 +73,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
   }
 
   return (
-    <div className="border-t border-gold/20 bg-black/90 backdrop-blur-xl">
+    <div className="bg-transparent">
       {studio.error && (
         <div className="px-4 pt-3">
           <div className="flex items-start justify-between gap-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2">
@@ -306,7 +306,40 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
           >
             Look
           </button>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await studio.savePreset()
+              } catch (err) {
+                studio.setError(err instanceof Error ? err.message : 'Failed to save look')
+              }
+            }}
+            className="text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border border-gold/30 text-gold/80 hover:bg-gold hover:text-black transition-colors"
+          >
+            Save look
+          </button>
         </div>
+
+        {studio.presets.length > 0 && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
+            {studio.presets.slice(0, 8).map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => studio.applyPreset(p)}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  studio.deletePreset(p.id)
+                }}
+                className="shrink-0 text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-gold/20 text-gold/70 hover:border-gold/50"
+                title="Click to apply · right-click to delete"
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {showBreakdown && (
           <p className="text-[10px] text-white/40 font-mono">

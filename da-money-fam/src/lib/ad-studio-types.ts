@@ -76,5 +76,27 @@ export const ASPECT_CLASS: Record<string, string> = {
 
 export const MAX_REFERENCE_IMAGES = 3
 export const MAX_REFERENCE_BYTES = 4 * 1024 * 1024
-export const MAX_STORYBOARD_SCENES = 3
+export const MAX_STORYBOARD_SCENES = 5
 export const MIN_STORYBOARD_SCENES = 2
+export const MAX_CONCURRENT_GENERATIONS = 2
+
+export interface AdStudioPreset {
+  id: string
+  user_id: string
+  name: string
+  brief: string | null
+  creative: Record<string, string> | null
+  aspect_ratio: string
+  model: string | null
+  duration_seconds: number
+  created_at: string
+  updated_at: string
+}
+
+export interface QueuedGenerationJob {
+  id: string
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+  label: string
+  error?: string | null
+  startedAt?: number
+}

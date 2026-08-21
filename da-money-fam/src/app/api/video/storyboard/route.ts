@@ -30,8 +30,8 @@ export async function POST(req: Request) {
     model: modelInput,
   } = body
 
-  if (!Array.isArray(rawScenes) || rawScenes.length < 2 || rawScenes.length > 3) {
-    return NextResponse.json({ error: 'Storyboard requires 2 or 3 scenes' }, { status: 400 })
+  if (!Array.isArray(rawScenes) || rawScenes.length < 2 || rawScenes.length > 5) {
+    return NextResponse.json({ error: 'Storyboard requires 2 to 5 scenes' }, { status: 400 })
   }
 
   const sceneBriefs = rawScenes

@@ -1,44 +1,42 @@
 'use client'
 
+import { MAX_STORYBOARD_SCENES, MIN_STORYBOARD_SCENES } from '@/lib/ad-studio-types'
 import type { AdStudioController } from '@/hooks/useAdStudio'
 
 export default function StoryboardTimeline({ studio }: { studio: AdStudioController }) {
   if (studio.mode !== 'storyboard') return null
+
+  const counts = Array.from(
+    { length: MAX_STORYBOARD_SCENES - MIN_STORYBOARD_SCENES + 1 },
+    (_, i) => MIN_STORYBOARD_SCENES + i
+  )
 
   return (
     <div className="px-4 pb-2">
       <div className="flex items-center justify-between mb-2">
         <p className="text-[10px] uppercase tracking-[0.2em] text-gold/50">Scenes</p>
         <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={() => studio.setSceneCount(2)}
-            className={`text-[9px] px-2 py-0.5 rounded-full border ${
-              studio.sceneBriefs.length === 2
-                ? 'bg-gold text-black border-gold'
-                : 'border-gold/25 text-gold/70'
-            }`}
-          >
-            2
-          </button>
-          <button
-            type="button"
-            onClick={() => studio.setSceneCount(3)}
-            className={`text-[9px] px-2 py-0.5 rounded-full border ${
-              studio.sceneBriefs.length === 3
-                ? 'bg-gold text-black border-gold'
-                : 'border-gold/25 text-gold/70'
-            }`}
-          >
-            3
-          </button>
+          {counts.map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => studio.setSceneCount(n)}
+              className={`text-[9px] px-2 py-0.5 rounded-full border ${
+                studio.sceneBriefs.length === n
+                  ? 'bg-gold text-black border-gold'
+                  : 'border-gold/25 text-gold/70'
+              }`}
+            >
+              {n}
+            </button>
+          ))}
         </div>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1">
         {studio.sceneBriefs.map((brief, i) => (
           <div
             key={i}
-            className="min-w-[180px] flex-1 rounded-xl border border-gold/20 bg-black/40 p-2.5"
+            className="min-w-[160px] flex-1 rounded-xl border border-gold/20 bg-black/40 p-2.5"
           >
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[9px] uppercase tracking-wider text-gold">Scene {i + 1}</span>

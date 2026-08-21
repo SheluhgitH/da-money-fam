@@ -10,10 +10,17 @@ import type {
   AdReferenceImage,
   AdStudioGeneration,
   AdStudioMode,
+  AdStudioPreset,
   AdVideoPricingResponse,
+  QueuedGenerationJob,
   StoryboardScene,
 } from '@/lib/ad-studio-types'
-import { MAX_REFERENCE_BYTES, MAX_REFERENCE_IMAGES } from '@/lib/ad-studio-types'
+import {
+  MAX_REFERENCE_BYTES,
+  MAX_REFERENCE_IMAGES,
+  MAX_STORYBOARD_SCENES,
+  MIN_STORYBOARD_SCENES,
+} from '@/lib/ad-studio-types'
 import {
   DEFAULT_SEEDANCE_MODEL,
   resolveSeedanceModel,
@@ -21,6 +28,7 @@ import {
 } from '@/lib/seedance-models'
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000
+const DRAFT_KEY = 'dmf-ad-studio-draft'
 
 async function extractLastFrame(videoUrl: string): Promise<string | null> {
   return new Promise((resolve) => {
@@ -125,8 +133,12 @@ export function useAdStudio(initialBrief = '') {
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const [activePreviewIndex, setActivePreviewIndex] = useState(0)
   const [selectedLibraryId, setSelectedLibraryId] = useState<string | null>(null)
+  const [presets, setPresets] = useState<AdStudioPreset[]>([])
+  const [queue, setQueue] = useState<QueuedGenerationJob[]>([])
+  const [progressStep, setProgressStep] = useState(0)
 
   const abortRef = useRef<AbortController | null>(null)
+  const queueBusyRef = useRef(false)
 
   const sceneCount = mode === 'storyboard' ? sceneBriefs.length : 1
 
@@ -165,6 +177,70 @@ export function useAdStudio(initialBrief = '') {
   useEffect(() => {
     fetchLibrary()
   }, [fetchLibrary])
+
+  const fetchPresets = useCallback(async () => {
+    try {
+      const res = await fetch('/api/video/presets')
+      if (res.ok) {
+        const data = await res.json()
+        setPresets(data.presets || [])
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchPresets()
+  }, [fetchPresets])
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY)
+      if (!raw) return
+      const draft = JSON.parse(raw) as {
+        brief?: string
+        mode?: AdStudioMode
+        sceneBriefs?: string[]
+        creative?: CreativeSelections
+        duration?: 6 | 8 | 10
+        aspectRatio?: string
+        modelKey?: SeedanceModelKey
+      }
+      if (draft.brief && !initialBrief) setBrief(draft.brief)
+      if (draft.mode) setMode(draft.mode)
+      if (draft.sceneBriefs?.length) setSceneBriefs(draft.sceneBriefs)
+      if (draft.creative) setCreative({ ...DEFAULT_CREATIVE_SELECTIONS, ...draft.creative })
+      if (draft.duration) setDuration(draft.duration)
+      if (draft.aspectRatio) setAspectRatio(draft.aspectRatio)
+      if (draft.modelKey) setModelKey(draft.modelKey)
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      try {
+        localStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({
+            brief,
+            mode,
+            sceneBriefs,
+            creative,
+            duration,
+            aspectRatio,
+            modelKey,
+          })
+        )
+      } catch {
+        /* ignore */
+      }
+    }, 400)
+    return () => window.clearTimeout(t)
+  }, [brief, mode, sceneBriefs, creative, duration, aspectRatio, modelKey])
 
   useEffect(() => {
     if (pricing && !pricing.canEnhance && enhance) setEnhance(false)
@@ -225,10 +301,12 @@ export function useAdStudio(initialBrief = '') {
     )
   }
 
-  const setSceneCount = (count: 2 | 3) => {
+  const setSceneCount = (count: number) => {
+    const n = Math.min(MAX_STORYBOARD_SCENES, Math.max(MIN_STORYBOARD_SCENES, count))
     setSceneBriefs((prev) => {
-      if (count === 2) return [prev[0] || '', prev[1] || '']
-      return [prev[0] || '', prev[1] || '', prev[2] || '']
+      const next = [...prev]
+      while (next.length < n) next.push('')
+      return next.slice(0, n)
     })
   }
 
@@ -241,6 +319,48 @@ export function useAdStudio(initialBrief = '') {
     abortRef.current = null
     setGenerating(false)
     setStatusText(null)
+    setProgressStep(0)
+    setQueue((prev) =>
+      prev.map((j) =>
+        j.status === 'running' || j.status === 'queued'
+          ? { ...j, status: 'cancelled' as const }
+          : j
+      )
+    )
+  }
+
+  const savePreset = async (name?: string) => {
+    const res = await fetch('/api/video/presets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name || `Look ${new Date().toLocaleDateString()}`,
+        brief,
+        creative,
+        aspect_ratio: aspectRatio,
+        model: modelKey,
+        duration_seconds: duration,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed to save look')
+    await fetchPresets()
+    return data.preset as AdStudioPreset
+  }
+
+  const applyPreset = (preset: AdStudioPreset) => {
+    if (preset.brief) setBrief(preset.brief)
+    if (preset.creative) setCreative({ ...DEFAULT_CREATIVE_SELECTIONS, ...preset.creative })
+    if (preset.aspect_ratio) setAspectRatio(preset.aspect_ratio)
+    if (preset.model) setModelKey(resolveSeedanceModel(preset.model).key)
+    if (preset.duration_seconds) {
+      setDuration((preset.duration_seconds as 6 | 8 | 10) || 6)
+    }
+  }
+
+  const deletePreset = async (id: string) => {
+    await fetch(`/api/video/presets?id=${id}`, { method: 'DELETE' })
+    await fetchPresets()
   }
 
   const selectLibraryItem = (item: AdStudioGeneration) => {
@@ -313,10 +433,22 @@ export function useAdStudio(initialBrief = '') {
     setError(null)
     setPreviewUrls([])
     setActivePreviewIndex(0)
+    setProgressStep(1)
+    const jobId = crypto.randomUUID()
+    setQueue((prev) => [
+      {
+        id: jobId,
+        status: 'running',
+        label: (mode === 'single' ? brief : `Storyboard (${sceneBriefs.length})`).slice(0, 48),
+        startedAt: Date.now(),
+      },
+      ...prev.slice(0, 9),
+    ])
 
     try {
       if (mode === 'storyboard') {
         setStatusText('Starting storyboard…')
+        setProgressStep(1)
         const startRes = await fetch('/api/video/storyboard', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -347,6 +479,7 @@ export function useAdStudio(initialBrief = '') {
 
         for (let i = 0; i < sceneBriefs.length; i++) {
           setStatusText(`Scene ${i + 1} of ${sceneBriefs.length} · Rendering…`)
+          setProgressStep(Math.min(4, 1 + Math.floor((i / sceneBriefs.length) * 3)))
 
           let jobId: string
           if (i === 0) {
@@ -407,6 +540,7 @@ export function useAdStudio(initialBrief = '') {
         await fetchPricing()
       } else {
         setStatusText(variations > 1 ? `Generating ${variations} variants…` : 'Rendering…')
+        setProgressStep(enhance ? 2 : 1)
         const res = await fetch('/api/video', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -468,6 +602,10 @@ export function useAdStudio(initialBrief = '') {
         }
 
         setStatusText(null)
+        setProgressStep(0)
+        setQueue((prev) =>
+          prev.map((j) => (j.id === jobId ? { ...j, status: 'completed' as const } : j))
+        )
         await fetchLibrary()
         await fetchPricing()
       }
@@ -478,9 +616,16 @@ export function useAdStudio(initialBrief = '') {
         setError(err instanceof Error ? err.message : 'Failed to generate')
       }
       setStatusText(null)
+      setProgressStep(0)
+      setQueue((prev) =>
+        prev.map((j) =>
+          j.status === 'running' ? { ...j, status: 'failed' as const, error: String(err) } : j
+        )
+      )
     } finally {
       setGenerating(false)
       abortRef.current = null
+      queueBusyRef.current = false
     }
   }
 
@@ -528,6 +673,12 @@ export function useAdStudio(initialBrief = '') {
     cancelGenerate,
     fetchPricing,
     fetchLibrary,
+    presets,
+    savePreset,
+    applyPreset,
+    deletePreset,
+    queue,
+    progressStep,
   }
 }
 

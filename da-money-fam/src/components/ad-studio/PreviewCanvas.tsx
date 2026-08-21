@@ -1,11 +1,17 @@
 'use client'
 
+import { AnimatePresence, motion } from 'framer-motion'
 import { ASPECT_CLASS } from '@/lib/ad-studio-types'
 import type { AdStudioController } from '@/hooks/useAdStudio'
+
+const STEPS = ['Enhancing…', 'Rendering…', 'Almost there…', 'Finishing…']
 
 export default function PreviewCanvas({ studio }: { studio: AdStudioController }) {
   const aspectClass = ASPECT_CLASS[studio.aspectRatio] || ASPECT_CLASS['9:16']
   const url = studio.previewUrls[studio.activePreviewIndex] || null
+  const stepLabel =
+    studio.statusText ||
+    (studio.progressStep > 0 ? STEPS[Math.min(STEPS.length - 1, studio.progressStep - 1)] : null)
 
   const onEnded = () => {
     if (studio.previewUrls.length > 1) {
@@ -15,65 +21,125 @@ export default function PreviewCanvas({ studio }: { studio: AdStudioController }
   }
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 min-h-0">
-      <div
-        className={`relative w-full max-w-md ${aspectClass} max-h-full rounded-2xl overflow-hidden border border-gold/20 bg-black shadow-[0_0_60px_rgba(255,215,0,0.08)]`}
+    <div className="flex-1 flex flex-col items-center justify-center p-4 md:p-8 min-h-0 relative">
+      <div className="pointer-events-none absolute inset-0 opacity-[0.07] bg-[radial-gradient(ellipse_at_center,_rgba(255,215,0,0.35),_transparent_60%)]" />
+
+      <motion.div
+        layout
+        className={`relative w-full max-w-md ${aspectClass} max-h-full rounded-2xl overflow-hidden border border-gold/25 bg-black shadow-[0_0_80px_rgba(255,215,0,0.12)]`}
       >
-        {url ? (
-          <video
-            key={url}
-            src={url}
-            controls
-            autoPlay
-            playsInline
-            className="w-full h-full object-contain bg-black"
-            onEnded={onEnded}
-          />
-        ) : studio.generating ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <span className="h-10 w-10 rounded-full border-2 border-gold/30 border-t-gold animate-spin" />
-            <p className="text-[10px] uppercase tracking-[0.2em] text-gold/60 px-4 text-center">
-              {studio.statusText || 'Rendering…'}
-            </p>
-          </div>
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-b from-zinc-900 via-black to-black">
-            <p className="font-serif text-gold text-lg">Ad Studio</p>
-            <p className="text-[11px] text-white/35 uppercase tracking-[0.2em] text-center px-6">
-              Describe your ad below
-            </p>
-          </div>
-        )}
-      </div>
+        <div className="pointer-events-none absolute inset-0 z-10 mix-blend-overlay opacity-20 bg-[url('data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22><filter id=%22n%22><feTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%222%22/></filter><rect width=%2240%22 height=%2240%22 filter=%22url(%23n)%22 opacity=%220.4%22/></svg>')]" />
+
+        <AnimatePresence mode="wait">
+          {url ? (
+            <motion.video
+              key={url}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.35 }}
+              src={url}
+              controls
+              autoPlay
+              playsInline
+              className="w-full h-full object-contain bg-black relative z-0"
+              onEnded={onEnded}
+            />
+          ) : studio.generating ? (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-20"
+            >
+              <div className="relative h-16 w-16">
+                <div className="absolute inset-0 rounded-full border-2 border-gold/20" />
+                <motion.div
+                  className="absolute inset-0 rounded-full border-2 border-transparent border-t-gold"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                />
+                <div className="absolute inset-2 rounded-full bg-gradient-to-b from-gold/10 to-transparent" />
+              </div>
+              <p className="text-[10px] uppercase tracking-[0.25em] text-gold/70 px-6 text-center">
+                {stepLabel || 'Creating…'}
+              </p>
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4].map((s) => (
+                  <span
+                    key={s}
+                    className={`h-1 w-6 rounded-full transition-colors ${
+                      studio.progressStep >= s ? 'bg-gold' : 'bg-white/15'
+                    }`}
+                  />
+                ))}
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="empty"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-b from-zinc-900 via-black to-black z-0"
+            >
+              <motion.p
+                animate={{ opacity: [0.6, 1, 0.6] }}
+                transition={{ duration: 3, repeat: Infinity }}
+                className="font-serif text-gold text-xl tracking-wide"
+              >
+                Ad Studio
+              </motion.p>
+              <p className="text-[11px] text-white/35 uppercase tracking-[0.25em] text-center px-8">
+                Describe your vision below
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
 
       {studio.previewUrls.length > 1 && (
-        <div className="flex gap-2 mt-4 flex-wrap justify-center">
-          {studio.previewUrls.map((src, i) => (
+        <div className="flex gap-2 mt-4 flex-wrap justify-center relative z-10">
+          {studio.previewUrls.map((_, i) => (
             <button
-              key={`${src}-${i}`}
+              key={i}
               type="button"
               onClick={() => studio.setActivePreviewIndex(i)}
-              className={`w-14 h-14 rounded-lg overflow-hidden border ${
-                i === studio.activePreviewIndex ? 'border-gold' : 'border-white/15'
+              className={`text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border transition-colors ${
+                studio.activePreviewIndex === i
+                  ? 'bg-gold text-black border-gold'
+                  : 'border-gold/25 text-gold/70'
               }`}
             >
-              <video src={src} muted playsInline preload="metadata" className="w-full h-full object-cover" />
+              Take {i + 1}
             </button>
           ))}
         </div>
       )}
 
-      {url && (
-        <div className="flex gap-2 mt-4 flex-wrap justify-center">
-          {studio.previewUrls.map((src, i) => (
-            <a
-              key={`dl-${src}-${i}`}
-              href={src}
-              download={`dmf-ad-${i + 1}.mp4`}
-              className="text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full bg-gold text-black font-bold hover:bg-white transition-colors"
+      {studio.queue.length > 0 && (
+        <div className="mt-4 w-full max-w-md space-y-1 relative z-10">
+          <p className="text-[9px] uppercase tracking-[0.2em] text-gold/40 mb-1">Queue</p>
+          {studio.queue.slice(0, 4).map((job) => (
+            <div
+              key={job.id}
+              className="flex items-center justify-between text-[10px] px-3 py-1.5 rounded-lg border border-white/10 bg-black/40"
             >
-              Download {studio.previewUrls.length > 1 ? i + 1 : ''}
-            </a>
+              <span className="text-white/70 truncate pr-2">{job.label}</span>
+              <span
+                className={
+                  job.status === 'running'
+                    ? 'text-gold'
+                    : job.status === 'completed'
+                      ? 'text-green-400'
+                      : job.status === 'failed'
+                        ? 'text-red-300'
+                        : 'text-white/40'
+                }
+              >
+                {job.status}
+              </span>
+            </div>
           ))}
         </div>
       )}
