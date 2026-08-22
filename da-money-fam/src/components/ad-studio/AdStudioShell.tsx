@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useAdStudio } from '@/hooks/useAdStudio'
 import { useImageStudio } from '@/hooks/useImageStudio'
 import GenerationLibrary from './GenerationLibrary'
@@ -9,6 +10,7 @@ import PreviewCanvas from './PreviewCanvas'
 import PromptDock from './PromptDock'
 import ImageStudioPanel from './ImageStudioPanel'
 import ImageLibrary from './ImageLibrary'
+import GtaStylePanel from './GtaStylePanel'
 import { COIN_PACKAGES, packAdCopy, type CoinPackage } from '@/lib/coin-packages'
 import { packsFromSettings } from '@/lib/site-settings'
 
@@ -16,20 +18,24 @@ export default function AdStudioShell({
   initialBrief = '',
   checkoutStatus = null,
   initialTab = 'video',
+  initialImageMode = 'stills',
 }: {
   initialBrief?: string
   checkoutStatus?: string | null
   initialTab?: 'video' | 'images'
+  initialImageMode?: 'stills' | 'gta'
 }) {
   const studio = useAdStudio(initialBrief)
   const images = useImageStudio()
   const [studioTab, setStudioTab] = useState<'video' | 'images'>(initialTab)
+  const [imageMode, setImageMode] = useState<'stills' | 'gta'>(initialImageMode)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [buyOpen, setBuyOpen] = useState(false)
   const [packs, setPacks] = useState<CoinPackage[]>(COIN_PACKAGES)
   const [buyingId, setBuyingId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [showImageTip, setShowImageTip] = useState(false)
+  const [showGtaTip, setShowGtaTip] = useState(false)
 
   useEffect(() => {
     fetch('/api/site-settings')
@@ -40,10 +46,15 @@ export default function AdStudioShell({
 
   useEffect(() => {
     try {
-      if (sessionStorage.getItem('dmf-image-studio-tip') === '1') return
-      setShowImageTip(true)
+      if (sessionStorage.getItem('dmf-gta-style-tip') === '1') {
+        if (sessionStorage.getItem('dmf-image-studio-tip') !== '1') {
+          setShowImageTip(true)
+        }
+        return
+      }
+      setShowGtaTip(true)
     } catch {
-      /* ignore */
+      setShowGtaTip(true)
     }
   }, [])
 
@@ -53,6 +64,7 @@ export default function AdStudioShell({
     ;(async () => {
       await studio.fetchPricing()
       await images.fetchQuote()
+      await images.fetchGtaQuotes()
       if (!cancelled) {
         setToast('Coinz updated')
         window.setTimeout(() => setToast(null), 4000)
@@ -74,6 +86,22 @@ export default function AdStudioShell({
     } catch {
       /* ignore */
     }
+  }
+
+  const dismissGtaTip = () => {
+    setShowGtaTip(false)
+    try {
+      sessionStorage.setItem('dmf-gta-style-tip', '1')
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const openGtaMode = () => {
+    setStudioTab('images')
+    setImageMode('gta')
+    dismissGtaTip()
+    dismissImageTip()
   }
 
   const buyPack = async (packageId: string) => {
@@ -103,7 +131,7 @@ export default function AdStudioShell({
 
   const balance =
     studioTab === 'images'
-      ? images.quote?.balance
+      ? images.gtaQuotes[images.gtaQuality]?.balance ?? images.quote?.balance
       : studio.pricing?.balance
 
   return (
@@ -162,7 +190,7 @@ export default function AdStudioShell({
           >
             Library
           </button>
-          {(studio.pricing?.isAuthenticated || images.quote) && (
+          {(studio.pricing?.isAuthenticated || images.quote || images.gtaQuotes.fast) && (
             <>
               <span className="text-[10px] font-mono text-gold/80 border border-gold/20 px-2 py-1 rounded-md">
                 {balance ?? '—'} Coinz
@@ -182,7 +210,7 @@ export default function AdStudioShell({
         </div>
       </header>
 
-      {showImageTip && studioTab === 'video' && (
+      {showImageTip && !showGtaTip && studioTab === 'video' && (
         <div className="shrink-0 border-b border-gold/20 bg-gold/10 px-4 py-2 flex items-center justify-between gap-3 relative z-10">
           <p className="text-[11px] text-gold">
             New: generate ad stills in <span className="font-bold">Image Studio</span>
@@ -259,7 +287,35 @@ export default function AdStudioShell({
             />
           </aside>
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
-            <ImageStudioPanel images={images} onUseForVideo={applyImageForVideo} />
+            <div className="shrink-0 flex gap-1 px-4 pt-3 pb-1">
+              <button
+                type="button"
+                onClick={() => setImageMode('stills')}
+                className={`text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border ${
+                  imageMode === 'stills'
+                    ? 'bg-gold text-black border-gold'
+                    : 'border-gold/25 text-gold/70'
+                }`}
+              >
+                Ad Stills
+              </button>
+              <button
+                type="button"
+                onClick={() => setImageMode('gta')}
+                className={`text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border ${
+                  imageMode === 'gta'
+                    ? 'bg-gold text-black border-gold'
+                    : 'border-gold/25 text-gold/70'
+                }`}
+              >
+                GTA Styles
+              </button>
+            </div>
+            {imageMode === 'gta' ? (
+              <GtaStylePanel images={images} onUseForVideo={applyImageForVideo} />
+            ) : (
+              <ImageStudioPanel images={images} onUseForVideo={applyImageForVideo} />
+            )}
           </div>
         </div>
       ) : (
@@ -305,6 +361,66 @@ export default function AdStudioShell({
           </div>
         </div>
       )}
+
+      <AnimatePresence>
+        {showGtaTip && (
+          <motion.div
+            className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <button
+              type="button"
+              aria-label="Dismiss"
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+              onClick={dismissGtaTip}
+            />
+            <motion.div
+              role="dialog"
+              aria-labelledby="gta-tip-title"
+              initial={{ opacity: 0, y: 24, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+              className="relative w-full max-w-sm rounded-2xl border border-gold/30 bg-[#0c0c0c] p-6 shadow-[0_0_60px_rgba(255,215,0,0.12)]"
+            >
+              <div
+                className="pointer-events-none absolute inset-0 rounded-2xl opacity-40"
+                style={{
+                  background:
+                    'radial-gradient(ellipse at top, rgba(255,45,149,0.18), transparent 55%), radial-gradient(ellipse at bottom right, rgba(0,229,192,0.12), transparent 50%)',
+                }}
+              />
+              <div className="relative">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-gold/60 mb-2">New mode</p>
+                <h2 id="gta-tip-title" className="font-serif text-2xl text-gold mb-2">
+                  GTA Style Mode
+                </h2>
+                <p className="text-sm text-white/55 leading-relaxed mb-5">
+                  Turn any photo into every Rockstar era — from pixel GTA 1 to neon GTA VI. From 4 Coinz.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={openGtaMode}
+                    className="flex-1 py-2.5 rounded-full bg-gold text-black text-[11px] font-bold uppercase tracking-widest hover:bg-white transition-colors"
+                  >
+                    Try it
+                  </button>
+                  <button
+                    type="button"
+                    onClick={dismissGtaTip}
+                    className="px-4 py-2.5 rounded-full border border-white/15 text-[11px] uppercase tracking-widest text-white/50 hover:text-gold hover:border-gold/40 transition-colors"
+                  >
+                    Not now
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

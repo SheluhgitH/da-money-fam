@@ -9,12 +9,16 @@ function AdStudioInner() {
   const brief = params.get('brief') || ''
   const checkoutStatus = params.get('status')
   const tabParam = params.get('tab')
-  const initialTab = tabParam === 'images' || tabParam === 'image' ? 'images' : 'video'
+  const modeParam = params.get('mode')
+  const initialImageMode = modeParam === 'gta' ? 'gta' : 'stills'
+  const initialTab =
+    tabParam === 'images' || tabParam === 'image' || modeParam === 'gta' ? 'images' : 'video'
   return (
     <AdStudioShell
       initialBrief={brief}
       checkoutStatus={checkoutStatus}
       initialTab={initialTab}
+      initialImageMode={initialImageMode}
     />
   )
 }
