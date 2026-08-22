@@ -13,6 +13,7 @@ import ImageLibrary from './ImageLibrary'
 import GtaStylePanel from './GtaStylePanel'
 import { COIN_PACKAGES, packAdCopy, type CoinPackage } from '@/lib/coin-packages'
 import { packsFromSettings } from '@/lib/site-settings'
+import { GTA_MARKETING_SAMPLES } from '@/lib/gta-marketing-samples'
 
 export default function AdStudioShell({
   initialBrief = '',
@@ -46,7 +47,7 @@ export default function AdStudioShell({
 
   useEffect(() => {
     try {
-      if (sessionStorage.getItem('dmf-gta-style-tip') === '1') {
+      if (sessionStorage.getItem('dmf-gta-style-tip-v2') === '1') {
         if (sessionStorage.getItem('dmf-image-studio-tip') !== '1') {
           setShowImageTip(true)
         }
@@ -91,7 +92,7 @@ export default function AdStudioShell({
   const dismissGtaTip = () => {
     setShowGtaTip(false)
     try {
-      sessionStorage.setItem('dmf-gta-style-tip', '1')
+      sessionStorage.setItem('dmf-gta-style-tip-v2', '1')
     } catch {
       /* ignore */
     }
@@ -397,9 +398,32 @@ export default function AdStudioShell({
                 <h2 id="gta-tip-title" className="font-serif text-2xl text-gold mb-2">
                   GTA Style Mode
                 </h2>
-                <p className="text-sm text-white/55 leading-relaxed mb-5">
+                <p className="text-sm text-white/55 leading-relaxed mb-4">
                   Turn any photo into every Rockstar era — from pixel GTA 1 to neon GTA VI. From 4 Coinz.
                 </p>
+                <div className="flex gap-2 mb-5 overflow-hidden">
+                  {GTA_MARKETING_SAMPLES.map((sample, i) => (
+                    <motion.div
+                      key={sample.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.12 + i * 0.08 }}
+                      className="relative flex-1 aspect-[3/4] rounded-lg overflow-hidden border border-gold/25"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={sample.url}
+                        alt={sample.label}
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                      <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1 pb-1 pt-4">
+                        <span className="block text-[8px] uppercase tracking-wider text-gold truncate text-center">
+                          {sample.label}
+                        </span>
+                      </span>
+                    </motion.div>
+                  ))}
+                </div>
                 <div className="flex gap-2">
                   <button
                     type="button"

@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ImageTier } from '@/lib/image-models'
 import { DEFAULT_IMAGE_TIER, IMAGE_MODELS } from '@/lib/image-models'
-import { MAX_REFERENCE_BYTES, MAX_REFERENCE_IMAGES } from '@/lib/ad-studio-types'
+import { MAX_REFERENCE_IMAGES } from '@/lib/ad-studio-types'
 import { getGtaStyle } from '@/lib/gta-image-styles'
+import { compressImageForUpload } from '@/lib/compress-image'
 
 export type GtaQuality = 'fast' | 'smart'
 
@@ -44,6 +45,18 @@ async function fetchQuoteForTier(tier: ImageTier): Promise<ImageQuote | null> {
   }
 }
 
+async function uploadCompressed(file: File): Promise<string> {
+  const compressed = await compressImageForUpload(file)
+  const res = await fetch('/api/ad-studio/upload-ref', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dataUrl: compressed.dataUrl, contentType: compressed.contentType }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Upload failed')
+  return data.url as string
+}
+
 export function useImageStudio() {
   const [prompt, setPrompt] = useState('')
   const [tier, setTier] = useState<ImageTier>(DEFAULT_IMAGE_TIER)
@@ -55,6 +68,7 @@ export function useImageStudio() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [optimizing, setOptimizing] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const gtaFileRef = useRef<HTMLInputElement>(null)
 
@@ -112,55 +126,39 @@ export function useImageStudio() {
     Array.from(files)
       .slice(0, remaining)
       .forEach((file) => {
-        if (!file.type.startsWith('image/') || file.size > MAX_REFERENCE_BYTES) return
-        const reader = new FileReader()
-        reader.onload = async () => {
-          if (typeof reader.result !== 'string') return
+        if (!file.type.startsWith('image/') && !/\.(heic|heif)$/i.test(file.name)) return
+        ;(async () => {
           try {
-            const res = await fetch('/api/ad-studio/upload-ref', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ dataUrl: reader.result }),
-            })
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error || 'Upload failed')
-            setReferences((prev) => [...prev, data.url as string].slice(0, MAX_REFERENCE_IMAGES))
+            setOptimizing(true)
+            setError(null)
+            const url = await uploadCompressed(file)
+            setReferences((prev) => [...prev, url].slice(0, MAX_REFERENCE_IMAGES))
             if (mode === 'generate') setMode('edit')
           } catch (err) {
             setError(err instanceof Error ? err.message : 'Upload failed')
+          } finally {
+            setOptimizing(false)
           }
-        }
-        reader.readAsDataURL(file)
+        })()
       })
   }
 
   const setGtaPhotoFromFiles = (files: FileList | null) => {
     const file = files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/') || file.size > MAX_REFERENCE_BYTES) {
-      setError('Use a PNG, JPEG, or WebP under 4MB')
-      return
-    }
-    const reader = new FileReader()
-    reader.onload = async () => {
-      if (typeof reader.result !== 'string') return
+    ;(async () => {
       try {
+        setOptimizing(true)
         setError(null)
-        const res = await fetch('/api/ad-studio/upload-ref', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dataUrl: reader.result }),
-        })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Upload failed')
-        const url = data.url as string
+        const url = await uploadCompressed(file)
         setGtaPhotoUrl(url)
         setReferences([url])
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Upload failed')
+      } finally {
+        setOptimizing(false)
       }
-    }
-    reader.readAsDataURL(file)
+    })()
   }
 
   const clearGtaPhoto = () => {
@@ -303,6 +301,7 @@ export function useImageStudio() {
     previewUrl,
     setPreviewUrl,
     generating,
+    optimizing,
     error,
     setError,
     generate,

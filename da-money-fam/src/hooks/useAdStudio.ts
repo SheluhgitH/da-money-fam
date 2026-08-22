@@ -16,7 +16,6 @@ import type {
   StoryboardScene,
 } from '@/lib/ad-studio-types'
 import {
-  MAX_REFERENCE_BYTES,
   MAX_REFERENCE_IMAGES,
   MAX_STORYBOARD_SCENES,
   MIN_STORYBOARD_SCENES,
@@ -26,6 +25,7 @@ import {
   resolveSeedanceModel,
   type SeedanceModelKey,
 } from '@/lib/seedance-models'
+import { compressImageForUpload } from '@/lib/compress-image'
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000
 const DRAFT_KEY = 'dmf-ad-studio-draft'
@@ -334,12 +334,8 @@ export function useAdStudio(initialBrief = '') {
     Array.from(files)
       .slice(0, remaining)
       .forEach((file) => {
-        if (!file.type.startsWith('image/')) {
+        if (!file.type.startsWith('image/') && !/\.(heic|heif)$/i.test(file.name)) {
           setError('Only image files are supported.')
-          return
-        }
-        if (file.size > MAX_REFERENCE_BYTES) {
-          setError(`${file.name} is too large. Max 4MB per image.`)
           return
         }
         const localPreview = URL.createObjectURL(file)
@@ -348,14 +344,16 @@ export function useAdStudio(initialBrief = '') {
           return [...prev, { url: localPreview, useAsFirstFrame: false }]
         })
 
-        const reader = new FileReader()
-        reader.onload = async () => {
-          if (typeof reader.result !== 'string') return
+        ;(async () => {
           try {
+            const compressed = await compressImageForUpload(file)
             const res = await fetch('/api/ad-studio/upload-ref', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ dataUrl: reader.result }),
+              body: JSON.stringify({
+                dataUrl: compressed.dataUrl,
+                contentType: compressed.contentType,
+              }),
             })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'Upload failed')
@@ -368,8 +366,7 @@ export function useAdStudio(initialBrief = '') {
             URL.revokeObjectURL(localPreview)
             setError(err instanceof Error ? err.message : 'Reference upload failed')
           }
-        }
-        reader.readAsDataURL(file)
+        })()
       })
   }
 

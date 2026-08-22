@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export const AD_STUDIO_REFS_BUCKET = 'ad-studio-refs'
 export const MAX_REF_UPLOAD_BYTES = 4 * 1024 * 1024
-export const MAX_REF_PROCESSED_BYTES = 2 * 1024 * 1024
+export const MAX_REF_PROCESSED_BYTES = 3 * 1024 * 1024
 
 function serviceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -50,7 +50,7 @@ export async function uploadReferenceImage(input: {
   }
   if (bytes.length > MAX_REF_PROCESSED_BYTES) {
     // Soft reject oversized processed payloads for Riverflow compatibility
-    throw new Error('Image too large after processing (max 2MB). Try a smaller file.')
+    throw new Error('Image too large after processing (max 3MB). Try a smaller file.')
   }
 
   const ext =

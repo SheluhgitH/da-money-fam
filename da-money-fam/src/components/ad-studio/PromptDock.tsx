@@ -186,7 +186,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
             <input
               ref={fileRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
+              accept="image/*"
               multiple
               className="hidden"
               onChange={(e) => {
@@ -210,7 +210,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
             <input
               ref={fileRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
+              accept="image/*"
               multiple
               className="hidden"
               onChange={(e) => {

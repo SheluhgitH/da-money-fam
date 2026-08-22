@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GTA_IMAGE_STYLES } from '@/lib/gta-image-styles'
+import { GTA_MARKETING_SAMPLES } from '@/lib/gta-marketing-samples'
 import { IMAGE_MODELS } from '@/lib/image-models'
 import type { ImageStudioController } from '@/hooks/useImageStudio'
 
@@ -88,7 +89,7 @@ export default function GtaStylePanel({
           <input
             ref={images.gtaFileRef}
             type="file"
-            accept="image/png,image/jpeg,image/webp"
+            accept="image/*"
             className="hidden"
             onChange={(e) => {
               images.setGtaPhotoFromFiles(e.target.files)
@@ -115,7 +116,7 @@ export default function GtaStylePanel({
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                 <span className="text-gold/80 text-xs uppercase tracking-[0.25em]">Drop a photo</span>
-                <span className="text-white/30 text-[10px]">PNG · JPEG · WebP</span>
+                <span className="text-white/30 text-[10px]">iPhone photos OK · auto-optimized</span>
               </div>
             )}
             {photo && (
@@ -124,7 +125,7 @@ export default function GtaStylePanel({
               </span>
             )}
             <AnimatePresence>
-              {images.generating && (
+              {(images.generating || images.optimizing) && (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -132,7 +133,11 @@ export default function GtaStylePanel({
                   className="absolute inset-0 bg-black/55 flex items-center justify-center"
                 >
                   <p className="text-[10px] uppercase tracking-[0.3em] text-gold animate-pulse">
-                    {activeStyle ? `Creating ${activeStyle.label}…` : 'Creating…'}
+                    {images.optimizing
+                      ? 'Optimizing photo…'
+                      : activeStyle
+                        ? `Creating ${activeStyle.label}…`
+                        : 'Creating…'}
                   </p>
                 </motion.div>
               )}
@@ -148,6 +153,40 @@ export default function GtaStylePanel({
               Clear photo
             </button>
           )}
+
+          {!photo && (
+            <div className="mt-5">
+              <p className="text-[10px] uppercase tracking-widest text-gold/45 mb-3">
+                See what&apos;s possible
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {GTA_MARKETING_SAMPLES.map((sample, i) => (
+                  <motion.button
+                    key={sample.id}
+                    type="button"
+                    onClick={() => images.setPreviewUrl(sample.url)}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 + i * 0.06 }}
+                    whileHover={{ y: -2 }}
+                    className="relative aspect-[3/4] rounded-xl overflow-hidden border border-gold/20 bg-black group"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={sample.url}
+                      alt={sample.label}
+                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-1.5 pb-1.5 pt-6">
+                      <span className="block text-[8px] uppercase tracking-wider text-gold truncate">
+                        {sample.label}
+                      </span>
+                    </span>
+                  </motion.button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="px-4 pb-4">
@@ -159,7 +198,7 @@ export default function GtaStylePanel({
                 <motion.button
                   key={style.id}
                   type="button"
-                  disabled={images.generating}
+                  disabled={images.generating || images.optimizing}
                   onClick={() => onStyleTap(style.id)}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -230,6 +269,10 @@ export default function GtaStylePanel({
         <div className="min-w-0">
           {images.error ? (
             <p className="text-xs text-red-300 truncate">{images.error}</p>
+          ) : images.optimizing ? (
+            <p className="text-[10px] uppercase tracking-widest text-gold/70 truncate animate-pulse">
+              Optimizing photo…
+            </p>
           ) : images.generating ? (
             <p className="text-[10px] uppercase tracking-widest text-gold/70 truncate animate-pulse">
               {activeStyle ? `Creating ${activeStyle.label}…` : 'Creating…'}
