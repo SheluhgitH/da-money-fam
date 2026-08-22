@@ -821,7 +821,7 @@ export async function updateServiceOrder(
 
 export async function saveUploadedFile(
   file: File,
-  folder: 'audio' | 'covers'
+  folder: 'audio' | 'covers' | 'blog'
 ): Promise<string> {
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)

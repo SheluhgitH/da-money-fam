@@ -35,8 +35,30 @@ html {
 }
 
 section[id],
-[id='contact'] {
-  scroll-margin-top: 5.5rem;
+[id='contact'],
+.homepage-tab-content {
+  scroll-margin-top: 9rem;
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.stream-wheel-stage {
+  perspective: 1200px;
+  perspective-origin: center center;
+  overflow: hidden;
+}
+
+.stream-wheel-card {
+  transform-style: preserve-3d;
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .glass {

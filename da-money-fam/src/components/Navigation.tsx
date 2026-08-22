@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { scrollToSection } from '../utils/scrollToSection'
+import { navigateHomepageSection } from '@/lib/homepage-tabs'
 import { useAuth } from '@/contexts/AuthProvider'
 import { useSiteSettings } from '@/contexts/SiteSettingsProvider'
 import UserAvatar from '@/components/UserAvatar'
@@ -93,7 +93,7 @@ export default function Navigation() {
   const handleSectionNav = (section: string, e: React.MouseEvent<HTMLAnchorElement>) => {
     if (!isHome) return
     e.preventDefault()
-    scrollToSection(section)
+    navigateHomepageSection(section)
   }
 
   return (
@@ -111,7 +111,7 @@ export default function Navigation() {
             onClick={(e) => {
               if (isHome) {
                 e.preventDefault()
-                scrollToSection('store')
+                navigateHomepageSection('store')
               }
             }}
             className="relative z-[1] text-white/90 hover:text-gold transition-colors"
@@ -148,7 +148,7 @@ export default function Navigation() {
           onClick={(e) => {
             if (isHome) {
               e.preventDefault()
-              scrollToSection('home')
+              navigateHomepageSection('home')
             }
           }}
           className="text-lg sm:text-xl md:text-2xl font-serif font-bold text-white text-glow"

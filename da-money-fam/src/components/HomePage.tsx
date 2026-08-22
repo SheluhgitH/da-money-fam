@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import dynamic from 'next/dynamic'
+import { AnimatePresence, motion } from 'framer-motion'
 import HeroSection from '@/components/HeroSection'
 import Navigation from '@/components/Navigation'
 import MusicPlayer from '@/components/MusicPlayer'
@@ -9,6 +10,7 @@ import Footer from '@/components/Footer'
 import FloatingShapes from '@/components/FloatingShapes'
 import SongStore from '@/components/store/SongStore'
 import AboutFamSection from '@/components/AboutFamSection'
+import HomepageTabBar from '@/components/HomepageTabBar'
 import { scrollToSection } from '@/utils/scrollToSection'
 import ReferralCapture from '@/components/ReferralCapture'
 import { PreviewPlayerProvider } from '@/contexts/PreviewPlayerContext'
@@ -22,6 +24,17 @@ import {
   asHomepageSections,
   type HomepageSectionId,
 } from '@/lib/homepage-sections'
+import {
+  DEFAULT_HOMEPAGE_TAB,
+  getSectionsForTab,
+  getVisibleTabs,
+  hashToScrollTarget,
+  HOMEPAGE_NAV_EVENT,
+  resolveTabFromUrl,
+  sectionToTab,
+  type HomepageNavDetail,
+  type HomepageTabId,
+} from '@/lib/homepage-tabs'
 
 const StreamVideosSection = dynamic(() => import('@/components/StreamVideosSection'))
 const AdStudioPromoSection = dynamic(() => import('@/components/AdStudioPromoSection'))
@@ -179,6 +192,16 @@ function renderSection(id: HomepageSectionId) {
 
 export default function HomePage() {
   const [sections, setSections] = useState(asHomepageSections(null))
+  const [activeTab, setActiveTab] = useState<HomepageTabId>(DEFAULT_HOMEPAGE_TAB)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const pendingScrollRef = useRef<string | null>(null)
+  const initialUrlHandled = useRef(false)
+
+  const visibleTabs = useMemo(() => getVisibleTabs(sections), [sections])
+  const tabSections = useMemo(
+    () => getSectionsForTab(activeTab, sections),
+    [activeTab, sections]
+  )
 
   useEffect(() => {
     fetch('/api/site-settings')
@@ -187,27 +210,131 @@ export default function HomePage() {
       .catch(() => {})
   }, [])
 
+  // Ensure active tab stays valid when visibility changes
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const section =
-      params.get('section') || window.location.hash.replace('#', '').split('?')[0]
-    if (!section) return
+    if (visibleTabs.length === 0) return
+    if (!visibleTabs.some((t) => t.id === activeTab)) {
+      setActiveTab(visibleTabs[0].id)
+    }
+  }, [visibleTabs, activeTab])
+
+  const switchTab = useCallback(
+    (tab: HomepageTabId, scrollTarget?: string | null, options?: { scrollToTop?: boolean }) => {
+      pendingScrollRef.current = scrollTarget || null
+      setActiveTab(tab)
+
+      const url = new URL(window.location.href)
+      url.searchParams.delete('tab')
+      if (scrollTarget) {
+        const query = url.searchParams.toString()
+        window.history.replaceState(
+          {},
+          '',
+          `${url.pathname}${query ? `?${query}` : ''}#${scrollTarget}`
+        )
+      } else {
+        url.searchParams.set('tab', tab)
+        const query = url.searchParams.toString()
+        window.history.replaceState({}, '', `${url.pathname}?${query}`)
+      }
+
+      if (options?.scrollToTop !== false && !scrollTarget) {
+        window.requestAnimationFrame(() => {
+          const el = contentRef.current
+          if (!el) return
+          const top = el.getBoundingClientRect().top + window.scrollY - 100
+          window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+        })
+      }
+    },
+    []
+  )
+
+  // After tab content mounts, scroll to pending target
+  useEffect(() => {
+    const target = pendingScrollRef.current
+    if (!target) return
 
     const timer = window.setTimeout(() => {
-      scrollToSection(section)
-
-      if (params.get('from') === 'stripe' || params.has('section')) {
-        const url = new URL(window.location.href)
-        url.searchParams.delete('from')
-        url.searchParams.delete('section')
-        const query = url.searchParams.toString()
-        const nextUrl = `${url.pathname}${query ? `?${query}` : ''}#${section}`
-        window.history.replaceState({}, '', nextUrl)
-      }
-    }, 300)
+      scrollToSection(target)
+      pendingScrollRef.current = null
+    }, 80)
 
     return () => window.clearTimeout(timer)
+  }, [activeTab, tabSections])
+
+  // Initial URL: ?tab=, ?section=, #hash
+  useEffect(() => {
+    if (initialUrlHandled.current) return
+    initialUrlHandled.current = true
+
+    const params = new URLSearchParams(window.location.search)
+    const { tab, scrollTarget } = resolveTabFromUrl({
+      tabParam: params.get('tab'),
+      sectionParam: params.get('section'),
+      hash: window.location.hash,
+    })
+
+    pendingScrollRef.current = scrollTarget
+    setActiveTab(tab)
+
+    if (params.get('from') === 'stripe' || params.has('section')) {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('from')
+      url.searchParams.delete('section')
+      const query = url.searchParams.toString()
+      const hash = scrollTarget || url.hash.replace('#', '')
+      const nextUrl = `${url.pathname}${query ? `?${query}` : ''}${hash ? `#${hash}` : ''}`
+      window.history.replaceState({}, '', nextUrl)
+    }
+
+    if (scrollTarget) {
+      const timer = window.setTimeout(() => {
+        scrollToSection(scrollTarget)
+        pendingScrollRef.current = null
+      }, 350)
+      return () => window.clearTimeout(timer)
+    }
   }, [])
+
+  // Nav / hero deep-links while already on homepage
+  useEffect(() => {
+    const onNav = (e: Event) => {
+      const detail = (e as CustomEvent<HomepageNavDetail>).detail
+      const section = detail?.section
+      if (!section) return
+
+      if (section === 'home') {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        window.history.replaceState(null, '', '/')
+        return
+      }
+
+      if (section === 'contact') {
+        scrollToSection('contact')
+        return
+      }
+
+      const tab = sectionToTab(section)
+      const target = hashToScrollTarget(section)
+      if (tab) {
+        if (tab === activeTab && target) {
+          scrollToSection(target)
+        } else {
+          switchTab(tab, target, { scrollToTop: !target })
+        }
+      } else if (target) {
+        scrollToSection(target)
+      }
+    }
+
+    window.addEventListener(HOMEPAGE_NAV_EVENT, onNav)
+    return () => window.removeEventListener(HOMEPAGE_NAV_EVENT, onNav)
+  }, [activeTab, switchTab])
+
+  const handleTabChange = (tab: HomepageTabId) => {
+    switchTab(tab, null, { scrollToTop: true })
+  }
 
   return (
     <PreviewPlayerProvider>
@@ -223,9 +350,33 @@ export default function HomePage() {
         <HeroSection />
       </section>
 
-      {sections.filter((row) => !row.hidden).map((row) => (
-        <div key={row.id}>{renderSection(row.id)}</div>
-      ))}
+      <HomepageTabBar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        visibleTabs={visibleTabs}
+      />
+
+      <div
+        ref={contentRef}
+        id="homepage-tab-content"
+        className="homepage-tab-content min-h-[50vh]"
+        role="tabpanel"
+        aria-labelledby={`homepage-tab-${activeTab}`}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25, ease: 'easeOut' }}
+          >
+            {tabSections.map((id) => (
+              <div key={id}>{renderSection(id)}</div>
+            ))}
+          </motion.div>
+        </AnimatePresence>
+      </div>
 
       <Footer />
       <StickyPreviewBar />

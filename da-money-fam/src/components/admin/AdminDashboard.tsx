@@ -328,6 +328,29 @@ export default function AdminDashboard() {
     }
   }
 
+  const sendThankYou = async (
+    kind: 'song' | 'merch' | 'service',
+    id: string
+  ) => {
+    const path =
+      kind === 'song'
+        ? '/api/admin/orders/thank-you'
+        : kind === 'merch'
+          ? '/api/admin/merch-orders/thank-you'
+          : '/api/admin/service-orders/thank-you'
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) {
+      setMessage('Thank you email sent')
+    } else {
+      setMessage(data.error || 'Failed to send thank you email')
+    }
+  }
+
   const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!settings) return
@@ -611,6 +634,7 @@ export default function AdminDashboard() {
                 statuses={['paid', 'packing', 'shipped', 'fulfilled', 'rejected']}
                 onStatus={(status, email) => updateMerch(order, status as MerchOrderStatus, email)}
                 onSaveNotes={(notes) => saveMerchNotes(order, notes)}
+                onThankYou={() => sendThankYou('merch', order.id)}
               />
             ))
           )}
@@ -632,6 +656,7 @@ export default function AdminDashboard() {
                 statuses={['deposit_paid', 'in_progress', 'completed', 'cancelled']}
                 onStatus={(status, email) => updateService(order, status as ServiceOrderStatus, email)}
                 onSaveNotes={(notes) => saveServiceNotes(order, notes)}
+                onThankYou={() => sendThankYou('service', order.id)}
               />
             ))
           )}
@@ -662,6 +687,7 @@ export default function AdminDashboard() {
                 onUpdate={updateOrder}
                 onSaveNotes={saveOrderNotes}
                 onCopyLink={copyDownloadLink}
+                onThankYou={() => sendThankYou('song', order.id)}
               />
             ))
           )}
@@ -718,13 +744,25 @@ function OrderCard({
   onUpdate,
   onSaveNotes,
   onCopyLink,
+  onThankYou,
 }: {
   order: PurchaseOrder
   onUpdate: (order: PurchaseOrder, status: PurchaseOrder['status'], sendEmail?: boolean, adminNotes?: string) => void
   onSaveNotes: (order: PurchaseOrder, notes: string) => void
   onCopyLink: (token: string) => void
+  onThankYou: () => void | Promise<void>
 }) {
   const [notes, setNotes] = useState(order.admin_notes || '')
+  const [thankYouLoading, setThankYouLoading] = useState(false)
+
+  const handleThankYou = async () => {
+    setThankYouLoading(true)
+    try {
+      await onThankYou()
+    } finally {
+      setThankYouLoading(false)
+    }
+  }
 
   return (
     <div className="glass rounded-xl p-4 space-y-4">
@@ -775,6 +813,16 @@ function OrderCard({
               </button>
             </>
           )}
+          {order.buyer_email && (
+            <button
+              type="button"
+              onClick={handleThankYou}
+              disabled={thankYouLoading}
+              className="text-xs px-3 py-2 rounded-full border border-gold/50 text-gold hover:bg-gold/10 disabled:opacity-50"
+            >
+              {thankYouLoading ? 'Sending…' : 'Send Thank You'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -812,6 +860,7 @@ function CommerceOrderCard({
   statuses,
   onStatus,
   onSaveNotes,
+  onThankYou,
 }: {
   title: string
   subtitle: string
@@ -824,8 +873,20 @@ function CommerceOrderCard({
   statuses: string[]
   onStatus: (status: string, sendEmail: boolean) => void
   onSaveNotes: (notes: string) => void
+  onThankYou: () => void | Promise<void>
 }) {
   const [notes, setNotes] = useState(initialNotes)
+  const [thankYouLoading, setThankYouLoading] = useState(false)
+
+  const handleThankYou = async () => {
+    setThankYouLoading(true)
+    try {
+      await onThankYou()
+    } finally {
+      setThankYouLoading(false)
+    }
+  }
+
   return (
     <div className="glass rounded-xl p-4 space-y-3">
       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
@@ -860,6 +921,14 @@ function CommerceOrderCard({
           className="text-[10px] uppercase tracking-wider px-3 py-1 rounded-full bg-blue-500/20 text-blue-200"
         >
           Email buyer
+        </button>
+        <button
+          type="button"
+          onClick={handleThankYou}
+          disabled={thankYouLoading}
+          className="text-[10px] uppercase tracking-wider px-3 py-1 rounded-full border border-gold/50 text-gold hover:bg-gold/10 disabled:opacity-50"
+        >
+          {thankYouLoading ? 'Sending…' : 'Send Thank You'}
         </button>
       </div>
       <div className="flex gap-2">

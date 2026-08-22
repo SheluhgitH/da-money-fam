@@ -1,7 +1,7 @@
 'use client'
 
 import { motion, useMotionValue, useSpring, useScroll, useTransform } from 'framer-motion'
-import { scrollToSection } from '../utils/scrollToSection'
+import { navigateHomepageSection } from '@/lib/homepage-tabs'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import BackgroundVideo from './BackgroundVideo'
 import MagneticButton from './MagneticButton'
@@ -173,7 +173,7 @@ export default function HeroSection() {
           <MagneticButton>
             <button
               type="button"
-              onClick={() => scrollToSection('store')}
+              onClick={() => navigateHomepageSection('store')}
               className="w-full sm:w-auto px-8 py-4 glass text-white font-bold uppercase tracking-widest text-sm hover:bg-white/10 transition-colors duration-300 border border-gold/50"
             >
               {hero.secondaryCta}
@@ -187,7 +187,7 @@ export default function HeroSection() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 1, delay: 1.5, ease: 'easeOut' }}
-        onClick={() => scrollToSection('streams')}
+        onClick={() => navigateHomepageSection('streams')}
         className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 px-5 py-2.5 rounded-full glass-gold border border-gold/40 text-gold text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-gold/10 transition-colors"
       >
         <motion.span

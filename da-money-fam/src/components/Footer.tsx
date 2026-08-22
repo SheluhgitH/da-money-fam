@@ -7,7 +7,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { CONFIG } from '../config'
-import { scrollToSection } from '../utils/scrollToSection'
+import { navigateHomepageSection } from '@/lib/homepage-tabs'
 import PremiumChat from './PremiumChat'
 
 const socialLinks = [
@@ -210,7 +210,7 @@ export default function Footer() {
                     onClick={(e) => {
                       if (isHome) {
                         e.preventDefault()
-                        scrollToSection(link.section)
+                        navigateHomepageSection(link.section)
                       }
                     }}
                   >
@@ -295,7 +295,7 @@ export default function Footer() {
             </a>
             <button
               type="button"
-              onClick={() => scrollToSection('contact')}
+              onClick={() => navigateHomepageSection('contact')}
               className="hover:text-gold transition-colors"
             >
               Contact

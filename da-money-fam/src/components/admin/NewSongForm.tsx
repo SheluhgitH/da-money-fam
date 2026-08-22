@@ -1,10 +1,23 @@
 'use client'
 
 import { useState } from 'react'
+import SongAiFields from '@/components/admin/SongAiFields'
+
+const inputClass =
+  'w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500'
 
 export default function NewSongForm({ onCreated }: { onCreated: () => void }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [title, setTitle] = useState('')
+  const [artist, setArtist] = useState('JackPot')
+  const [description, setDescription] = useState('')
+  const [genre, setGenre] = useState('')
+  const [imagePrompt, setImagePrompt] = useState('')
+  const [albumCoverPath, setAlbumCoverPath] = useState('')
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null)
+  const [hasCoverFile, setHasCoverFile] = useState(false)
+  const [hasMp3, setHasMp3] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -15,6 +28,13 @@ export default function NewSongForm({ onCreated }: { onCreated: () => void }) {
       const form = e.currentTarget
       const formData = new FormData(form)
 
+      if (!hasMp3 && !(formData.get('mp3') as File)?.size) {
+        throw new Error('MP3 / audio file is required')
+      }
+      if (!albumCoverPath && !hasCoverFile) {
+        throw new Error('Album cover is required — generate with AI or upload a file')
+      }
+
       const res = await fetch('/api/admin/songs', {
         method: 'POST',
         body: formData,
@@ -24,6 +44,15 @@ export default function NewSongForm({ onCreated }: { onCreated: () => void }) {
       if (!res.ok) throw new Error(data.error || 'Failed to create song')
 
       form.reset()
+      setTitle('')
+      setArtist('JackPot')
+      setDescription('')
+      setGenre('')
+      setImagePrompt('')
+      setAlbumCoverPath('')
+      setCoverPreviewUrl(null)
+      setHasCoverFile(false)
+      setHasMp3(false)
       onCreated()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create song')
@@ -36,34 +65,60 @@ export default function NewSongForm({ onCreated }: { onCreated: () => void }) {
     <form onSubmit={handleSubmit} className="glass rounded-xl p-6 space-y-4 max-w-2xl">
       <h2 className="font-serif text-2xl text-white mb-4">Add New Song</h2>
 
-      <input name="title" required placeholder="Song title" className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3" />
-      <input name="artist" defaultValue="JackPot" placeholder="Artist" className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3" />
-      <input name="price" type="number" step="0.01" defaultValue="5.00" placeholder="Price" className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3" />
-      <input name="genre" placeholder="Genre" className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3" />
-      <input name="release_date" type="date" className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3" />
-      <textarea name="description" placeholder="Description" rows={3} className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3" />
+      <input
+        name="title"
+        required
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="Song title"
+        className={inputClass}
+      />
+      <input
+        name="artist"
+        value={artist}
+        onChange={(e) => setArtist(e.target.value)}
+        placeholder="Artist"
+        className={inputClass}
+      />
+      <input
+        name="price"
+        type="number"
+        step="0.01"
+        defaultValue="5.00"
+        placeholder="Price"
+        className={inputClass}
+      />
+      <input name="release_date" type="date" className={inputClass} />
 
-      <div>
-        <label className="text-sm text-gray-400 block mb-2">MP3 / Audio File</label>
-        <input name="mp3" type="file" accept="audio/*" required className="w-full text-sm" />
-      </div>
+      <SongAiFields
+        title={title}
+        artist={artist}
+        description={description}
+        genre={genre}
+        onDescriptionChange={setDescription}
+        onGenreChange={setGenre}
+        mp3Required
+        albumCoverPath={albumCoverPath}
+        onAlbumCoverPathChange={setAlbumCoverPath}
+        coverPreviewUrl={coverPreviewUrl}
+        onCoverPreviewUrlChange={setCoverPreviewUrl}
+        imagePrompt={imagePrompt}
+        onImagePromptChange={setImagePrompt}
+        onCoverFileChange={(file) => setHasCoverFile(Boolean(file))}
+        onMp3FileChange={(file) => setHasMp3(Boolean(file))}
+      />
 
-      <div>
-        <label className="text-sm text-gray-400 block mb-2">Album Cover</label>
-        <input name="cover" type="file" accept="image/*" required className="w-full text-sm" />
-      </div>
-
-      <label className="flex items-center gap-2 text-sm">
+      <label className="flex items-center gap-2 text-sm text-gray-300">
         <input name="for_sale" type="checkbox" value="true" defaultChecked />
         Available for purchase
       </label>
 
-      <label className="flex items-center gap-2 text-sm">
+      <label className="flex items-center gap-2 text-sm text-gray-300">
         <input name="is_promoted" type="checkbox" value="true" defaultChecked />
         Promote on homepage
       </label>
 
-      <label className="flex items-center gap-2 text-sm">
+      <label className="flex items-center gap-2 text-sm text-gray-300">
         <input name="is_published" type="checkbox" value="true" defaultChecked />
         Publish immediately
       </label>

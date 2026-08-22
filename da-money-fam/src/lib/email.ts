@@ -203,3 +203,47 @@ export async function sendReleaseAlert(input: {
 
   return { sent: batch.length }
 }
+
+export type ThankYouOrderType = 'song' | 'merch' | 'service'
+
+export async function sendOrderThankYouEmail(input: {
+  type: ThankYouOrderType
+  buyerEmail: string
+  buyerName: string
+  itemName: string
+  downloadUrl?: string | null
+}): Promise<{ sent: boolean }> {
+  const resend = getResend()
+  if (!resend) return { sent: false }
+
+  const name = input.buyerName || 'fam'
+  const item = input.itemName
+  let bodyExtra = ''
+  if (input.type === 'song') {
+    bodyExtra = `<p>Thank you for supporting the music — <strong>${item}</strong> means a lot to the Fam.</p>`
+    if (input.downloadUrl) {
+      bodyExtra += `<p><a href="${input.downloadUrl}" style="display:inline-block;padding:12px 20px;background:#d4af37;color:#000;text-decoration:none;border-radius:999px;font-weight:700;">Download your track</a></p>`
+    }
+  } else if (input.type === 'merch') {
+    bodyExtra = `<p>Thank you for rocking DMF — we appreciate your order for <strong>${item}</strong>.</p>`
+  } else {
+    bodyExtra = `<p>Thank you for trusting Da Money Fam with <strong>${item}</strong>. We're glad to have you in the circle.</p>`
+  }
+
+  await resend.emails.send({
+    from: FROM,
+    to: input.buyerEmail,
+    subject: 'Thank you from Da Money Fam',
+    html: `
+      <div style="font-family:Georgia,serif;background:#0a0a0a;color:#f5f5f5;padding:32px;">
+        <p style="color:#d4af37;letter-spacing:0.2em;text-transform:uppercase;font-size:12px;">Da Money Fam</p>
+        <h2 style="color:#fff;">Thank you, ${name}</h2>
+        ${bodyExtra}
+        <p style="color:#999;font-size:14px;">Stay locked in — more drops, streams, and culture coming soon.</p>
+        <p style="color:#d4af37;font-size:14px;">— DMF</p>
+      </div>
+    `,
+  })
+
+  return { sent: true }
+}

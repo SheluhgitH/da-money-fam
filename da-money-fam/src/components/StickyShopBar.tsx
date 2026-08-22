@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useState, useRef } from 'react'
-import { scrollToSection } from '@/utils/scrollToSection'
+import { navigateHomepageSection } from '@/lib/homepage-tabs'
 import { useMiniCart } from '@/contexts/MiniCartContext'
 
 export default function StickyShopBar() {
@@ -48,7 +48,7 @@ export default function StickyShopBar() {
         >
           <button
             type="button"
-            onClick={() => scrollToSection('store')}
+            onClick={() => navigateHomepageSection('store')}
             className="px-5 py-3 rounded-full bg-gold text-black text-[10px] font-bold uppercase tracking-wider shadow-[0_10px_40px_rgba(212,175,55,0.35)] hover:bg-white transition-colors"
           >
             Shop The Drop

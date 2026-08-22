@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { Song } from '@/types/store'
+import SongAiFields from '@/components/admin/SongAiFields'
 
 const inputClass =
   'w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500'
@@ -18,6 +19,13 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
   const [isPromoted, setIsPromoted] = useState(song.is_promoted)
   const [isPublished, setIsPublished] = useState(song.is_published)
   const [forSale, setForSale] = useState(song.for_sale !== false)
+  const [title, setTitle] = useState(song.title)
+  const [artist, setArtist] = useState(song.artist)
+  const [description, setDescription] = useState(song.description || '')
+  const [genre, setGenre] = useState(song.genre || '')
+  const [imagePrompt, setImagePrompt] = useState('')
+  const [albumCoverPath, setAlbumCoverPath] = useState('')
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -69,14 +77,16 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
       <input
         name="title"
         required
-        defaultValue={song.title}
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
         placeholder="Song title"
         className={inputClass}
       />
       <input
         name="artist"
         required
-        defaultValue={song.artist}
+        value={artist}
+        onChange={(e) => setArtist(e.target.value)}
         placeholder="Artist"
         className={inputClass}
       />
@@ -90,51 +100,29 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
         className={inputClass}
       />
       <input
-        name="genre"
-        defaultValue={song.genre || ''}
-        placeholder="Genre"
-        className={inputClass}
-      />
-      <input
         name="release_date"
         type="date"
         defaultValue={song.release_date || ''}
         className={inputClass}
       />
-      <textarea
-        name="description"
-        defaultValue={song.description || ''}
-        placeholder="Description"
-        rows={3}
-        className={inputClass}
+
+      <SongAiFields
+        title={title}
+        artist={artist}
+        description={description}
+        genre={genre}
+        onDescriptionChange={setDescription}
+        onGenreChange={setGenre}
+        mp3Required={false}
+        currentCoverUrl={song.album_cover_path}
+        albumCoverPath={albumCoverPath}
+        onAlbumCoverPathChange={setAlbumCoverPath}
+        coverPreviewUrl={coverPreviewUrl}
+        onCoverPreviewUrlChange={setCoverPreviewUrl}
+        imagePrompt={imagePrompt}
+        onImagePromptChange={setImagePrompt}
+        mp3FileName={audioFileName || null}
       />
-
-      <div className="flex items-center gap-4 p-4 bg-black/30 rounded-lg border border-white/10">
-        <img
-          src={song.album_cover_path}
-          alt={song.title}
-          className="w-20 h-20 rounded-lg object-cover"
-        />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Current cover</p>
-          <p className="text-sm text-gray-300 truncate">{song.album_cover_path}</p>
-        </div>
-      </div>
-
-      <div>
-        <label className="text-sm text-gray-400 block mb-2">Replace album cover (optional)</label>
-        <input name="cover" type="file" accept="image/*" className="w-full text-sm text-gray-300" />
-      </div>
-
-      <div className="p-4 bg-black/30 rounded-lg border border-white/10">
-        <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Current audio</p>
-        <p className="text-sm text-gray-300 truncate">{audioFileName}</p>
-      </div>
-
-      <div>
-        <label className="text-sm text-gray-400 block mb-2">Replace audio file (optional)</label>
-        <input name="mp3" type="file" accept="audio/*" className="w-full text-sm text-gray-300" />
-      </div>
 
       <label className="flex items-center gap-2 text-sm text-gray-300">
         <input

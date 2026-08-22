@@ -152,6 +152,11 @@ export async function PATCH(req: Request) {
 
       if (coverFile && coverFile.size > 0) {
         updates.album_cover_path = await saveUploadedFile(coverFile, 'covers')
+      } else {
+        const coverPath = String(formData.get('album_cover_path') || '').trim()
+        if (coverPath) {
+          updates.album_cover_path = coverPath
+        }
       }
 
       const song = await updateSong(id, updates)

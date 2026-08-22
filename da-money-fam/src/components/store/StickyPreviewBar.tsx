@@ -4,7 +4,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePreviewPlayer } from '@/contexts/PreviewPlayerContext'
 import { PREVIEW_DURATION_SEC } from '@/lib/audio-constants'
-import { scrollToSection } from '@/utils/scrollToSection'
+import { navigateHomepageSection } from '@/lib/homepage-tabs'
 
 function findActiveAudio(songId: string): HTMLAudioElement | null {
   if (typeof document === 'undefined') return null
@@ -66,7 +66,7 @@ export default function StickyPreviewBar() {
             onClick={() => {
               const el = document.getElementById(`song-${activePreview.songId}`)
               if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-              else scrollToSection('store')
+              else navigateHomepageSection('store')
             }}
             className="text-[10px] font-bold uppercase tracking-wider text-gold hover:text-white shrink-0"
           >

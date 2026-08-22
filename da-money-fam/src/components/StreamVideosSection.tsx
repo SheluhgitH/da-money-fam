@@ -2,15 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import {
-  STREAMS_CONFIG,
-  formatRelativeDate,
-  formatStreamDuration,
-  kickThumbnailSrc,
-  type KickVideo,
-} from '@/lib/streams'
+import { STREAMS_CONFIG, type KickVideo } from '@/lib/streams'
 import { scrollRevealViewport } from '@/lib/motion'
-import { scrollToSection } from '@/utils/scrollToSection'
+import { navigateHomepageSection } from '@/lib/homepage-tabs'
+import StreamVideoWheel from '@/components/streams/StreamVideoWheel'
 
 export default function StreamVideosSection() {
   const [videos, setVideos] = useState<KickVideo[]>([])
@@ -174,61 +169,11 @@ export default function StreamVideosSection() {
           </a>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {videos.map((video, index) => (
-            <motion.a
-              key={video.id}
-              href={video.watchUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={scrollRevealViewport}
-              transition={{ delay: index * 0.08 }}
-              className="group block glass rounded-2xl overflow-hidden border border-white/10 hover:border-gold/40 transition-colors"
-            >
-              <div className="relative aspect-video bg-black/50">
-                {video.thumbnail && !brokenThumbs[video.id] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={kickThumbnailSrc(video.thumbnail)}
-                    alt={video.title}
-                    className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    loading="lazy"
-                    decoding="async"
-                    onError={() =>
-                      setBrokenThumbs((prev) => ({ ...prev, [video.id]: true }))
-                    }
-                  />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center text-gray-600 text-sm bg-gradient-to-br from-zinc-900 to-black">
-                    Stream preview
-                  </div>
-                )}
-                <div className="absolute top-3 left-3 px-2 py-1 bg-black/80 text-white text-[10px] font-mono rounded">
-                  {formatStreamDuration(video.durationMs)}
-                </div>
-                <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/80 text-white text-[10px] rounded">
-                  {video.views} views
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
-                  <div className="w-14 h-14 rounded-full bg-gold/90 flex items-center justify-center">
-                    <svg className="w-6 h-6 text-black ml-1" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M8 5v14l11-7z" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-              <div className="p-4">
-                <p className="text-gold text-[10px] font-bold tracking-[2px] uppercase">{video.category}</p>
-                <h3 className="text-white font-semibold mt-1 group-hover:text-gold transition-colors line-clamp-2">
-                  {video.title}
-                </h3>
-                <p className="text-gray-500 text-xs mt-2">{formatRelativeDate(video.createdAt)}</p>
-              </div>
-            </motion.a>
-          ))}
-        </div>
+        <StreamVideoWheel
+          videos={videos}
+          brokenThumbs={brokenThumbs}
+          onThumbError={(id) => setBrokenThumbs((prev) => ({ ...prev, [id]: true }))}
+        />
       )}
 
       <motion.div
@@ -239,14 +184,14 @@ export default function StreamVideosSection() {
       >
         <button
           type="button"
-          onClick={() => scrollToSection('store')}
+          onClick={() => navigateHomepageSection('store')}
           className="px-8 py-3 bg-gold text-black text-xs font-bold uppercase tracking-wider rounded-full hover:bg-white transition-colors"
         >
           Shop The Drop
         </button>
         <button
           type="button"
-          onClick={() => scrollToSection('merch')}
+          onClick={() => navigateHomepageSection('merch')}
           className="px-8 py-3 border border-gold/40 text-gold text-xs font-bold uppercase tracking-wider rounded-full hover:bg-gold/10 transition-colors"
         >
           Browse Merch

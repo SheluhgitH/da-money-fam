@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import BlogAiFields from '@/components/admin/BlogAiFields'
 
 type Post = {
   id: string
@@ -25,6 +26,7 @@ const empty = {
 export default function BlogAdminPanel() {
   const [posts, setPosts] = useState<Post[]>([])
   const [form, setForm] = useState(empty)
+  const [imagePrompt, setImagePrompt] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
@@ -60,6 +62,7 @@ export default function BlogAdminPanel() {
     }
     setMessage(editingId ? 'Updated' : 'Created')
     setForm(empty)
+    setImagePrompt('')
     setEditingId(null)
     load()
   }
@@ -74,6 +77,7 @@ export default function BlogAdminPanel() {
       cover_image_url: post.cover_image_url || '',
       is_published: post.is_published,
     })
+    setImagePrompt('')
   }
 
   const remove = async (id: string) => {
@@ -87,32 +91,29 @@ export default function BlogAdminPanel() {
       <div className="space-y-3">
         <h3 className="font-serif text-xl text-gold">{editingId ? 'Edit post' : 'New post'}</h3>
         {message && <p className="text-sm text-gold">{message}</p>}
-        {(
-          [
-            ['title', 'Title'],
-            ['slug', 'Slug'],
-            ['excerpt', 'Excerpt'],
-            ['cover_image_url', 'Cover image URL'],
-          ] as const
-        ).map(([key, label]) => (
-          <label key={key} className="block text-xs uppercase tracking-wider text-gray-500">
-            {label}
-            <input
-              value={form[key]}
-              onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-              className="mt-1 w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white normal-case tracking-normal"
-            />
-          </label>
-        ))}
         <label className="block text-xs uppercase tracking-wider text-gray-500">
-          Content
-          <textarea
-            value={form.content}
-            onChange={(e) => setForm({ ...form, content: e.target.value })}
-            rows={10}
+          Title
+          <input
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
             className="mt-1 w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white normal-case tracking-normal"
           />
         </label>
+
+        <BlogAiFields
+          title={form.title}
+          excerpt={form.excerpt}
+          slug={form.slug}
+          content={form.content}
+          coverImageUrl={form.cover_image_url}
+          imagePrompt={imagePrompt}
+          onExcerptChange={(excerpt) => setForm((f) => ({ ...f, excerpt }))}
+          onSlugChange={(slug) => setForm((f) => ({ ...f, slug }))}
+          onContentChange={(content) => setForm((f) => ({ ...f, content }))}
+          onCoverImageUrlChange={(cover_image_url) => setForm((f) => ({ ...f, cover_image_url }))}
+          onImagePromptChange={setImagePrompt}
+        />
+
         <label className="flex items-center gap-2 text-sm text-gray-300">
           <input
             type="checkbox"
@@ -136,6 +137,7 @@ export default function BlogAdminPanel() {
               onClick={() => {
                 setEditingId(null)
                 setForm(empty)
+                setImagePrompt('')
               }}
               className="px-5 py-2 rounded-full bg-white/10 text-xs uppercase tracking-wider"
             >
