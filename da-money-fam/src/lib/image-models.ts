@@ -22,7 +22,7 @@ export const IMAGE_MODELS: Record<ImageTier, ImageModelConfig> = {
     baseCoins: 4,
     usdEstimate: 0.014,
     mode: 'generate',
-    fallbackIds: ['krea/krea-2-medium-turbo', 'qwen/qwen-image'],
+    fallbackIds: ['krea/krea-2-medium-turbo', 'google/gemini-3.1-flash-lite-image'],
   },
   fast: {
     tier: 'fast',
@@ -31,7 +31,7 @@ export const IMAGE_MODELS: Record<ImageTier, ImageModelConfig> = {
     baseCoins: 4,
     usdEstimate: 0.015,
     mode: 'generate',
-    fallbackIds: ['black-forest-labs/flux.2-klein-4b', 'qwen/qwen-image'],
+    fallbackIds: ['black-forest-labs/flux.2-klein-4b', 'google/gemini-3.1-flash-lite-image'],
   },
   edit: {
     tier: 'edit',
