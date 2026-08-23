@@ -67,7 +67,7 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
   }
 
   const audioFileName = song.mp3_file_path.split('/').pop()
-  const audioSrc = localMp3Url || `/api/preview/${song.id}`
+  const audioSrc = localMp3Url || `/api/preview/${song.id}?full=1`
 
   return (
     <form onSubmit={handleSubmit} className="glass rounded-xl p-6 space-y-4 max-w-2xl">
@@ -153,7 +153,7 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
           setPreviewStartSec(start)
           setTrackDurationSec(dur)
         }}
-        fullFileHref={`/api/preview/${song.id}`}
+        fullFileHref={`/api/preview/${song.id}?full=1`}
       />
 
       <label className="flex items-center gap-2 text-sm text-gray-300">

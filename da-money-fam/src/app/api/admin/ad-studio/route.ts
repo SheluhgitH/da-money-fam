@@ -3,7 +3,7 @@ import { isAdminAuthenticated } from '@/lib/auth'
 import { createClient } from '@supabase/supabase-js'
 import { creditUserCoins } from '@/lib/user-store'
 import { writeAdminAudit } from '@/lib/site-settings'
-import { emptyVideoStats, loadVideoStudioStats } from '@/lib/admin-ad-studio-stats'
+import { emptyImageStats, emptyVideoStats, loadImageStudioStats, loadVideoStudioStats } from '@/lib/admin-ad-studio-stats'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,6 +22,7 @@ export async function GET(req: Request) {
   const supabase = service()
   if (!supabase) {
     const empty = emptyVideoStats()
+    const emptyImg = emptyImageStats()
     return NextResponse.json({
       items: [],
       stats: {
@@ -32,6 +33,8 @@ export async function GET(req: Request) {
         week: empty.week,
         coinzWeek: empty.coinzWeek,
       },
+      imageStats: emptyImg,
+      fetchedAt: new Date().toISOString(),
     })
   }
 
@@ -49,7 +52,12 @@ export async function GET(req: Request) {
   if (status) query = query.eq('status', status)
   if (model) query = query.ilike('model', `%${model}%`)
 
-  const { data, error } = await query
+  const [{ data, error }, videoStats, { stats: imageStats }] = await Promise.all([
+    query,
+    loadVideoStudioStats(supabase),
+    loadImageStudioStats(supabase),
+  ])
+
   if (error) {
     console.error('admin ad-studio list:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
@@ -68,21 +76,21 @@ export async function GET(req: Request) {
     }
   }
 
-  const stats = await loadVideoStudioStats(supabase)
-
   return NextResponse.json({
     items: items.map((row) => ({
       ...row,
       user_email: emails[String(row.user_id)] || null,
     })),
     stats: {
-      today: stats.today,
-      coinzSpentToday: stats.coinzToday,
-      failedToday: stats.failedToday,
-      failRate: stats.failRate,
-      week: stats.week,
-      coinzWeek: stats.coinzWeek,
+      today: videoStats.today,
+      coinzSpentToday: videoStats.coinzToday,
+      failedToday: videoStats.failedToday,
+      failRate: videoStats.failRate,
+      week: videoStats.week,
+      coinzWeek: videoStats.coinzWeek,
     },
+    imageStats,
+    fetchedAt: new Date().toISOString(),
   })
 }
 

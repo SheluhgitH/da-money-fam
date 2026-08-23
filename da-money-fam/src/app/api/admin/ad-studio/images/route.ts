@@ -32,10 +32,28 @@ export async function GET() {
   }
 
   const { stats, weekRows } = await loadImageStudioStats(supabase)
+  const items = weekRows.slice(0, 40)
+
+  const userIds = Array.from(
+    new Set(items.map((row) => String(row.user_id || '')).filter(Boolean))
+  )
+  const emails: Record<string, string> = {}
+  if (userIds.length) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, email')
+      .in('id', userIds)
+    for (const p of profiles || []) {
+      emails[String(p.id)] = String(p.email || '')
+    }
+  }
 
   return NextResponse.json({
     tiers: stats.tiers,
-    items: weekRows.slice(0, 40),
+    items: items.map((row) => ({
+      ...row,
+      user_email: emails[String(row.user_id || '')] || null,
+    })),
     today: stats.today,
     week: stats.week,
     coinzToday: stats.coinzToday,

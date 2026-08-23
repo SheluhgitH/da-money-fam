@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { OrderStatus, PaymentSettings, PurchaseOrder, MerchOrder, MerchOrderStatus, ServiceOrder, ServiceOrderStatus, Song } from '@/types/store'
 import NewSongForm from './NewSongForm'
 import EditSongForm from './EditSongForm'
-import AdStudioAdmin from './AdStudioAdmin'
+import AdStudioAdmin, { type AdStudioMode } from './AdStudioAdmin'
 import SiteSettingsPanel from './SiteSettingsPanel'
 import UsersAdmin from './UsersAdmin'
 import ActivityLogPanel from './ActivityLogPanel'
@@ -118,6 +118,7 @@ export default function AdminDashboard() {
   const [merchOrders, setMerchOrders] = useState<MerchOrder[]>([])
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([])
   const [studioFilter, setStudioFilter] = useState('')
+  const [studioMode, setStudioMode] = useState<AdStudioMode>('video')
   const [overview, setOverview] = useState<OverviewPayload | null>(null)
   const [settings, setSettings] = useState<PaymentSettings | null>(null)
   const [loading, setLoading] = useState(true)
@@ -494,7 +495,34 @@ export default function AdminDashboard() {
       )}
 
       {tab === 'ad-studio' ? (
-        <AdStudioAdmin initialStatus={studioFilter} />
+        <AdStudioAdmin
+          initialStatus={studioFilter}
+          initialMode={studioMode}
+          initialVideoStats={
+            overview
+              ? {
+                  today: overview.adStudio.video.today,
+                  coinzSpentToday: overview.adStudio.video.coinzToday,
+                  failedToday: overview.adStudio.video.failedToday,
+                  failRate: overview.adStudio.video.failRate,
+                  week: overview.adStudio.video.week,
+                  coinzWeek: overview.adStudio.video.coinzWeek,
+                }
+              : null
+          }
+          initialImageStats={
+            overview
+              ? {
+                  today: overview.adStudio.image.today,
+                  week: overview.adStudio.image.week,
+                  coinzToday: overview.adStudio.image.coinzToday,
+                  coinzWeek: overview.adStudio.image.coinzWeek,
+                  costUsdWeek: overview.adStudio.image.costUsdWeek,
+                  tiers: overview.adStudio.image.tiers,
+                }
+              : null
+          }
+        />
       ) : tab === 'users' ? (
         <UsersAdmin />
       ) : tab === 'site' ? (
@@ -630,6 +658,7 @@ export default function AdminDashboard() {
                 <button
                   onClick={() => {
                     setStudioFilter('')
+                    setStudioMode('video')
                     switchTab('ad-studio')
                   }}
                   className="px-4 py-2 rounded-full bg-white/10 text-sm hover:bg-white/20"
@@ -639,11 +668,22 @@ export default function AdminDashboard() {
                 <button
                   onClick={() => {
                     setStudioFilter('failed')
+                    setStudioMode('video')
                     switchTab('ad-studio')
                   }}
                   className="px-4 py-2 rounded-full bg-red-500/20 text-red-200 text-sm hover:bg-red-500/30"
                 >
                   Failed video gens
+                </button>
+                <button
+                  onClick={() => {
+                    setStudioFilter('')
+                    setStudioMode('images')
+                    switchTab('ad-studio')
+                  }}
+                  className="px-4 py-2 rounded-full bg-white/10 text-sm hover:bg-white/20"
+                >
+                  View images
                 </button>
                 <button
                   onClick={() => switchTab('users')}
@@ -703,6 +743,7 @@ export default function AdminDashboard() {
                   type="button"
                   onClick={() => {
                     setStudioFilter('')
+                    setStudioMode('video')
                     switchTab('ad-studio')
                   }}
                   className="text-xs text-gold hover:underline"
@@ -736,6 +777,7 @@ export default function AdminDashboard() {
                   type="button"
                   onClick={() => {
                     setStudioFilter('')
+                    setStudioMode('images')
                     switchTab('ad-studio')
                   }}
                   className="text-xs text-gold hover:underline"
@@ -844,7 +886,7 @@ export default function AdminDashboard() {
                     {song.is_published ? 'Published' : 'Draft'}
                   </button>
                   <a
-                    href={`/api/preview/${song.id}`}
+                    href={`/api/preview/${song.id}?full=1`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 inline-flex items-center"

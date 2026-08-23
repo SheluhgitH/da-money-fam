@@ -159,7 +159,7 @@ export async function loadImageStudioStats(
 
   const { data, error } = await supabase
     .from('ad_studio_images')
-    .select('id, model, coinz_spent, usd_cost, created_at, prompt, output_url')
+    .select('id, user_id, model, coinz_spent, usd_cost, created_at, prompt, output_url, mode')
     .gte('created_at', weekIso)
     .order('created_at', { ascending: false })
     .limit(500)

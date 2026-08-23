@@ -170,12 +170,14 @@ export type PreviewByteWindow = {
 /**
  * Map a time-based preview window onto MP3 file bytes.
  * Prefer known track_duration_sec; otherwise estimate from size @ ~320kbps.
+ * When a probe buffer is provided, snap byteStart forward to an MPEG frame sync.
  */
 export function getPreviewByteWindow(
   fileSize: number,
   startSec: number,
   durationSec: number | null | undefined,
-  maxBytes: number = PREVIEW_MAX_BYTES
+  maxBytes: number = PREVIEW_MAX_BYTES,
+  probe?: Buffer | Uint8Array | null
 ): PreviewByteWindow {
   if (fileSize <= 0) {
     return { byteStart: 0, byteEnd: 0, virtualSize: 0 }
@@ -193,18 +195,31 @@ export function getPreviewByteWindow(
   let byteStart = Math.floor((clampedStart / estimatedDuration) * fileSize)
   byteStart = Math.max(0, Math.min(byteStart, Math.max(0, fileSize - 1)))
 
-  // Prefer starting near a frame boundary for cleaner decode (skip large ID3 if at 0)
-  if (byteStart === 0) {
-    // leave at 0 so tags still work for first-frame decode
-  } else {
-    // Align roughly to 1KB — good enough for seeking into mid-file MP3
+  if (byteStart > 0) {
+    // Coarse align, then snap to next MPEG frame sync if we have bytes to scan
     byteStart = Math.floor(byteStart / 1024) * 1024
+    if (probe && probe.length > 0) {
+      const synced = findMpegFrameSync(probe, 0)
+      if (synced >= 0) byteStart = byteStart + synced
+    }
   }
 
+  byteStart = Math.max(0, Math.min(byteStart, Math.max(0, fileSize - 1)))
   const byteEnd = Math.min(fileSize, byteStart + maxBytes)
   const virtualSize = Math.max(0, byteEnd - byteStart)
 
   return { byteStart, byteEnd, virtualSize }
+}
+
+/** Find next MPEG audio frame sync (0xFFEx) within probe, relative to offset 0 of probe. */
+export function findMpegFrameSync(probe: Buffer | Uint8Array, from = 0): number {
+  const len = probe.length
+  for (let i = Math.max(0, from); i < len - 1; i++) {
+    if (probe[i] === 0xff && (probe[i + 1] & 0xe0) === 0xe0) {
+      return i
+    }
+  }
+  return -1
 }
 
 export async function getPreviewByteLength(absolutePath: string): Promise<number> {

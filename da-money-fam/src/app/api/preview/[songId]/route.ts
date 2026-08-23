@@ -23,10 +23,14 @@ export async function GET(
       return NextResponse.json({ error: 'Song not found' }, { status: 404 })
     }
 
+    const { searchParams } = new URL(req.url)
+    const wantFull = searchParams.get('full') === '1'
+
     const user = await getCurrentUser()
     const owns = user ? await userOwnsSong(user.id, params.songId) : false
     const isAdmin = isAdminAuthenticated()
-    const serveFull = owns || isAdmin
+    // Admin cookie must NOT force full file on the public store — only ?full=1
+    const serveFull = owns || (isAdmin && wantFull)
 
     const internalPath = song.preview_path || song.mp3_file_path
     const source = await openAudioSource(internalPath)
@@ -34,14 +38,35 @@ export async function GET(
       return NextResponse.json({ error: 'Preview unavailable' }, { status: 404 })
     }
 
-    const window = serveFull
-      ? { byteStart: 0, byteEnd: source.size, virtualSize: source.size }
-      : getPreviewByteWindow(
-          source.size,
-          song.preview_start_sec ?? 0,
-          song.track_duration_sec,
-          PREVIEW_MAX_BYTES
-        )
+    let window: { byteStart: number; byteEnd: number; virtualSize: number }
+    if (serveFull) {
+      window = { byteStart: 0, byteEnd: source.size, virtualSize: source.size }
+    } else {
+      const startSec = song.preview_start_sec ?? 0
+      // Probe ahead of estimated start so we can snap to an MPEG frame sync
+      const rough = getPreviewByteWindow(
+        source.size,
+        startSec,
+        song.track_duration_sec,
+        PREVIEW_MAX_BYTES
+      )
+      let probe: Buffer | null = null
+      if (rough.byteStart > 0 && rough.byteStart < source.size) {
+        const probeEnd = Math.min(source.size - 1, rough.byteStart + 8192)
+        try {
+          probe = await source.readRange(rough.byteStart, probeEnd)
+        } catch {
+          probe = null
+        }
+      }
+      window = getPreviewByteWindow(
+        source.size,
+        startSec,
+        song.track_duration_sec,
+        PREVIEW_MAX_BYTES,
+        probe
+      )
+    }
 
     const effectiveSize = window.virtualSize
     const originOffset = window.byteStart
