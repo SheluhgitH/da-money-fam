@@ -161,6 +161,52 @@ export async function readPreviewBuffer(absolutePath: string): Promise<Buffer> {
   return fileBuffer.subarray(0, Math.min(fileBuffer.length, PREVIEW_MAX_BYTES))
 }
 
+export type PreviewByteWindow = {
+  byteStart: number
+  byteEnd: number
+  virtualSize: number
+}
+
+/**
+ * Map a time-based preview window onto MP3 file bytes.
+ * Prefer known track_duration_sec; otherwise estimate from size @ ~320kbps.
+ */
+export function getPreviewByteWindow(
+  fileSize: number,
+  startSec: number,
+  durationSec: number | null | undefined,
+  maxBytes: number = PREVIEW_MAX_BYTES
+): PreviewByteWindow {
+  if (fileSize <= 0) {
+    return { byteStart: 0, byteEnd: 0, virtualSize: 0 }
+  }
+
+  const safeStart = Math.max(0, Number(startSec) || 0)
+  const knownDuration =
+    durationSec != null && Number(durationSec) > 0 ? Number(durationSec) : null
+
+  // Rough CBR estimate when duration unknown (~320 kbps MPEG)
+  const estimatedDuration =
+    knownDuration ?? Math.max(1, (fileSize * 8) / (320 * 1000))
+
+  const clampedStart = Math.min(safeStart, Math.max(0, estimatedDuration - 1))
+  let byteStart = Math.floor((clampedStart / estimatedDuration) * fileSize)
+  byteStart = Math.max(0, Math.min(byteStart, Math.max(0, fileSize - 1)))
+
+  // Prefer starting near a frame boundary for cleaner decode (skip large ID3 if at 0)
+  if (byteStart === 0) {
+    // leave at 0 so tags still work for first-frame decode
+  } else {
+    // Align roughly to 1KB — good enough for seeking into mid-file MP3
+    byteStart = Math.floor(byteStart / 1024) * 1024
+  }
+
+  const byteEnd = Math.min(fileSize, byteStart + maxBytes)
+  const virtualSize = Math.max(0, byteEnd - byteStart)
+
+  return { byteStart, byteEnd, virtualSize }
+}
+
 export async function getPreviewByteLength(absolutePath: string): Promise<number> {
   const stats = await fs.stat(absolutePath)
   return Math.min(stats.size, PREVIEW_MAX_BYTES)

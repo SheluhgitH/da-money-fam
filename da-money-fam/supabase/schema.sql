@@ -10,6 +10,8 @@ create table if not exists songs (
   album_cover_path text not null,
   mp3_file_path text not null,
   preview_path text,
+  preview_start_sec real not null default 0,
+  track_duration_sec real,
   price numeric(10, 2) not null default 5.00,
   is_promoted boolean not null default false,
   for_sale boolean not null default true,
@@ -56,6 +58,10 @@ do $$ begin
   alter table songs add constraint songs_access_check check (access in ('public', 'early', 'exclusive'));
 exception when duplicate_object then null;
 end $$;
+
+-- Preview window: which part of the track visitors hear (seconds from start)
+alter table songs add column if not exists preview_start_sec real not null default 0;
+alter table songs add column if not exists track_duration_sec real;
 
 create or replace function update_updated_at()
 returns trigger as $$

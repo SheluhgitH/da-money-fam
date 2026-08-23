@@ -25,27 +25,40 @@ type Stats = {
   coinzSpentToday: number
   failedToday: number
   failRate: number
+  week?: number
+  coinzWeek?: number
 }
 
-export default function AdStudioAdmin() {
+type ImageSummary = {
+  today: number
+  week: number
+  coinzToday: number
+  coinzWeek: number
+  costUsdWeek: number
+  tiers: Array<{
+    tier: string
+    label: string
+    gens: number
+    avgUsdCost: number
+    avgRealRevenueUsd: number
+    impliedMargin: number | null
+    overBuffer: boolean
+  }>
+}
+
+export default function AdStudioAdmin({ initialStatus = '' }: { initialStatus?: string }) {
   const [items, setItems] = useState<GenRow[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState(initialStatus)
   const [selected, setSelected] = useState<GenRow | null>(null)
   const [notes, setNotes] = useState('')
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
-  const [imageTiers, setImageTiers] = useState<
-    Array<{
-      tier: string
-      label: string
-      gens: number
-      avgUsdCost: number
-      avgRealRevenueUsd: number
-      impliedMargin: number | null
-      overBuffer: boolean
-    }>
-  >([])
+  const [imageSummary, setImageSummary] = useState<ImageSummary | null>(null)
+
+  useEffect(() => {
+    setStatus(initialStatus)
+  }, [initialStatus])
 
   const load = async () => {
     setLoading(true)
@@ -61,7 +74,16 @@ export default function AdStudioAdmin() {
     try {
       const res = await fetch('/api/admin/ad-studio/images')
       const data = await res.json()
-      if (res.ok) setImageTiers(data.tiers || [])
+      if (res.ok) {
+        setImageSummary({
+          today: data.today || 0,
+          week: data.week || 0,
+          coinzToday: data.coinzToday || 0,
+          coinzWeek: data.coinzWeek || 0,
+          costUsdWeek: data.costUsdWeek || 0,
+          tiers: data.tiers || [],
+        })
+      }
     } catch {
       /* ignore */
     }
@@ -110,35 +132,65 @@ export default function AdStudioAdmin() {
   return (
     <div className="space-y-6">
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Stat label="Gens today" value={stats.today} />
-          <Stat label="Coinz spent today" value={stats.coinzSpentToday} />
-          <Stat label="Failed today" value={stats.failedToday} />
-          <Stat label="Fail rate" value={`${stats.failRate}%`} />
+        <div>
+          <p className="text-xs uppercase tracking-widest text-gold mb-2">Video</p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <Stat
+              label="Video gens today"
+              value={stats.today}
+              hint={stats.week != null ? `${stats.week} this week` : undefined}
+            />
+            <Stat
+              label="Video coinz today"
+              value={stats.coinzSpentToday}
+              hint={stats.coinzWeek != null ? `${stats.coinzWeek} coinz (7d)` : undefined}
+            />
+            <Stat label="Failed today" value={stats.failedToday} />
+            <Stat label="Fail rate" value={`${stats.failRate}%`} />
+          </div>
         </div>
       )}
 
-      {imageTiers.length > 0 && (
-        <div className="glass rounded-xl p-4 space-y-2">
-          <p className="text-xs uppercase tracking-wider text-gold">Image margin (7d, USD)</p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-            {imageTiers.map((t) => (
-              <div
-                key={t.tier}
-                className={`rounded-lg p-3 bg-black/40 border ${
-                  t.overBuffer ? 'border-red-400/50' : 'border-white/10'
-                }`}
-              >
-                <p className="text-[10px] uppercase text-gray-500">{t.label}</p>
-                <p className="text-sm text-white mt-1">
-                  {t.gens} gens · margin {t.impliedMargin != null ? `${t.impliedMargin}%` : '—'}
-                </p>
-                <p className="text-[10px] text-gray-500 mt-0.5">
-                  cost ${t.avgUsdCost} · rev ${t.avgRealRevenueUsd}
-                </p>
-              </div>
-            ))}
+      {imageSummary && (
+        <div>
+          <p className="text-xs uppercase tracking-widest text-gold mb-2">Images</p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+            <Stat
+              label="Image gens today"
+              value={imageSummary.today}
+              hint={`${imageSummary.week} this week`}
+            />
+            <Stat
+              label="Image coinz today"
+              value={imageSummary.coinzToday}
+              hint={`${imageSummary.coinzWeek} coinz (7d)`}
+            />
+            <Stat label="Gens (7d)" value={imageSummary.week} />
+            <Stat label="Est. cost (7d)" value={`$${imageSummary.costUsdWeek.toFixed(2)}`} />
           </div>
+          {imageSummary.tiers.length > 0 && (
+            <div className="glass rounded-xl p-4 space-y-2">
+              <p className="text-xs uppercase tracking-wider text-gray-400">Image margin (7d, USD)</p>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                {imageSummary.tiers.map((t) => (
+                  <div
+                    key={t.tier}
+                    className={`rounded-lg p-3 bg-black/40 border ${
+                      t.overBuffer ? 'border-red-400/50' : 'border-white/10'
+                    }`}
+                  >
+                    <p className="text-[10px] uppercase text-gray-500">{t.label}</p>
+                    <p className="text-sm text-white mt-1">
+                      {t.gens} gens · margin {t.impliedMargin != null ? `${t.impliedMargin}%` : '—'}
+                    </p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      cost ${t.avgUsdCost} · rev ${t.avgRealRevenueUsd}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -155,7 +207,14 @@ export default function AdStudioAdmin() {
             {s || 'all'}
           </button>
         ))}
-        <button type="button" onClick={load} className="text-xs px-3 py-1 rounded-full border border-gold/30 text-gold">
+        <button
+          type="button"
+          onClick={() => {
+            load()
+            loadImageMargin()
+          }}
+          className="text-xs px-3 py-1 rounded-full border border-gold/30 text-gold"
+        >
           Refresh
         </button>
       </div>
@@ -256,11 +315,20 @@ export default function AdStudioAdmin() {
   )
 }
 
-function Stat({ label, value }: { label: string; value: string | number }) {
+function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string
+  value: string | number
+  hint?: string
+}) {
   return (
     <div className="glass rounded-xl p-4">
       <p className="text-[10px] uppercase tracking-wider text-gray-500">{label}</p>
       <p className="text-2xl font-bold text-white mt-1">{value}</p>
+      {hint ? <p className="text-[10px] text-gray-500 mt-1">{hint}</p> : null}
     </div>
   )
 }

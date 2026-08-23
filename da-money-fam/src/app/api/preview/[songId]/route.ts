@@ -4,7 +4,7 @@ import { getSongById } from '@/lib/store'
 import { getCurrentUser } from '@/lib/auth/user'
 import { userOwnsSong } from '@/lib/user-store'
 import { checkRateLimit } from '@/lib/rate-limit'
-import { openAudioSource, PREVIEW_MAX_BYTES } from '@/lib/audio'
+import { getPreviewByteWindow, openAudioSource, PREVIEW_MAX_BYTES } from '@/lib/audio'
 import { PREVIEW_DURATION_SEC } from '@/lib/audio-constants'
 
 export async function GET(
@@ -34,7 +34,17 @@ export async function GET(
       return NextResponse.json({ error: 'Preview unavailable' }, { status: 404 })
     }
 
-    const effectiveSize = serveFull ? source.size : Math.min(source.size, PREVIEW_MAX_BYTES)
+    const window = serveFull
+      ? { byteStart: 0, byteEnd: source.size, virtualSize: source.size }
+      : getPreviewByteWindow(
+          source.size,
+          song.preview_start_sec ?? 0,
+          song.track_duration_sec,
+          PREVIEW_MAX_BYTES
+        )
+
+    const effectiveSize = window.virtualSize
+    const originOffset = window.byteStart
 
     const rangeHeader = req.headers.get('range')
     if (rangeHeader) {
@@ -49,12 +59,9 @@ export async function GET(
         }
 
         let end = match[2] ? parseInt(match[2], 10) : effectiveSize - 1
-        if (!serveFull) {
-          end = Math.min(end, PREVIEW_MAX_BYTES - 1)
-        }
         end = Math.min(end, effectiveSize - 1)
 
-        const chunk = await source.readRange(start, end)
+        const chunk = await source.readRange(originOffset + start, originOffset + end)
 
         return new NextResponse(new Uint8Array(chunk), {
           status: 206,
@@ -70,9 +77,23 @@ export async function GET(
       }
     }
 
-    const buffer = serveFull
-      ? await source.readFull()
-      : (await source.readFull()).subarray(0, effectiveSize)
+    if (serveFull) {
+      const buffer = await source.readFull()
+      return new NextResponse(new Uint8Array(buffer), {
+        headers: {
+          'Content-Type': source.contentType,
+          'Content-Length': String(buffer.length),
+          'Accept-Ranges': 'bytes',
+          'Cache-Control': 'private, no-store',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      })
+    }
+
+    const buffer =
+      effectiveSize > 0
+        ? await source.readRange(originOffset, originOffset + effectiveSize - 1)
+        : Buffer.alloc(0)
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
@@ -81,7 +102,7 @@ export async function GET(
         'Accept-Ranges': 'bytes',
         'Cache-Control': 'private, no-store',
         'X-Content-Type-Options': 'nosniff',
-        ...(!serveFull ? { 'X-Preview-Max-Seconds': String(PREVIEW_DURATION_SEC) } : {}),
+        'X-Preview-Max-Seconds': String(PREVIEW_DURATION_SEC),
       },
     })
   } catch (error) {

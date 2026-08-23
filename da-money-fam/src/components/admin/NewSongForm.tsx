@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import SongAiFields from '@/components/admin/SongAiFields'
+import PreviewRegionPicker from '@/components/admin/PreviewRegionPicker'
 
 const inputClass =
   'w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500'
@@ -18,6 +19,15 @@ export default function NewSongForm({ onCreated }: { onCreated: () => void }) {
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null)
   const [hasCoverFile, setHasCoverFile] = useState(false)
   const [hasMp3, setHasMp3] = useState(false)
+  const [mp3ObjectUrl, setMp3ObjectUrl] = useState<string | null>(null)
+  const [previewStartSec, setPreviewStartSec] = useState(0)
+  const [trackDurationSec, setTrackDurationSec] = useState<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (mp3ObjectUrl) URL.revokeObjectURL(mp3ObjectUrl)
+    }
+  }, [mp3ObjectUrl])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -27,6 +37,10 @@ export default function NewSongForm({ onCreated }: { onCreated: () => void }) {
     try {
       const form = e.currentTarget
       const formData = new FormData(form)
+      formData.set('preview_start_sec', String(previewStartSec))
+      if (trackDurationSec != null && trackDurationSec > 0) {
+        formData.set('track_duration_sec', String(trackDurationSec))
+      }
 
       if (!hasMp3 && !(formData.get('mp3') as File)?.size) {
         throw new Error('MP3 / audio file is required')
@@ -53,6 +67,10 @@ export default function NewSongForm({ onCreated }: { onCreated: () => void }) {
       setCoverPreviewUrl(null)
       setHasCoverFile(false)
       setHasMp3(false)
+      if (mp3ObjectUrl) URL.revokeObjectURL(mp3ObjectUrl)
+      setMp3ObjectUrl(null)
+      setPreviewStartSec(0)
+      setTrackDurationSec(null)
       onCreated()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create song')
@@ -105,7 +123,27 @@ export default function NewSongForm({ onCreated }: { onCreated: () => void }) {
         imagePrompt={imagePrompt}
         onImagePromptChange={setImagePrompt}
         onCoverFileChange={(file) => setHasCoverFile(Boolean(file))}
-        onMp3FileChange={(file) => setHasMp3(Boolean(file))}
+        onMp3FileChange={(file) => {
+          setHasMp3(Boolean(file))
+          if (mp3ObjectUrl) URL.revokeObjectURL(mp3ObjectUrl)
+          if (file) {
+            setMp3ObjectUrl(URL.createObjectURL(file))
+            setPreviewStartSec(0)
+            setTrackDurationSec(null)
+          } else {
+            setMp3ObjectUrl(null)
+          }
+        }}
+      />
+
+      <PreviewRegionPicker
+        audioSrc={mp3ObjectUrl}
+        startSec={previewStartSec}
+        durationSec={trackDurationSec}
+        onChange={(start, dur) => {
+          setPreviewStartSec(start)
+          setTrackDurationSec(dur)
+        }}
       />
 
       <label className="flex items-center gap-2 text-sm text-gray-300">

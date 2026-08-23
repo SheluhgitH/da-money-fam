@@ -36,6 +36,14 @@ export async function POST(req: Request) {
     const mp3File = formData.get('mp3') as File | null
     const coverFile = formData.get('cover') as File | null
 
+    const previewStartRaw = formData.get('preview_start_sec')
+    const trackDurationRaw = formData.get('track_duration_sec')
+    const preview_start_sec = Math.max(0, Number(previewStartRaw ?? 0) || 0)
+    const track_duration_sec =
+      trackDurationRaw != null && String(trackDurationRaw).trim() !== ''
+        ? Math.max(0, Number(trackDurationRaw) || 0)
+        : undefined
+
     const payload = {
       title: String(formData.get('title') || ''),
       artist: String(formData.get('artist') || 'JackPot'),
@@ -46,6 +54,8 @@ export async function POST(req: Request) {
       is_promoted: formData.get('is_promoted') === 'true',
       is_published: formData.get('is_published') !== 'false',
       for_sale: formData.get('for_sale') !== 'false',
+      preview_start_sec,
+      track_duration_sec: track_duration_sec || undefined,
     }
 
     await songSchema.validate(payload)
@@ -74,6 +84,8 @@ export async function POST(req: Request) {
       album_cover_path: coverPath,
       mp3_file_path: mp3Path,
       preview_path: mp3Path,
+      preview_start_sec: payload.preview_start_sec,
+      track_duration_sec: payload.track_duration_sec,
       price: payload.price,
       is_promoted: payload.is_promoted,
       for_sale: payload.for_sale,
@@ -115,6 +127,17 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ error: 'Song not found' }, { status: 404 })
       }
 
+      const previewStartRaw = formData.get('preview_start_sec')
+      const trackDurationRaw = formData.get('track_duration_sec')
+      const preview_start_sec =
+        previewStartRaw != null && String(previewStartRaw).trim() !== ''
+          ? Math.max(0, Number(previewStartRaw) || 0)
+          : existing.preview_start_sec ?? 0
+      const track_duration_sec =
+        trackDurationRaw != null && String(trackDurationRaw).trim() !== ''
+          ? Math.max(0, Number(trackDurationRaw) || 0)
+          : existing.track_duration_sec
+
       const payload = {
         title: String(formData.get('title') || existing.title),
         artist: String(formData.get('artist') || existing.artist),
@@ -125,6 +148,8 @@ export async function PATCH(req: Request) {
         is_promoted: formData.get('is_promoted') === 'true',
         is_published: formData.get('is_published') === 'true',
         for_sale: formData.get('for_sale') !== 'false',
+        preview_start_sec,
+        track_duration_sec: track_duration_sec || undefined,
       }
 
       await songUpdateSchema.validate(payload)
@@ -139,6 +164,8 @@ export async function PATCH(req: Request) {
         genre: payload.genre || undefined,
         release_date: payload.release_date || undefined,
         description: payload.description || undefined,
+        preview_start_sec: payload.preview_start_sec,
+        track_duration_sec: payload.track_duration_sec,
       }
 
       const mp3File = formData.get('mp3') as File | null
@@ -148,6 +175,10 @@ export async function PATCH(req: Request) {
         const mp3Path = await saveUploadedFile(mp3File, 'audio')
         updates.mp3_file_path = mp3Path
         updates.preview_path = mp3Path
+        // New audio: keep submitted start if set, otherwise reset to 0
+        if (previewStartRaw == null || String(previewStartRaw).trim() === '') {
+          updates.preview_start_sec = 0
+        }
       }
 
       if (coverFile && coverFile.size > 0) {

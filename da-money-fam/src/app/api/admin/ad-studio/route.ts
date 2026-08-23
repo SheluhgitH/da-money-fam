@@ -3,6 +3,7 @@ import { isAdminAuthenticated } from '@/lib/auth'
 import { createClient } from '@supabase/supabase-js'
 import { creditUserCoins } from '@/lib/user-store'
 import { writeAdminAudit } from '@/lib/site-settings'
+import { emptyVideoStats, loadVideoStudioStats } from '@/lib/admin-ad-studio-stats'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +21,18 @@ export async function GET(req: Request) {
 
   const supabase = service()
   if (!supabase) {
-    return NextResponse.json({ items: [], stats: emptyStats() })
+    const empty = emptyVideoStats()
+    return NextResponse.json({
+      items: [],
+      stats: {
+        today: empty.today,
+        coinzSpentToday: empty.coinzToday,
+        failedToday: empty.failedToday,
+        failRate: empty.failRate,
+        week: empty.week,
+        coinzWeek: empty.coinzWeek,
+      },
+    })
   }
 
   const { searchParams } = new URL(req.url)
@@ -56,14 +68,21 @@ export async function GET(req: Request) {
     }
   }
 
-  const stats = await loadStats(supabase)
+  const stats = await loadVideoStudioStats(supabase)
 
   return NextResponse.json({
     items: items.map((row) => ({
       ...row,
       user_email: emails[String(row.user_id)] || null,
     })),
-    stats,
+    stats: {
+      today: stats.today,
+      coinzSpentToday: stats.coinzToday,
+      failedToday: stats.failedToday,
+      failRate: stats.failRate,
+      week: stats.week,
+      coinzWeek: stats.coinzWeek,
+    },
   })
 }
 
@@ -111,26 +130,4 @@ export async function PATCH(req: Request) {
   })
 
   return NextResponse.json({ item: data })
-}
-
-async function loadStats(supabase: NonNullable<ReturnType<typeof service>>) {
-  const since = new Date()
-  since.setHours(0, 0, 0, 0)
-  const { data } = await supabase
-    .from('ad_studio_generations')
-    .select('status, coinz_spent, created_at')
-    .gte('created_at', since.toISOString())
-
-  const rows = data || []
-  const failed = rows.filter((r) => r.status === 'failed').length
-  return {
-    today: rows.length,
-    coinzSpentToday: rows.reduce((sum, r) => sum + Number(r.coinz_spent || 0), 0),
-    failedToday: failed,
-    failRate: rows.length ? Math.round((failed / rows.length) * 100) : 0,
-  }
-}
-
-function emptyStats() {
-  return { today: 0, coinzSpentToday: 0, failedToday: 0, failRate: 0 }
 }

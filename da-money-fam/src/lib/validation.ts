@@ -10,6 +10,8 @@ export const songSchema = yup.object({
   is_promoted: yup.boolean().required(),
   is_published: yup.boolean().required(),
   for_sale: yup.boolean().default(true),
+  preview_start_sec: yup.number().min(0).max(36000).optional(),
+  track_duration_sec: yup.number().min(0).max(36000).nullable().optional(),
 })
 
 export const songUpdateSchema = songSchema

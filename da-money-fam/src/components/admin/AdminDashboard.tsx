@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { OrderStatus, PaymentSettings, PurchaseOrder, MerchOrder, MerchOrderStatus, ServiceOrder, ServiceOrderStatus, Song } from '@/types/store'
 import NewSongForm from './NewSongForm'
 import EditSongForm from './EditSongForm'
@@ -26,6 +26,57 @@ type Tab =
   | 'edit'
 type OrderFilter = 'all' | OrderStatus
 
+type ImageTierStat = {
+  tier: string
+  label: string
+  gens: number
+  avgUsdCost: number
+  avgRealRevenueUsd: number
+  impliedMargin: number | null
+  overBuffer: boolean
+}
+
+type OverviewPayload = {
+  usersTotal: number
+  signupsWeek: number
+  coinzSoldApprox: number
+  fetchedAt: string
+  adStudio: {
+    video: {
+      today: number
+      week: number
+      coinzToday: number
+      coinzWeek: number
+      failedToday: number
+      failRate: number
+    }
+    image: {
+      today: number
+      week: number
+      coinzToday: number
+      coinzWeek: number
+      costUsdWeek: number
+      tiers: ImageTierStat[]
+    }
+  }
+  recentVideos: Array<{
+    id: string
+    brief: string | null
+    status: string
+    coinz_spent: number
+    created_at: string
+    mode: string
+  }>
+  recentImages: Array<{
+    id: string
+    prompt: string | null
+    model: string
+    coinz_spent: number
+    usd_cost: number | null
+    created_at: string
+  }>
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', {
     month: 'short',
@@ -34,6 +85,12 @@ function formatDate(iso: string) {
     hour: 'numeric',
     minute: '2-digit',
   })
+}
+
+function formatPreviewStart(sec: number) {
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
 }
 
 function StatCard({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
@@ -46,6 +103,12 @@ function StatCard({ label, value, hint }: { label: string; value: string | numbe
   )
 }
 
+function SectionLabel({ children }: { children: ReactNode }) {
+  return (
+    <h3 className="text-xs uppercase tracking-widest text-gold mb-3">{children}</h3>
+  )
+}
+
 export default function AdminDashboard() {
   const [tab, setTab] = useState<Tab>('overview')
   const [editingSong, setEditingSong] = useState<Song | null>(null)
@@ -54,12 +117,8 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [merchOrders, setMerchOrders] = useState<MerchOrder[]>([])
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([])
-  const [studioStats, setStudioStats] = useState<{ today: number; failRate: number; failedToday: number } | null>(null)
-  const [overviewExtra, setOverviewExtra] = useState<{
-    usersTotal: number
-    signupsWeek: number
-    coinzSoldApprox: number
-  } | null>(null)
+  const [studioFilter, setStudioFilter] = useState('')
+  const [overview, setOverview] = useState<OverviewPayload | null>(null)
   const [settings, setSettings] = useState<PaymentSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
@@ -68,14 +127,13 @@ export default function AdminDashboard() {
     setLoading(true)
     setMessage('')
     try {
-      const [songsRes, ordersRes, merchRes, serviceRes, settingsRes, studioRes, overviewRes] =
+      const [songsRes, ordersRes, merchRes, serviceRes, settingsRes, overviewRes] =
         await Promise.all([
           fetch('/api/admin/songs'),
           fetch('/api/admin/orders'),
           fetch('/api/admin/merch-orders'),
           fetch('/api/admin/service-orders'),
           fetch('/api/admin/payment-settings'),
-          fetch('/api/admin/ad-studio?limit=1'),
           fetch('/api/admin/overview'),
         ])
 
@@ -90,7 +148,6 @@ export default function AdminDashboard() {
       const merchData = merchRes.ok ? await merchRes.json() : { orders: [] }
       const serviceData = serviceRes.ok ? await serviceRes.json() : { orders: [] }
       const settingsData = await settingsRes.json()
-      const studioData = studioRes.ok ? await studioRes.json() : { stats: null }
       const overviewData = overviewRes.ok ? await overviewRes.json() : null
 
       if (!songsRes.ok) {
@@ -102,13 +159,33 @@ export default function AdminDashboard() {
       setMerchOrders(merchData.orders || [])
       setServiceOrders(serviceData.orders || [])
       setSettings(settingsData.settings || null)
-      setStudioStats(studioData.stats || null)
-      setOverviewExtra(
+      setOverview(
         overviewData
           ? {
               usersTotal: overviewData.usersTotal || 0,
               signupsWeek: overviewData.signupsWeek || 0,
               coinzSoldApprox: overviewData.coinzSoldApprox || 0,
+              fetchedAt: overviewData.fetchedAt || new Date().toISOString(),
+              adStudio: overviewData.adStudio || {
+                video: {
+                  today: 0,
+                  week: 0,
+                  coinzToday: 0,
+                  coinzWeek: 0,
+                  failedToday: 0,
+                  failRate: 0,
+                },
+                image: {
+                  today: 0,
+                  week: 0,
+                  coinzToday: 0,
+                  coinzWeek: 0,
+                  costUsdWeek: 0,
+                  tiers: [],
+                },
+              },
+              recentVideos: overviewData.recentVideos || [],
+              recentImages: overviewData.recentImages || [],
             }
           : null
       )
@@ -417,7 +494,7 @@ export default function AdminDashboard() {
       )}
 
       {tab === 'ad-studio' ? (
-        <AdStudioAdmin />
+        <AdStudioAdmin initialStatus={studioFilter} />
       ) : tab === 'users' ? (
         <UsersAdmin />
       ) : tab === 'site' ? (
@@ -430,24 +507,120 @@ export default function AdminDashboard() {
         <p className="text-gray-500">Loading...</p>
       ) : tab === 'overview' ? (
         <div className="space-y-8">
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <StatCard label="Total Songs" value={songs.length} hint={`${stats.published} published`} />
-            <StatCard label="Promoted" value={stats.promoted} hint="Shown on homepage" />
-            <StatCard label="Pending Orders" value={stats.pending} hint="Awaiting verification" />
-            <StatCard label="Est. Revenue" value={`$${stats.revenue.toFixed(2)}`} hint={`${stats.delivered} delivered`} />
-            <StatCard label="Merch Orders" value={stats.merchCount} hint={`$${stats.merchRevenue.toFixed(2)} merch`} />
-            <StatCard label="Service Deposits" value={stats.serviceCount} hint={`$${stats.serviceRevenue.toFixed(2)} deposits`} />
-            <StatCard
-              label="Ad Studio today"
-              value={studioStats?.today ?? '—'}
-              hint={studioStats ? `${studioStats.failedToday} failed · ${studioStats.failRate}% fail` : 'Load Ad Studio'}
-            />
-            <StatCard label="Users" value={overviewExtra?.usersTotal ?? '—'} hint={`${overviewExtra?.signupsWeek ?? 0} new this week`} />
-            <StatCard
-              label="Coinz granted (7d)"
-              value={overviewExtra?.coinzSoldApprox ?? '—'}
-              hint="From purchase ledger entries"
-            />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-gray-500">
+              {overview?.fetchedAt
+                ? `Updated ${formatDate(overview.fetchedAt)}`
+                : 'Stats not loaded'}
+            </p>
+            <button
+              type="button"
+              onClick={() => loadData()}
+              className="text-xs px-3 py-1.5 rounded-full border border-gold/40 text-gold hover:bg-gold/10"
+            >
+              Refresh
+            </button>
+          </div>
+
+          <div>
+            <SectionLabel>Store</SectionLabel>
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+              <StatCard label="Total Songs" value={songs.length} hint={`${stats.published} published`} />
+              <StatCard label="Promoted" value={stats.promoted} hint="Shown on homepage" />
+              <StatCard label="Pending Orders" value={stats.pending} hint="Awaiting verification" />
+              <StatCard label="Est. Revenue" value={`$${stats.revenue.toFixed(2)}`} hint={`${stats.delivered} delivered`} />
+              <StatCard label="Merch Orders" value={stats.merchCount} hint={`$${stats.merchRevenue.toFixed(2)} merch`} />
+              <StatCard label="Service Deposits" value={stats.serviceCount} hint={`$${stats.serviceRevenue.toFixed(2)} deposits`} />
+            </div>
+          </div>
+
+          <div>
+            <SectionLabel>Ad Studio — Video</SectionLabel>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard
+                label="Video gens today"
+                value={overview?.adStudio.video.today ?? 0}
+                hint={`${overview?.adStudio.video.week ?? 0} this week`}
+              />
+              <StatCard
+                label="Coinz today"
+                value={overview?.adStudio.video.coinzToday ?? 0}
+                hint={`${overview?.adStudio.video.coinzWeek ?? 0} coinz (7d)`}
+              />
+              <StatCard
+                label="Failed today"
+                value={overview?.adStudio.video.failedToday ?? 0}
+                hint={`${overview?.adStudio.video.failRate ?? 0}% fail rate`}
+              />
+              <StatCard
+                label="Fail rate"
+                value={`${overview?.adStudio.video.failRate ?? 0}%`}
+                hint="Today"
+              />
+            </div>
+          </div>
+
+          <div>
+            <SectionLabel>Ad Studio — Images</SectionLabel>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+              <StatCard
+                label="Image gens today"
+                value={overview?.adStudio.image.today ?? 0}
+                hint={`${overview?.adStudio.image.week ?? 0} this week`}
+              />
+              <StatCard
+                label="Coinz today"
+                value={overview?.adStudio.image.coinzToday ?? 0}
+                hint={`${overview?.adStudio.image.coinzWeek ?? 0} coinz (7d)`}
+              />
+              <StatCard
+                label="Gens (7d)"
+                value={overview?.adStudio.image.week ?? 0}
+                hint="All image tiers"
+              />
+              <StatCard
+                label="Est. cost (7d)"
+                value={`$${(overview?.adStudio.image.costUsdWeek ?? 0).toFixed(2)}`}
+                hint="Provider USD"
+              />
+            </div>
+            {(overview?.adStudio.image.tiers?.length ?? 0) > 0 && (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                {overview!.adStudio.image.tiers.map((t) => (
+                  <div
+                    key={t.tier}
+                    className={`rounded-lg p-3 bg-black/40 border ${
+                      t.overBuffer ? 'border-red-400/50' : 'border-white/10'
+                    }`}
+                  >
+                    <p className="text-[10px] uppercase text-gray-500">{t.label}</p>
+                    <p className="text-sm text-white mt-1">
+                      {t.gens} gens · margin{' '}
+                      {t.impliedMargin != null ? `${t.impliedMargin}%` : '—'}
+                    </p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      cost ${t.avgUsdCost} · rev ${t.avgRealRevenueUsd}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <SectionLabel>Community</SectionLabel>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard
+                label="Users"
+                value={overview?.usersTotal ?? 0}
+                hint={`${overview?.signupsWeek ?? 0} new this week`}
+              />
+              <StatCard
+                label="Coinz granted (7d)"
+                value={overview?.coinzSoldApprox ?? 0}
+                hint="From purchase ledger entries"
+              />
+            </div>
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -455,10 +628,22 @@ export default function AdminDashboard() {
               <h3 className="font-serif text-xl text-white mb-4">Quick Actions</h3>
               <div className="flex flex-wrap gap-3">
                 <button
-                  onClick={() => switchTab('ad-studio')}
+                  onClick={() => {
+                    setStudioFilter('')
+                    switchTab('ad-studio')
+                  }}
                   className="px-4 py-2 rounded-full bg-white/10 text-sm hover:bg-white/20"
                 >
                   Ad Studio
+                </button>
+                <button
+                  onClick={() => {
+                    setStudioFilter('failed')
+                    switchTab('ad-studio')
+                  }}
+                  className="px-4 py-2 rounded-full bg-red-500/20 text-red-200 text-sm hover:bg-red-500/30"
+                >
+                  Failed video gens
                 </button>
                 <button
                   onClick={() => switchTab('users')}
@@ -509,6 +694,74 @@ export default function AdminDashboard() {
               )}
             </div>
           </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="glass rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-serif text-xl text-white">Recent video gens</h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStudioFilter('')
+                    switchTab('ad-studio')
+                  }}
+                  className="text-xs text-gold hover:underline"
+                >
+                  View all
+                </button>
+              </div>
+              {(overview?.recentVideos?.length ?? 0) === 0 ? (
+                <p className="text-gray-500 text-sm">No video generations yet.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {overview!.recentVideos.map((item) => (
+                    <li key={item.id} className="flex items-center justify-between gap-3 text-sm">
+                      <div className="min-w-0">
+                        <p className="text-white truncate">{item.brief || 'Untitled'}</p>
+                        <p className="text-gray-500 text-xs">
+                          {item.status} · {item.mode} · {formatDate(item.created_at)}
+                        </p>
+                      </div>
+                      <span className="text-xs text-gold shrink-0 font-mono">{item.coinz_spent}c</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="glass rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-serif text-xl text-white">Recent image gens</h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStudioFilter('')
+                    switchTab('ad-studio')
+                  }}
+                  className="text-xs text-gold hover:underline"
+                >
+                  View all
+                </button>
+              </div>
+              {(overview?.recentImages?.length ?? 0) === 0 ? (
+                <p className="text-gray-500 text-sm">No image generations yet.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {overview!.recentImages.map((item) => (
+                    <li key={item.id} className="flex items-center justify-between gap-3 text-sm">
+                      <div className="min-w-0">
+                        <p className="text-white truncate">{item.prompt || item.model || 'Image'}</p>
+                        <p className="text-gray-500 text-xs">
+                          {item.model} · {formatDate(item.created_at)}
+                        </p>
+                      </div>
+                      <span className="text-xs text-gold shrink-0 font-mono">{item.coinz_spent}c</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
         </div>
       ) : tab === 'new' ? (
         <NewSongForm onCreated={() => { switchTab('songs'); setMessage('Song published'); loadData() }} />
@@ -549,6 +802,8 @@ export default function AdminDashboard() {
                   <p className="text-xs text-gray-500 mt-1">
                     Updated {formatDate(song.updated_at)}
                     {!song.is_published && ' · Draft'}
+                    {(song.preview_start_sec ?? 0) > 0 &&
+                      ` · preview @ ${formatPreviewStart(song.preview_start_sec ?? 0)}`}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">

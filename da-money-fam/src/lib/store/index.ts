@@ -71,6 +71,11 @@ function mapSupabaseSong(row: Record<string, unknown>): Song {
     album_cover_path: String(row.album_cover_path),
     mp3_file_path: String(row.mp3_file_path),
     preview_path: row.preview_path ? String(row.preview_path) : undefined,
+    preview_start_sec: Number(row.preview_start_sec ?? 0) || 0,
+    track_duration_sec:
+      row.track_duration_sec != null && Number(row.track_duration_sec) > 0
+        ? Number(row.track_duration_sec)
+        : undefined,
     price: Number(row.price),
     is_promoted: Boolean(row.is_promoted),
     for_sale: row.for_sale !== false,
@@ -105,7 +110,16 @@ function mapSupabaseOrder(row: Record<string, unknown>, songTitle?: string): Pur
 
 function normalizeSong(song: Song): Song {
   const access = song.access || (song.for_sale === false && !song.release_date ? 'exclusive' : 'public')
-  return { ...song, for_sale: song.for_sale !== false, access }
+  return {
+    ...song,
+    for_sale: song.for_sale !== false,
+    access,
+    preview_start_sec: Number(song.preview_start_sec ?? 0) || 0,
+    track_duration_sec:
+      song.track_duration_sec != null && Number(song.track_duration_sec) > 0
+        ? Number(song.track_duration_sec)
+        : undefined,
+  }
 }
 
 export async function applyScheduledDropReleases(): Promise<void> {

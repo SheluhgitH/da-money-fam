@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { Song } from '@/types/store'
 import SongAiFields from '@/components/admin/SongAiFields'
+import PreviewRegionPicker from '@/components/admin/PreviewRegionPicker'
 
 const inputClass =
   'w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500'
@@ -26,6 +27,11 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
   const [imagePrompt, setImagePrompt] = useState('')
   const [albumCoverPath, setAlbumCoverPath] = useState('')
   const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null)
+  const [previewStartSec, setPreviewStartSec] = useState(song.preview_start_sec ?? 0)
+  const [trackDurationSec, setTrackDurationSec] = useState<number | null>(
+    song.track_duration_sec ?? null
+  )
+  const [localMp3Url, setLocalMp3Url] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -39,6 +45,10 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
       formData.set('is_promoted', isPromoted ? 'true' : 'false')
       formData.set('is_published', isPublished ? 'true' : 'false')
       formData.set('for_sale', forSale ? 'true' : 'false')
+      formData.set('preview_start_sec', String(previewStartSec))
+      if (trackDurationSec != null && trackDurationSec > 0) {
+        formData.set('track_duration_sec', String(trackDurationSec))
+      }
 
       const res = await fetch('/api/admin/songs', {
         method: 'PATCH',
@@ -57,6 +67,7 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
   }
 
   const audioFileName = song.mp3_file_path.split('/').pop()
+  const audioSrc = localMp3Url || `/api/preview/${song.id}`
 
   return (
     <form onSubmit={handleSubmit} className="glass rounded-xl p-6 space-y-4 max-w-2xl">
@@ -122,6 +133,27 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
         imagePrompt={imagePrompt}
         onImagePromptChange={setImagePrompt}
         mp3FileName={audioFileName || null}
+        onMp3FileChange={(file) => {
+          if (localMp3Url) URL.revokeObjectURL(localMp3Url)
+          if (file) {
+            setLocalMp3Url(URL.createObjectURL(file))
+            setPreviewStartSec(0)
+            setTrackDurationSec(null)
+          } else {
+            setLocalMp3Url(null)
+          }
+        }}
+      />
+
+      <PreviewRegionPicker
+        audioSrc={audioSrc}
+        startSec={previewStartSec}
+        durationSec={trackDurationSec}
+        onChange={(start, dur) => {
+          setPreviewStartSec(start)
+          setTrackDurationSec(dur)
+        }}
+        fullFileHref={`/api/preview/${song.id}`}
       />
 
       <label className="flex items-center gap-2 text-sm text-gray-300">
@@ -161,14 +193,6 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
         >
           {loading ? 'Saving...' : 'Save Changes'}
         </button>
-        <a
-          href={`/api/preview/${song.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="px-6 py-3 rounded-full border border-white/20 text-sm text-gray-300 hover:text-white hover:border-gold/50 transition-colors"
-        >
-          Preview Audio
-        </a>
       </div>
     </form>
   )

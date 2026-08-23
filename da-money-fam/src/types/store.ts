@@ -9,6 +9,10 @@ export interface Song {
   album_cover_path: string
   mp3_file_path: string
   preview_path?: string
+  /** Seconds from track start where the public preview begins. */
+  preview_start_sec?: number
+  /** Full track length in seconds (from browser decode); improves byte-offset accuracy. */
+  track_duration_sec?: number
   price: number
   is_promoted: boolean
   for_sale: boolean
