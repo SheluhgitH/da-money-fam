@@ -32,6 +32,7 @@ export default function PreviewPlayer({
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
   const [previewEnded, setPreviewEnded] = useState(false)
+  const endedFiredRef = useRef(false)
 
   const isActiveInBar = previewCtx?.activePreview?.songId === songId
 
@@ -43,7 +44,15 @@ export default function PreviewPlayer({
     setIsPlaying(false)
     setProgress(0)
     setPreviewEnded(false)
+    endedFiredRef.current = false
   }, [songId, owned])
+
+  useEffect(() => {
+    if (isActiveInBar && previewCtx && !previewCtx.previewEnded && previewEnded) {
+      setPreviewEnded(false)
+      endedFiredRef.current = false
+    }
+  }, [isActiveInBar, previewCtx?.previewEnded, previewEnded, previewCtx])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -59,6 +68,24 @@ export default function PreviewPlayer({
         if (isActiveInBar && previewCtx) {
           previewCtx.setIsPlaying(false)
           previewCtx.setPreviewEnded(true)
+          if (!endedFiredRef.current) {
+            endedFiredRef.current = true
+            previewCtx.openUpsell()
+          }
+        } else if (previewCtx && title && !endedFiredRef.current) {
+          endedFiredRef.current = true
+          previewCtx.registerPreview({
+            songId,
+            title,
+            artist,
+            cover,
+            owned,
+            price,
+            for_sale,
+          })
+          previewCtx.setIsPlaying(false)
+          previewCtx.setPreviewEnded(true)
+          previewCtx.openUpsell()
         }
       }
       const max = owned ? audio.duration || 1 : previewDurationSec
@@ -92,39 +119,62 @@ export default function PreviewPlayer({
       audio.removeEventListener('play', onPlay)
       audio.removeEventListener('pause', onPause)
     }
-  }, [owned, songId, previewDurationSec, isActiveInBar, previewCtx])
+  }, [
+    owned,
+    songId,
+    previewDurationSec,
+    isActiveInBar,
+    previewCtx,
+    title,
+    artist,
+    cover,
+    price,
+    for_sale,
+  ])
 
   const togglePlay = async () => {
     const audio = audioRef.current
     if (!audio) return
 
-    if (previewEnded && !owned) return
-
     if (isPlaying) {
       audio.pause()
       setIsPlaying(false)
-    } else {
-      try {
-        pauseAllExceptAudio(audio)
-        if (previewCtx && title) {
-          previewCtx.registerPreview({
-            songId,
-            title,
-            artist,
-            cover,
-            owned,
-            price,
-            for_sale,
-          })
+      return
+    }
+
+    try {
+      pauseAllExceptAudio(audio)
+      if (previewEnded) {
+        audio.currentTime = 0
+        setPreviewEnded(false)
+        endedFiredRef.current = false
+        setProgress(0)
+        if (previewCtx) {
+          previewCtx.setPreviewEnded(false)
+          previewCtx.setProgress(0)
+          previewCtx.closeUpsell()
         }
-        await audio.play()
-        setIsPlaying(true)
-        if (previewCtx) previewCtx.setIsPlaying(true)
-      } catch {
-        setIsPlaying(false)
       }
+      if (previewCtx && title) {
+        previewCtx.registerPreview({
+          songId,
+          title,
+          artist,
+          cover,
+          owned,
+          price,
+          for_sale,
+        })
+      }
+      await audio.play()
+      setIsPlaying(true)
+      if (previewCtx) previewCtx.setIsPlaying(true)
+    } catch {
+      setIsPlaying(false)
     }
   }
+
+  const endedHint = previewEnded && !owned
 
   return (
     <div
@@ -143,9 +193,10 @@ export default function PreviewPlayer({
       <button
         type="button"
         onClick={togglePlay}
-        disabled={previewEnded && !owned}
-        className="w-8 h-8 flex items-center justify-center rounded-full bg-gold text-black hover:bg-white transition-colors disabled:opacity-40 shrink-0"
-        aria-label={isPlaying ? 'Pause preview' : 'Play preview'}
+        className={`w-8 h-8 flex items-center justify-center rounded-full bg-gold text-black hover:bg-white transition-colors shrink-0 ${
+          endedHint ? 'ring-2 ring-gold/70 ring-offset-1 ring-offset-black animate-pulse' : ''
+        }`}
+        aria-label={isPlaying ? 'Pause preview' : endedHint ? 'Play preview again' : 'Play preview'}
       >
         {isPlaying ? (
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -168,8 +219,8 @@ export default function PreviewPlayer({
         <p className="text-[9px] text-white/50 mt-1 truncate">
           {owned
             ? 'Full track unlocked'
-            : previewEnded
-              ? 'Purchase to unlock full track'
+            : endedHint
+              ? 'Tap to preview again'
               : `${previewDurationSec}s preview`}
         </p>
       </div>

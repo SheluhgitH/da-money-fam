@@ -4,7 +4,6 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePreviewPlayer } from '@/contexts/PreviewPlayerContext'
 import { PREVIEW_DURATION_SEC } from '@/lib/audio-constants'
-import { navigateHomepageSection } from '@/lib/homepage-tabs'
 
 function findActiveAudio(songId: string): HTMLAudioElement | null {
   if (typeof document === 'undefined') return null
@@ -12,7 +11,16 @@ function findActiveAudio(songId: string): HTMLAudioElement | null {
 }
 
 export default function StickyPreviewBar() {
-  const { activePreview, isPlaying, progress, previewEnded, setIsPlaying } = usePreviewPlayer()
+  const {
+    activePreview,
+    isPlaying,
+    progress,
+    previewEnded,
+    purchasing,
+    setIsPlaying,
+    replayPreview,
+    purchasePreviewSong,
+  } = usePreviewPlayer()
 
   if (!activePreview) return null
 
@@ -22,16 +30,27 @@ export default function StickyPreviewBar() {
     if (isPlaying) {
       audio.pause()
       setIsPlaying(false)
-    } else if (!previewEnded || activePreview.owned) {
-      audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false))
+      return
     }
+    if (previewEnded && !activePreview.owned) {
+      void replayPreview()
+      return
+    }
+    audio.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false))
   }
 
   const durationLabel = activePreview.owned
     ? 'Full track'
     : previewEnded
-      ? 'Purchase to unlock'
+      ? 'Preview again'
       : `${PREVIEW_DURATION_SEC}s preview`
+
+  const priceLabel =
+    typeof activePreview.price === 'number'
+      ? `$${activePreview.price.toFixed(2)}`
+      : null
+
+  const endedHint = previewEnded && !activePreview.owned
 
   return (
     <div className="fixed bottom-20 md:bottom-6 left-4 right-4 md:left-auto md:right-6 md:max-w-md z-[900] glass-gold rounded-2xl border border-gold/30 p-3 shadow-2xl">
@@ -54,23 +73,21 @@ export default function StickyPreviewBar() {
         <button
           type="button"
           onClick={togglePlay}
-          disabled={previewEnded && !activePreview.owned}
-          className="w-9 h-9 rounded-full bg-gold text-black flex items-center justify-center shrink-0 disabled:opacity-40 text-xs"
-          aria-label={isPlaying ? 'Pause' : 'Play'}
+          className={`w-9 h-9 rounded-full bg-gold text-black flex items-center justify-center shrink-0 text-xs hover:bg-white transition-colors ${
+            endedHint ? 'ring-2 ring-gold/70 animate-pulse' : ''
+          }`}
+          aria-label={isPlaying ? 'Pause' : endedHint ? 'Play preview again' : 'Play'}
         >
           {isPlaying ? '❚❚' : '▶'}
         </button>
         {activePreview.for_sale && !activePreview.owned ? (
           <button
             type="button"
-            onClick={() => {
-              const el = document.getElementById(`song-${activePreview.songId}`)
-              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-              else navigateHomepageSection('store')
-            }}
-            className="text-[10px] font-bold uppercase tracking-wider text-gold hover:text-white shrink-0"
+            onClick={() => void purchasePreviewSong()}
+            disabled={purchasing}
+            className="text-[10px] font-bold uppercase tracking-wider text-gold hover:text-white shrink-0 disabled:opacity-50"
           >
-            Buy
+            {purchasing ? '...' : priceLabel ? `Buy ${priceLabel}` : 'Buy'}
           </button>
         ) : activePreview.owned ? (
           <Link href="/library" className="text-[10px] font-bold uppercase tracking-wider text-gold shrink-0">

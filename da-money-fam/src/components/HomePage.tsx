@@ -16,6 +16,7 @@ import ReferralCapture from '@/components/ReferralCapture'
 import { PreviewPlayerProvider } from '@/contexts/PreviewPlayerContext'
 import { MiniCartProvider } from '@/contexts/MiniCartContext'
 import StickyPreviewBar from '@/components/store/StickyPreviewBar'
+import PreviewUpsellModal from '@/components/store/PreviewUpsellModal'
 import StickyShopBar from '@/components/StickyShopBar'
 import MiniCartDrawer from '@/components/MiniCartDrawer'
 import EmailCaptureModal from '@/components/EmailCaptureModal'
@@ -380,6 +381,7 @@ export default function HomePage() {
 
       <Footer />
       <StickyPreviewBar />
+      <PreviewUpsellModal />
       <StickyShopBar />
       <MiniCartDrawer />
     </main>
