@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs'
 import path from 'path'
+import { createClient } from '@supabase/supabase-js'
 import { PREVIEW_MAX_BYTES } from '@/lib/audio-constants'
 import { createServiceClient } from '@/lib/supabase/server'
 
@@ -8,6 +9,24 @@ export { PREVIEW_DURATION_SEC, PREVIEW_MAX_BYTES } from '@/lib/audio-constants'
 const DATA_DIR = path.join(process.cwd(), 'data')
 const PRIVATE_AUDIO_DIR = path.join(DATA_DIR, 'private-audio')
 const STORAGE_BUCKET = 'store-audio'
+
+function storageServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return null
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
+}
+
+export async function ensureStoreAudioBucket(): Promise<void> {
+  const supabase = storageServiceClient()
+  if (!supabase) return
+  const { data } = await supabase.storage.listBuckets()
+  if (data?.some((b) => b.name === STORAGE_BUCKET)) return
+  await supabase.storage.createBucket(STORAGE_BUCKET, {
+    public: false,
+    fileSizeLimit: 100 * 1024 * 1024,
+  })
+}
 
 export function getContentType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase()
@@ -176,13 +195,16 @@ export async function uploadAudioToStorage(
   buffer: Buffer,
   contentType: string
 ): Promise<boolean> {
-  const supabase = createServiceClient()
+  const supabase = storageServiceClient()
   if (!supabase) return false
+
+  await ensureStoreAudioBucket()
 
   const { error } = await supabase.storage.from(STORAGE_BUCKET).upload(filename, buffer, {
     upsert: true,
     contentType,
   })
 
-  return !error
+  if (error) throw new Error(error.message)
+  return true
 }

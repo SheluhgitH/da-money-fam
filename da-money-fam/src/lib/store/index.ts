@@ -831,10 +831,15 @@ export async function saveUploadedFile(
   const filename = `${Date.now()}-${safeName}`
 
   if (folder === 'audio') {
+    const contentType = getContentType(filename)
+    if (isSupabaseConfigured()) {
+      await uploadAudioToStorage(filename, buffer, contentType)
+      return `private-audio/${filename}`
+    }
+
     const absolutePath = path.join(getPrivateAudioDir(), filename)
     await fs.mkdir(path.dirname(absolutePath), { recursive: true })
     await fs.writeFile(absolutePath, buffer)
-    await uploadAudioToStorage(filename, buffer, getContentType(filename))
     return `private-audio/${filename}`
   }
 
