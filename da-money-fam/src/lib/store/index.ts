@@ -5,6 +5,7 @@ import type { PaymentSettings, PurchaseOrder, MerchOrder, MerchOrderStatus, Serv
 import { createServiceClient } from '@/lib/supabase/server'
 import { isMissingSupabaseTable } from '@/lib/supabase/errors'
 import { getPrivateAudioDir, getContentType, uploadAudioToStorage } from '@/lib/audio'
+import { uploadStorePublicImage } from '@/lib/store-image-storage'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 
@@ -837,13 +838,12 @@ export async function saveUploadedFile(
     return `private-audio/${filename}`
   }
 
-  const relativePath = `/store/${folder}/${filename}`
-  const absolutePath = path.join(process.cwd(), 'public', 'store', folder, filename)
-
-  await fs.mkdir(path.dirname(absolutePath), { recursive: true })
-  await fs.writeFile(absolutePath, buffer)
-
-  return relativePath
+  return uploadStorePublicImage(
+    buffer,
+    folder,
+    file.type || (safeName.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg'),
+    safeName
+  )
 }
 
 export function verifyAdminPassword(password: string): boolean {

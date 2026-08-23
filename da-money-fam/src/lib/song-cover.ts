@@ -1,27 +1,14 @@
-import { promises as fs } from 'fs'
-import path from 'path'
 import { imageModelChain, IMAGE_MODELS, type ImageTier } from '@/lib/image-models'
+import { uploadStorePublicImage, type StoreImageFolder } from '@/lib/store-image-storage'
 
-export type AdminImageFolder = 'covers' | 'blog'
+export type AdminImageFolder = StoreImageFolder
 
 export async function saveAdminPublicImage(
   buffer: Buffer,
   contentType = 'image/png',
   folder: AdminImageFolder = 'covers'
 ): Promise<string> {
-  const ext = contentType.includes('webp')
-    ? 'webp'
-    : contentType.includes('jpeg') || contentType.includes('jpg')
-      ? 'jpg'
-      : 'png'
-  const filename = `${Date.now()}-ai-cover.${ext}`
-  const relativePath = `/store/${folder}/${filename}`
-  const absolutePath = path.join(process.cwd(), 'public', 'store', folder, filename)
-
-  await fs.mkdir(path.dirname(absolutePath), { recursive: true })
-  await fs.writeFile(absolutePath, buffer)
-
-  return relativePath
+  return uploadStorePublicImage(buffer, folder, contentType)
 }
 
 /** @deprecated Prefer saveAdminPublicImage — kept for song cover callers */
