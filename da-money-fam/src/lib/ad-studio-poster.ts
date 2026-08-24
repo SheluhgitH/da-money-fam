@@ -2,6 +2,17 @@ import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
 import { spawn } from 'child_process'
+import { createRequire } from 'module'
+
+const nodeRequire = createRequire(__filename)
+
+function loadFfmpegPath(): string | null {
+  try {
+    return nodeRequire('ffmpeg-static') as string | null
+  } catch {
+    return null
+  }
+}
 
 /**
  * Extract a JPEG poster (~0.5s) from an MP4 buffer using ffmpeg-static when available.
@@ -11,13 +22,7 @@ export async function extractMp4PosterJpeg(
   videoBuffer: Buffer | Uint8Array,
   seekSec = 0.5
 ): Promise<Buffer | null> {
-  let ffmpegPath: string | null = null
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    ffmpegPath = require('ffmpeg-static') as string | null
-  } catch {
-    return null
-  }
+  const ffmpegPath = loadFfmpegPath()
   if (!ffmpegPath) return null
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dmf-poster-'))
@@ -66,13 +71,7 @@ export async function extractMp4PosterJpeg(
 
 /** Last video frame as JPEG (near EOF). */
 export async function extractLastFrameJpeg(videoBuffer: Buffer | Uint8Array): Promise<Buffer | null> {
-  let ffmpegPath: string | null = null
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    ffmpegPath = require('ffmpeg-static') as string | null
-  } catch {
-    return null
-  }
+  const ffmpegPath = loadFfmpegPath()
   if (!ffmpegPath) return null
 
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dmf-lastframe-'))

@@ -1,3 +1,4 @@
+import { createRequire } from 'module'
 import { promises as fs } from 'fs'
 import os from 'os'
 import path from 'path'
@@ -9,10 +10,11 @@ import {
   MAX_VIDEO_UPLOAD_BYTES,
 } from '@/lib/ad-studio-video-storage'
 
+const nodeRequire = createRequire(__filename)
+
 function ffmpegBin(): string | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require('ffmpeg-static') as string | null
+    return nodeRequire('ffmpeg-static') as string | null
   } catch {
     return null
   }
