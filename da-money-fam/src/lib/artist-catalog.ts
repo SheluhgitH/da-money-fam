@@ -25,7 +25,7 @@ export function groupCatalogArtists(songs: PublicSong[]): CatalogArtist[] {
   )
 
   const result: CatalogArtist[] = []
-  for (const [key, list] of groups) {
+  for (const [key, list] of Array.from(groups.entries())) {
     const roster = rosterByName.get(key)
     const featured = list.find((s) => s.is_promoted) || list[0]
     const sorted = [...list].sort((a, b) => Number(b.is_promoted) - Number(a.is_promoted))
