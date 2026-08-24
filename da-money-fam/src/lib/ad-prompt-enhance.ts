@@ -147,3 +147,43 @@ export async function resolveAdPrompt(input: {
   }
   return buildBaseAdPrompt(brief, creative)
 }
+
+export async function enhanceStillPrompt(
+  brief: string,
+  referenceUrls: string[] = []
+): Promise<string> {
+  const text = brief.trim()
+  if (!text) return text
+  const refs = referenceUrls.filter((u) => u.startsWith('http://') || u.startsWith('https://'))
+  const cacheKey = enhanceCacheKey(`still:${text}`, '', refs)
+  const cached = getCachedEnhance(cacheKey)
+  if (cached) return cached
+
+  const messages: ChatMessage[] = [
+    {
+      role: 'system',
+      content: `You rewrite still-image briefs into camera-ready generation prompts for ads.
+Return ONLY valid JSON: {"prompt":"..."}
+Rules:
+- ONE paragraph, no markdown, max 90 words.
+- Include camera, lens feel, lighting, wardrobe, setting, and composition.
+- Keep the user's subject and product. DMF brand: luxury hip-hop, gold and black, premium polish.
+- No logos, no readable text, no watermark.
+${refs.length ? '- Preserve identity from reference stills.' : ''}`,
+    },
+    {
+      role: 'user',
+      content: `Brief:\n${text}${
+        refs.length
+          ? `\n\nRefs:\n${refs.slice(0, 3).map((u, i) => `${i + 1}. ${u}`).join('\n')}`
+          : ''
+      }`,
+    },
+  ]
+  const raw = await completeAdPromptChat(messages, { maxTokens: 280 })
+  if (!raw) return text
+  const parsed = parseEnhancedPromptJson(raw)
+  const prompt = parsed?.prompt || text
+  setCachedEnhance(cacheKey, prompt)
+  return prompt
+}

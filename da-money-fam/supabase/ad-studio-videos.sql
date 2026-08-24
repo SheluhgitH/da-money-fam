@@ -1,0 +1,7 @@
+-- Ad Studio durable video storage
+-- Bucket is also auto-created by ensureAdStudioVideosBucket() on first persist.
+-- Create in Dashboard → Storage if preferred:
+--   name: ad-studio-videos
+--   public: true
+--   file size limit: 100MB
+--   allowed MIME: video/mp4, video/webm, video/quicktime

@@ -13,6 +13,7 @@ export async function generateOpenRouterImage(input: {
   aspectRatio?: string
   inputReferences?: string[]
   userId: string
+  strictEdit?: boolean
 }): Promise<OpenRouterImageResult> {
   const openRouterApiKey = process.env.OPENROUTER_API_KEY
   if (!openRouterApiKey || openRouterApiKey === 'your_openrouter_key_here') {

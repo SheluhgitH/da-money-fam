@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/user'
 import { completeGenerationByJobId } from '@/lib/ad-studio-jobs'
+import { ensureDurableVideoWithPoster } from '@/lib/ad-studio-video-storage'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 export async function GET(
   req: Request,
@@ -38,23 +40,39 @@ export async function GET(
 
     const data = await response.json()
     const status = data.status as string
+    const done = status === 'completed' || status === 'succeeded'
 
-    // Browser cannot call OpenRouter content URLs (need API key).
-    // Always serve completed videos through our authenticated proxy.
-    const videoUrl =
-      status === 'completed' || status === 'succeeded'
-        ? `/api/video/${jobId}/content`
-        : null
+    const { searchParams } = new URL(req.url)
+    const generationId = searchParams.get('generationId')
 
-    if (videoUrl) {
-      const { searchParams } = new URL(req.url)
-      const generationId = searchParams.get('generationId')
+    let videoUrl: string | null = null
+    let posterUrl: string | null = null
+    if (done) {
+      const proxyUrl = `/api/video/${jobId}/content`
+      videoUrl = proxyUrl
+
+      if (generationId) {
+        try {
+          const persisted = await ensureDurableVideoWithPoster({
+            videoUrl: proxyUrl,
+            userId: user.id,
+            generationId,
+          })
+          videoUrl = persisted.videoUrl
+          posterUrl = persisted.posterUrl
+        } catch (e) {
+          console.error('Failed to persist video to storage:', e)
+          videoUrl = proxyUrl
+        }
+      }
+
       try {
         await completeGenerationByJobId({
           userId: user.id,
           jobId,
           videoUrl,
           generationId,
+          thumbnailUrl: posterUrl,
         })
       } catch (e) {
         console.error('Failed to auto-complete generation:', e)
@@ -64,6 +82,7 @@ export async function GET(
     return NextResponse.json({
       status,
       videoUrl,
+      posterUrl,
       jobId,
     })
   } catch (error) {

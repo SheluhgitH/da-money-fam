@@ -1,10 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    serverComponentsExternalPackages: ['ffmpeg-static', 'fluent-ffmpeg'],
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.kick.com' },
       { protocol: 'https', hostname: 'files.kick.com' },
+      { protocol: 'https', hostname: 'ismptoxqzpmgssursgzl.supabase.co' },
     ],
     unoptimized: true,
   },

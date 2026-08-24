@@ -6,7 +6,7 @@ import { SEEDANCE_MODELS } from '@/lib/seedance-models'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 const DATA_FILE = path.join(DATA_DIR, 'ad-studio-generations.json')
-const DEFAULT_MODEL = SEEDANCE_MODELS.fast.id
+const DEFAULT_MODEL = SEEDANCE_MODELS.mini.id
 
 function isSupabaseConfigured() {
   return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)
@@ -122,6 +122,47 @@ export async function getAdStudioGenerationById(id: string): Promise<AdStudioGen
 
   const rows = await readLocal()
   return rows.find((r) => r.id === id) || null
+}
+
+/** Find a generation that references this OpenRouter job id in video_urls or scenes. */
+export async function findGenerationByOpenRouterJobId(
+  jobId: string
+): Promise<AdStudioGeneration | null> {
+  const proxy = `/api/video/${jobId}/content`
+  if (isSupabaseConfigured()) {
+    const supabase = createServiceClient()!
+    const { data } = await supabase
+      .from('ad_studio_generations')
+      .select('*')
+      .contains('video_urls', [proxy])
+      .order('created_at', { ascending: false })
+      .limit(1)
+    if (data?.[0]) return mapRow(data[0] as Record<string, unknown>)
+
+    // Fallback: scan recent rows for scene jobId (storyboard)
+    const { data: recent } = await supabase
+      .from('ad_studio_generations')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(80)
+    const hit = (recent || [])
+      .map((row) => mapRow(row as Record<string, unknown>))
+      .find(
+        (g) =>
+          g.video_urls.some((u) => u.includes(jobId)) ||
+          g.scenes.some((s) => s.jobId === jobId) ||
+          g.video_urls.some((u) => u.includes(`/ad-studio-videos/`) && u.includes(`${jobId}.mp4`))
+      )
+    return hit || null
+  }
+
+  const rows = await readLocal()
+  return (
+    rows.find(
+      (g) =>
+        g.video_urls.some((u) => u.includes(jobId)) || g.scenes.some((s) => s.jobId === jobId)
+    ) || null
+  )
 }
 
 export async function getAdStudioGeneration(
@@ -255,8 +296,10 @@ export async function completeGenerationByJobId(input: {
   jobId: string
   videoUrl: string
   generationId?: string | null
+  /** Prefer image poster CDN URL when available */
+  thumbnailUrl?: string | null
 }): Promise<AdStudioGeneration | null> {
-  const { userId, jobId, videoUrl, generationId } = input
+  const { userId, jobId, videoUrl, generationId, thumbnailUrl } = input
 
   let target: AdStudioGeneration | null = null
   if (generationId) {
@@ -275,14 +318,18 @@ export async function completeGenerationByJobId(input: {
 
   if (!target) return null
 
-  // Already completed with this URL — no-op
+  // Already completed with this durable URL — no-op
   if (target.status === 'completed' && target.video_urls.includes(videoUrl)) {
+    if (thumbnailUrl && thumbnailUrl !== target.thumbnail_url) {
+      return updateAdStudioGeneration(userId, target.id, { thumbnail_url: thumbnailUrl })
+    }
     return target
   }
 
-  const urls = target.video_urls.includes(videoUrl)
-    ? target.video_urls
-    : [...target.video_urls, videoUrl]
+  // Replace proxy URL for this job with the new URL (durable preferred)
+  const proxyForJob = `/api/video/${jobId}/content`
+  let urls = target.video_urls.filter((u) => u !== proxyForJob && u !== videoUrl)
+  urls = [...urls, videoUrl]
 
   const scenes = target.scenes.map((s) =>
     s.jobId === jobId ? { ...s, videoUrl, status: 'completed' as const } : s
@@ -291,7 +338,7 @@ export async function completeGenerationByJobId(input: {
   return updateAdStudioGeneration(userId, target.id, {
     status: 'completed',
     video_urls: urls,
-    thumbnail_url: urls[0] || target.thumbnail_url,
+    thumbnail_url: thumbnailUrl || urls[0] || target.thumbnail_url,
     scenes,
   })
 }

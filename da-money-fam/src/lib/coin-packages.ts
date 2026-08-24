@@ -1,45 +1,46 @@
 import { SEEDANCE_MODELS } from '@/lib/seedance-models'
+import { IMAGE_MODELS } from '@/lib/image-models'
 
 export interface CoinPackage {
   id: string
   amount: number
   price: number
-  /** Approx Lite ads at 6s base */
   liteAds: number
-  /** Approx Fast ads at 6s base */
+  miniAds: number
   fastAds: number
-  /** Approx Draft images (4 Coinz) */
   draftImages: number
   label: string
 }
 
-/** Post 2× rebase packs — same USD prices, double Coinz */
+function packMeta(amount: number) {
+  return {
+    liteAds: Math.max(1, Math.floor(amount / SEEDANCE_MODELS.lite.baseCoins)),
+    miniAds: Math.max(1, Math.floor(amount / SEEDANCE_MODELS.mini.baseCoins)),
+    fastAds: Math.max(1, Math.floor(amount / SEEDANCE_MODELS.fast.baseCoins)),
+    draftImages: Math.max(1, Math.floor(amount / IMAGE_MODELS.draft.baseCoins)),
+  }
+}
+
 export const COIN_PACKAGES: CoinPackage[] = [
   {
     id: 'starter',
-    amount: 100,
+    amount: 150,
     price: 8,
-    liteAds: 5,
-    fastAds: 2,
-    draftImages: 25,
+    ...packMeta(150),
     label: 'Starter',
   },
   {
     id: 'creator',
-    amount: 300,
+    amount: 450,
     price: 20,
-    liteAds: 15,
-    fastAds: 7,
-    draftImages: 75,
+    ...packMeta(450),
     label: 'Creator',
   },
   {
     id: 'studio',
-    amount: 800,
+    amount: 1200,
     price: 50,
-    liteAds: 40,
-    fastAds: 20,
-    draftImages: 200,
+    ...packMeta(1200),
     label: 'Studio',
   },
 ]
@@ -49,19 +50,21 @@ export function getCoinPackage(id: string): CoinPackage | undefined {
 }
 
 export function packAdCopy(pkg: CoinPackage): string {
-  return `≈ ${pkg.liteAds} Lite · ${pkg.fastAds} Fast · ${pkg.draftImages} Draft imgs`
+  return `≈ ${pkg.liteAds} Lite · ${pkg.miniAds} Mini · ${pkg.fastAds} Fast · ${pkg.draftImages} Draft imgs`
 }
 
-/** Sanity: pack math vs catalog base coins */
 export const PACK_REFERENCE = {
   liteBase: SEEDANCE_MODELS.lite.baseCoins,
+  miniBase: SEEDANCE_MODELS.mini.baseCoins,
   fastBase: SEEDANCE_MODELS.fast.baseCoins,
 } as const
 
 export const ALLOWED_COIN_RETURN_PATHS = new Set(['/account', '/ad-studio', '/coin-wallet'])
 
 export function sanitizeCoinReturnPath(path: unknown): string {
-  if (typeof path !== 'string') return '/account'
-  const cleaned = path.split('?')[0]
-  return ALLOWED_COIN_RETURN_PATHS.has(cleaned) ? cleaned : '/account'
+  if (typeof path === 'string') {
+    const cleaned = path.split('?')[0]
+    return ALLOWED_COIN_RETURN_PATHS.has(cleaned) ? cleaned : '/account'
+  }
+  return '/account'
 }

@@ -3,6 +3,7 @@ export type AdStudioMode = 'single' | 'storyboard'
 export interface AdReferenceImage {
   url: string
   useAsFirstFrame: boolean
+  useAsLastFrame?: boolean
 }
 
 export interface AdVideoPricingResponse {
@@ -22,9 +23,14 @@ export interface AdVideoPricingResponse {
   modelId?: string
   baseCoins?: number
   baseCoinsBeforeDiscount?: number
+  generateAudio?: boolean
+  audioAddonCoins?: number
+  resolution?: '480p' | '720p'
+  resolutions?: Array<'480p' | '720p'>
   modelPrices?: {
-    lite: { priceCoins: number; baseCoinsBeforeDiscount: number }
-    fast: { priceCoins: number; baseCoinsBeforeDiscount: number }
+    lite: { priceCoins: number; baseCoinsBeforeDiscount: number; audioAddon?: number }
+    mini: { priceCoins: number; baseCoinsBeforeDiscount: number; audioAddon?: number }
+    fast: { priceCoins: number; baseCoinsBeforeDiscount: number; audioAddon?: number }
   }
   durationPrices?: Record<
     number,
@@ -64,6 +70,8 @@ export interface AdStudioGeneration {
 export interface AdStudioShowcaseItem {
   id: string
   videoUrl: string
+  /** JPEG/WebP poster when available */
+  thumbnailUrl?: string | null
   aspect_ratio: string
   created_at: string
 }
@@ -89,6 +97,8 @@ export interface AdStudioPreset {
   aspect_ratio: string
   model: string | null
   duration_seconds: number
+  look_ref_urls?: string[]
+  look_character_id?: string | null
   created_at: string
   updated_at: string
 }

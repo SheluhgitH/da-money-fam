@@ -3,7 +3,7 @@ import { getCurrentUser } from '@/lib/auth/user'
 import { getAdStudioGeneration, updateAdStudioGeneration } from '@/lib/ad-studio-jobs'
 import type { CreativeSelections } from '@/lib/ad-creative-presets'
 import { submitSeedanceJob } from '@/lib/seedance-submit'
-import { resolveSeedanceModel } from '@/lib/seedance-models'
+import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
 
 /**
  * Continue storyboard: generate next pending scene with optional first_frame from previous.
@@ -24,7 +24,19 @@ export async function POST(
   }
 
   const body = await req.json()
-  const { first_frame_image, reference_images, enhance } = body
+  const { first_frame_image, reference_images, enhance, generate_audio, resolution } = body
+
+  const firstFrame =
+    typeof first_frame_image === 'string' &&
+    (first_frame_image.startsWith('http://') || first_frame_image.startsWith('https://'))
+      ? first_frame_image
+      : ''
+  if (!firstFrame) {
+    return NextResponse.json(
+      { error: 'Previous scene last frame is required to continue' },
+      { status: 400 }
+    )
+  }
 
   const nextIndex = gen.scenes.findIndex((s) => !s.jobId || s.status === 'pending')
   if (nextIndex < 0) {
@@ -44,8 +56,11 @@ export async function POST(
       duration: gen.duration_seconds,
       aspect_ratio: gen.aspect_ratio,
       reference_images: reference_images,
-      first_frame_image: first_frame_image || null,
+      first_frame_image: firstFrame,
+      generate_audio: generate_audio === true,
       model: model.key,
+      ignoreRefFrames: true,
+      resolution: resolveSubmitResolution(model, resolution),
     })
 
     const scenes = gen.scenes.map((s, i) =>

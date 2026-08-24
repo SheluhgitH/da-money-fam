@@ -5,7 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { GTA_IMAGE_STYLES } from '@/lib/gta-image-styles'
 import { GTA_MARKETING_SAMPLES } from '@/lib/gta-marketing-samples'
 import { IMAGE_MODELS } from '@/lib/image-models'
+import { LEGACY_IMAGE_BASE } from '@/lib/ad-studio-legacy-prices'
 import type { ImageStudioController } from '@/hooks/useImageStudio'
+import CoinzPriceCut from './CoinzPriceCut'
 
 export default function GtaStylePanel({
   images,
@@ -66,7 +68,7 @@ export default function GtaStylePanel({
                 images.gtaQuality === 'fast' ? 'text-black font-bold' : 'text-gold/70'
               }`}
             >
-              Fast · {fastPrice}
+              Fast · <CoinzPriceCut current={fastPrice} legacy={LEGACY_IMAGE_BASE.fast} />
             </button>
             <button
               type="button"
@@ -75,7 +77,7 @@ export default function GtaStylePanel({
                 images.gtaQuality === 'smart' ? 'text-black font-bold' : 'text-gold/70'
               }`}
             >
-              Smart HD · {smartPrice}
+              Smart HD · <CoinzPriceCut current={smartPrice} legacy={LEGACY_IMAGE_BASE.smart} />
             </button>
           </div>
         </div>
@@ -228,7 +230,11 @@ export default function GtaStylePanel({
                     {style.era}
                   </span>
                   <span className="relative block text-[9px] text-gold/70 mt-2 font-mono">
-                    {images.gtaPriceCoins} Coinz
+                    <CoinzPriceCut
+                      current={images.gtaPriceCoins}
+                      legacy={LEGACY_IMAGE_BASE[images.gtaQuality]}
+                      suffix=" Coinz"
+                    />
                   </span>
                 </motion.button>
               )
@@ -279,7 +285,13 @@ export default function GtaStylePanel({
             </p>
           ) : (
             <p className="text-[10px] uppercase tracking-widest text-white/40 truncate">
-              {images.gtaQuality === 'smart' ? 'Smart HD' : 'Fast'} · {images.gtaPriceCoins} Coinz per style
+              {images.gtaQuality === 'smart' ? 'Smart HD' : 'Fast'} ·{' '}
+              <CoinzPriceCut
+                current={images.gtaPriceCoins}
+                legacy={LEGACY_IMAGE_BASE[images.gtaQuality]}
+                suffix=" Coinz"
+              />{' '}
+              per style
             </p>
           )}
         </div>

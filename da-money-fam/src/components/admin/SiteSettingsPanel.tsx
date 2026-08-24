@@ -6,6 +6,7 @@ import {
   asHeroSettings,
   asHiddenStreamIds,
   asPricingSettings,
+  packsFromSettings,
   type AdStudioPricingSettings,
   type HomepageAboutSettings,
   type HomepageHeroSettings,
@@ -16,19 +17,20 @@ import {
   type HomepageSectionConfig,
 } from '@/lib/homepage-sections'
 import { IMAGE_MODELS, IMAGE_TIERS, type ImageTier, asImageModelSettings, TIER_FLOOR, type ImageModelOverrides } from '@/lib/image-models'
+import { COIN_PACKAGES, type CoinPackage } from '@/lib/coin-packages'
 
 export default function SiteSettingsPanel() {
   const [hero, setHero] = useState<HomepageHeroSettings>(asHeroSettings(null))
   const [about, setAbout] = useState<HomepageAboutSettings>(asAboutSettings(null))
   const [pricing, setPricing] = useState<AdStudioPricingSettings>(asPricingSettings(null))
   const [imageModels, setImageModels] = useState<ImageModelOverrides>({
-    draft: { baseCoins: 4 },
-    fast: { baseCoins: 4 },
-    edit: { baseCoins: 6 },
-    smart: { baseCoins: 10 },
+    draft: { baseCoins: TIER_FLOOR.draft },
+    fast: { baseCoins: TIER_FLOOR.fast },
+    edit: { baseCoins: TIER_FLOOR.edit },
+    smart: { baseCoins: TIER_FLOOR.smart },
   })
   const [hiddenIds, setHiddenIds] = useState('')
-  const [packJson, setPackJson] = useState('')
+  const [packs, setPacks] = useState<CoinPackage[]>(COIN_PACKAGES)
   const [sections, setSections] = useState<HomepageSectionConfig[]>(asHomepageSections(null))
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
@@ -42,14 +44,14 @@ export default function SiteSettingsPanel() {
         setAbout(asAboutSettings(s['homepage.about']))
         setPricing(asPricingSettings(s['ad_studio.pricing']))
         setImageModels({
-          draft: { baseCoins: 4 },
-          fast: { baseCoins: 4 },
-          edit: { baseCoins: 6 },
-          smart: { baseCoins: 10 },
+          draft: { baseCoins: TIER_FLOOR.draft },
+          fast: { baseCoins: TIER_FLOOR.fast },
+          edit: { baseCoins: TIER_FLOOR.edit },
+          smart: { baseCoins: TIER_FLOOR.smart },
           ...asImageModelSettings(s['ad_studio.image_models']),
         })
         setHiddenIds(asHiddenStreamIds(s['streams.hidden_ids']).join('\n'))
-        setPackJson(JSON.stringify(s['ad_studio.packs'] || {}, null, 2))
+        setPacks(packsFromSettings(s['ad_studio.packs']))
         setSections(asHomepageSections(s['homepage.sections']))
       })
       .catch(() => setMessage('Failed to load settings'))
@@ -58,14 +60,9 @@ export default function SiteSettingsPanel() {
   const save = async () => {
     setSaving(true)
     setMessage('')
-    let packs: unknown = {}
-    try {
-      packs = JSON.parse(packJson || '{}')
-    } catch {
-      setMessage('Packs JSON is invalid')
-      setSaving(false)
-      return
-    }
+    const packsPayload = Object.fromEntries(
+      packs.map((p) => [p.id, { amount: p.amount, price: p.price, label: p.label }])
+    )
 
     const res = await fetch('/api/admin/site-settings', {
       method: 'PUT',
@@ -86,7 +83,7 @@ export default function SiteSettingsPanel() {
               },
             ])
           ),
-          'ad_studio.packs': packs,
+          'ad_studio.packs': packsPayload,
           'homepage.sections': sections,
           'streams.hidden_ids': hiddenIds
             .split(/[\n,]+/)
@@ -148,6 +145,11 @@ export default function SiteSettingsPanel() {
             onChange={(n) => setPricing({ ...pricing, liteBaseCoins: n })}
           />
           <NumField
+            label="Mini base Coinz"
+            value={pricing.miniBaseCoins}
+            onChange={(n) => setPricing({ ...pricing, miniBaseCoins: n })}
+          />
+          <NumField
             label="Fast base Coinz"
             value={pricing.fastBaseCoins}
             onChange={(n) => setPricing({ ...pricing, fastBaseCoins: n })}
@@ -161,7 +163,7 @@ export default function SiteSettingsPanel() {
       </section>
 
       <section className="glass rounded-xl p-5 space-y-3">
-        <h3 className="font-serif text-xl text-gold">Image Studio Coinz (floors 4/4/6/10)</h3>
+        <h3 className="font-serif text-xl text-gold">Image Studio Coinz (floors 1/2/4/5)</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {IMAGE_TIERS.map((t: ImageTier) => (
             <NumField
@@ -180,13 +182,45 @@ export default function SiteSettingsPanel() {
       </section>
 
       <section className="glass rounded-xl p-5 space-y-3">
-        <h3 className="font-serif text-xl text-gold">Coinz packs JSON</h3>
-        <textarea
-          value={packJson}
-          onChange={(e) => setPackJson(e.target.value)}
-          rows={8}
-          className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-xs text-white font-mono"
-        />
+        <h3 className="font-serif text-xl text-gold">Coinz packs</h3>
+        <p className="text-[11px] text-gray-500">USD stays on Stripe via live price_data. Edit Coinz amount, dollar price, and label.</p>
+        <div className="space-y-3">
+          {packs.map((pkg, index) => (
+            <div key={pkg.id} className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+              <label className="block text-xs uppercase tracking-wider text-gray-500 sm:col-span-1">
+                Label
+                <input
+                  value={pkg.label}
+                  onChange={(e) => {
+                    const next = [...packs]
+                    next[index] = { ...pkg, label: e.target.value }
+                    setPacks(next)
+                  }}
+                  className="mt-1 w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white normal-case tracking-normal"
+                />
+              </label>
+              <NumField
+                label="Coinz"
+                value={pkg.amount}
+                onChange={(n) => {
+                  const next = [...packs]
+                  next[index] = { ...pkg, amount: n }
+                  setPacks(next)
+                }}
+              />
+              <NumField
+                label="USD"
+                value={pkg.price}
+                onChange={(n) => {
+                  const next = [...packs]
+                  next[index] = { ...pkg, price: n }
+                  setPacks(next)
+                }}
+              />
+              <p className="text-[10px] text-gray-500 self-end pb-2">{pkg.id}</p>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="glass rounded-xl p-5 space-y-3">

@@ -40,6 +40,7 @@ import {
 const StreamVideosSection = dynamic(() => import('@/components/StreamVideosSection'))
 const AdStudioPromoSection = dynamic(() => import('@/components/AdStudioPromoSection'))
 const CollectiveCollage = dynamic(() => import('@/components/CollectiveCollage'))
+const ArtistMusicStrip = dynamic(() => import('@/components/ArtistMusicStrip'))
 const ArtistRoster = dynamic(() => import('@/components/ArtistRoster'))
 const SocialWall = dynamic(() => import('@/components/SocialWall'))
 const MerchStore = dynamic(() => import('@/components/MerchStore'))
@@ -103,6 +104,12 @@ function renderSection(id: HomepageSectionId) {
       return (
         <SectionShell>
           <AdStudioPromoSection />
+        </SectionShell>
+      )
+    case 'artist-music':
+      return (
+        <SectionShell>
+          <ArtistMusicStrip />
         </SectionShell>
       )
     case 'collage':

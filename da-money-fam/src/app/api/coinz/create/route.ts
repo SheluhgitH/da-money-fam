@@ -46,7 +46,7 @@ export async function POST(req: Request) {
             currency: 'usd',
             product_data: {
               name: `${coinPackage.amount} DMF Coinz`,
-              description: `${coinPackage.label}: ${coinPackage.amount} Coinz · ≈ ${coinPackage.liteAds} Lite · ${coinPackage.fastAds} Fast · ${coinPackage.draftImages ?? Math.floor(coinPackage.amount / 4)} Draft imgs`,
+              description: `${coinPackage.label}: ${coinPackage.amount} Coinz · ≈ ${coinPackage.liteAds} Lite · ${coinPackage.miniAds ?? Math.floor(coinPackage.amount / 8)} Mini · ${coinPackage.fastAds} Fast · ${coinPackage.draftImages ?? Math.floor(coinPackage.amount / 4)} Draft imgs`,
             },
             unit_amount: unitAmount,
           },

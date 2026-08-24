@@ -23,12 +23,54 @@ import {
 import {
   DEFAULT_SEEDANCE_MODEL,
   resolveSeedanceModel,
+  SEEDANCE_MODELS,
   type SeedanceModelKey,
+  type SeedanceResolution,
 } from '@/lib/seedance-models'
+import { resolvePlayableVideoUrls } from '@/lib/ad-studio-video-urls'
 import { compressImageForUpload } from '@/lib/compress-image'
+import { FROM_STILL_VIDEO } from '@/lib/studio-templates'
 
-const POLL_TIMEOUT_MS = 5 * 60 * 1000
-const DRAFT_KEY = 'dmf-ad-studio-draft'
+const DRAFT_KEY = 'dmf-ad-studio-draft-v1'
+const POLL_TIMEOUT_MS = 8 * 60 * 1000
+
+async function uploadDataUrlAsRef(dataUrl: string): Promise<string | null> {
+  try {
+    const res = await fetch('/api/ad-studio/upload-ref', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dataUrl, contentType: 'image/jpeg' }),
+    })
+    const data = await res.json()
+    if (!res.ok || typeof data.url !== 'string') return null
+    return data.url
+  } catch {
+    return null
+  }
+}
+
+async function captureLastFrameHttps(
+  videoUrl: string,
+  storyboardId: string
+): Promise<string | null> {
+  const dataUrl = await extractLastFrame(videoUrl)
+  if (dataUrl?.startsWith('data:')) {
+    const uploaded = await uploadDataUrlAsRef(dataUrl)
+    if (uploaded) return uploaded
+  }
+  try {
+    const res = await fetch(`/api/video/storyboard/${storyboardId}/last-frame`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoUrl }),
+    })
+    const data = await res.json()
+    if (res.ok && typeof data.url === 'string') return data.url
+  } catch {
+    /* fall through */
+  }
+  return null
+}
 
 async function extractLastFrame(videoUrl: string): Promise<string | null> {
   return new Promise((resolve) => {
@@ -120,10 +162,13 @@ export function useAdStudio(initialBrief = '') {
   const [sceneBriefs, setSceneBriefs] = useState(['', ''])
   const [creative, setCreative] = useState<CreativeSelections>(DEFAULT_CREATIVE_SELECTIONS)
   const [enhance, setEnhance] = useState(false)
-  const [duration, setDuration] = useState<6 | 8 | 10>(6)
+  const [duration, setDuration] = useState(6)
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [variations, setVariations] = useState<1 | 2>(1)
-  const [modelKey, setModelKey] = useState<SeedanceModelKey>(DEFAULT_SEEDANCE_MODEL)
+  const [modelKey, setModelKeyState] = useState<SeedanceModelKey>(DEFAULT_SEEDANCE_MODEL)
+  const [generateAudio, setGenerateAudio] = useState(false)
+  const [resolution, setResolutionState] = useState<SeedanceResolution>('480p')
+  const [lookCharacterId, setLookCharacterId] = useState<string | null>(null)
   const [references, setReferences] = useState<AdReferenceImage[]>([])
   const [lookOpen, setLookOpen] = useState(false)
 
@@ -151,7 +196,7 @@ export function useAdStudio(initialBrief = '') {
   const fetchPricing = useCallback(async () => {
     try {
       const res = await fetch(
-        `/api/video/quote?scenes=${sceneCount}&variations=${mode === 'single' ? variations : 1}&model=${modelKey}&duration=${duration}`
+        `/api/video/quote?scenes=${sceneCount}&variations=${mode === 'single' ? variations : 1}&model=${modelKey}&duration=${duration}&audio=${generateAudio ? '1' : '0'}&resolution=${resolution}`
       )
       if (res.ok) {
         const data: AdVideoPricingResponse = await res.json()
@@ -162,7 +207,7 @@ export function useAdStudio(initialBrief = '') {
     } catch {
       setPricing(null)
     }
-  }, [sceneCount, variations, mode, modelKey, duration])
+  }, [sceneCount, variations, mode, modelKey, duration, generateAudio, resolution])
 
   const fetchLibrary = useCallback(async () => {
     try {
@@ -209,9 +254,11 @@ export function useAdStudio(initialBrief = '') {
         mode?: AdStudioMode
         sceneBriefs?: string[]
         creative?: CreativeSelections
-        duration?: 6 | 8 | 10
+        duration?: number
         aspectRatio?: string
         modelKey?: SeedanceModelKey
+        generateAudio?: boolean
+        resolution?: SeedanceResolution
       }
       if (draft.brief && !initialBrief) setBrief(draft.brief)
       if (draft.mode) setMode(draft.mode)
@@ -219,7 +266,11 @@ export function useAdStudio(initialBrief = '') {
       if (draft.creative) setCreative({ ...DEFAULT_CREATIVE_SELECTIONS, ...draft.creative })
       if (draft.duration) setDuration(draft.duration)
       if (draft.aspectRatio) setAspectRatio(draft.aspectRatio)
-      if (draft.modelKey) setModelKey(draft.modelKey)
+      if (draft.modelKey) setModelKeyState(draft.modelKey)
+      if (typeof draft.generateAudio === 'boolean') setGenerateAudio(draft.generateAudio)
+      if (draft.resolution === '720p' || draft.resolution === '480p') {
+        setResolutionState(draft.resolution)
+      }
     } catch {
       /* ignore */
     }
@@ -239,6 +290,8 @@ export function useAdStudio(initialBrief = '') {
             duration,
             aspectRatio,
             modelKey,
+            generateAudio,
+            resolution,
           })
         )
       } catch {
@@ -246,7 +299,7 @@ export function useAdStudio(initialBrief = '') {
       }
     }, 400)
     return () => window.clearTimeout(t)
-  }, [brief, mode, sceneBriefs, creative, duration, aspectRatio, modelKey])
+  }, [brief, mode, sceneBriefs, creative, duration, aspectRatio, modelKey, generateAudio, resolution])
 
   useEffect(() => {
     if (pricing && !pricing.canEnhance && enhance) setEnhance(false)
@@ -263,11 +316,7 @@ export function useAdStudio(initialBrief = '') {
   }
 
   const applyTemplate = (briefText: string, creativePatch?: Partial<CreativeSelections>) => {
-    if (!brief.trim()) {
-      setBrief(briefText)
-    } else {
-      setBrief((prev) => `${prev.trim()}\n${briefText}`)
-    }
+    setBrief(briefText)
     if (creativePatch) {
       setCreative((prev) => ({ ...prev, ...creativePatch }))
     }
@@ -319,7 +368,7 @@ export function useAdStudio(initialBrief = '') {
     setReferences((prev) => {
       if (prev.length >= MAX_REFERENCE_IMAGES) return prev
       if (prev.some((r) => r.url === url)) return prev
-      return [...prev, { url, useAsFirstFrame }]
+      return [...prev, { url, useAsFirstFrame, useAsLastFrame: false }]
     })
   }
 
@@ -341,7 +390,7 @@ export function useAdStudio(initialBrief = '') {
         const localPreview = URL.createObjectURL(file)
         setReferences((prev) => {
           if (prev.length >= MAX_REFERENCE_IMAGES) return prev
-          return [...prev, { url: localPreview, useAsFirstFrame: false }]
+          return [...prev, { url: localPreview, useAsFirstFrame: false, useAsLastFrame: false }]
         })
 
         ;(async () => {
@@ -376,11 +425,38 @@ export function useAdStudio(initialBrief = '') {
 
   const toggleFirstFrame = (index: number) => {
     setReferences((prev) =>
-      prev.map((img, i) => ({
-        ...img,
-        useAsFirstFrame: i === index ? !img.useAsFirstFrame : false,
-      }))
+      prev.map((img, i) =>
+        i === index
+          ? { ...img, useAsFirstFrame: !img.useAsFirstFrame, useAsLastFrame: false }
+          : { ...img, useAsFirstFrame: false }
+      )
     )
+  }
+
+  const toggleLastFrame = (index: number) => {
+    setReferences((prev) =>
+      prev.map((img, i) =>
+        i === index
+          ? { ...img, useAsLastFrame: !img.useAsLastFrame, useAsFirstFrame: false }
+          : { ...img, useAsLastFrame: false }
+      )
+    )
+  }
+
+  const setModelKey = (key: SeedanceModelKey) => {
+    setModelKeyState(key)
+    const model = SEEDANCE_MODELS[key]
+    if (!model.durations.includes(duration)) {
+      setDuration(model.durations.includes(6) ? 6 : model.durations[0])
+    }
+    if (!model.supportsAudio) setGenerateAudio(false)
+    if (!model.resolutions.includes('720p')) setResolutionState('480p')
+  }
+
+  const setResolution = (next: SeedanceResolution) => {
+    const model = SEEDANCE_MODELS[modelKey]
+    if (next === '720p' && !model.resolutions.includes('720p')) return
+    setResolutionState(next)
   }
 
   const setSceneCount = (count: number) => {
@@ -411,6 +487,61 @@ export function useAdStudio(initialBrief = '') {
     )
   }
 
+  const resetJob = () => {
+    if (generating) {
+      const ok = window.confirm('A clip is still generating. Start a new job anyway?')
+      if (!ok) return
+      cancelGenerate()
+    }
+    setBrief('')
+    setSceneBriefs(['', ''])
+    setMode('single')
+    setReferences([])
+    setPreviewUrls([])
+    setActivePreviewIndex(0)
+    setSelectedLibraryId(null)
+    setError(null)
+    setEnhancedPreview(null)
+    setBasePreview(null)
+    setStatusText(null)
+  }
+
+  const applyJobChip = (
+    chip: 'hook' | 'hero' | 'end' | 'storyboard'
+  ) => {
+    if (chip === 'hook') {
+      setMode('single')
+      setDuration(SEEDANCE_MODELS[modelKey].durations.includes(6) ? 6 : SEEDANCE_MODELS[modelKey].durations[0])
+      setBrief('15-second hook: cold open on the talent, punchy product reveal in the first 3 seconds, luxury hip-hop energy, cut before a logo card.')
+    } else if (chip === 'hero') {
+      setMode('single')
+      setBrief('Product hero: slow push-in on the product in hand, same wardrobe and lighting, premium commercial polish, no text.')
+    } else if (chip === 'end') {
+      setMode('single')
+      setBrief('End card: hold on talent and product, slow camera settle, space for a logo, gold and black luxury close.')
+    } else {
+      setMode('storyboard')
+      setSceneCount(3)
+      setSceneBriefs([
+        'Hook: cold open, eye contact, product enters frame.',
+        'Product hero: same look, show the item clearly in hand.',
+        'End card: hold, premium closer, no readable text.',
+      ])
+    }
+  }
+
+  const startStoryboardFromStill = (url: string, hint?: string) => {
+    addReferenceFromUrl(url, true)
+    setMode('storyboard')
+    setSceneCount(3)
+    const subject = (hint || brief).trim() || 'this look'
+    setSceneBriefs([
+      `Hook: open on this still as the first frame. ${subject}. Camera eases in.`,
+      `Product: same talent and wardrobe, show the product clearly.`,
+      `End card: same look, hold for a closer, no readable text.`,
+    ])
+  }
+
   const savePreset = async (name?: string) => {
     const res = await fetch('/api/video/presets', {
       method: 'POST',
@@ -422,6 +553,8 @@ export function useAdStudio(initialBrief = '') {
         aspect_ratio: aspectRatio,
         model: modelKey,
         duration_seconds: duration,
+        look_ref_urls: references.map((r) => r.url),
+        look_character_id: lookCharacterId,
       }),
     })
     const data = await res.json()
@@ -432,12 +565,30 @@ export function useAdStudio(initialBrief = '') {
 
   const applyPreset = (preset: AdStudioPreset) => {
     if (preset.brief) setBrief(preset.brief)
-    if (preset.creative) setCreative({ ...DEFAULT_CREATIVE_SELECTIONS, ...preset.creative })
+    if (preset.creative) {
+      const rest = { ...preset.creative }
+      delete rest.lookRefUrls
+      delete rest.lookCharacterId
+      setCreative({ ...DEFAULT_CREATIVE_SELECTIONS, ...rest })
+    }
     if (preset.aspect_ratio) setAspectRatio(preset.aspect_ratio)
     if (preset.model) setModelKey(resolveSeedanceModel(preset.model).key)
     if (preset.duration_seconds) {
-      setDuration((preset.duration_seconds as 6 | 8 | 10) || 6)
+      setDuration(preset.duration_seconds || 6)
     }
+    const urls = preset.look_ref_urls?.length
+      ? preset.look_ref_urls
+      : preset.creative?.lookRefUrls
+        ? preset.creative.lookRefUrls.split('|').filter(Boolean)
+        : []
+    if (urls.length) {
+      setReferences(urls.slice(0, MAX_REFERENCE_IMAGES).map((url) => ({
+        url,
+        useAsFirstFrame: false,
+        useAsLastFrame: false,
+      })))
+    }
+    setLookCharacterId(preset.look_character_id || preset.creative?.lookCharacterId || null)
   }
 
   const deletePreset = async (id: string) => {
@@ -447,11 +598,11 @@ export function useAdStudio(initialBrief = '') {
 
   const selectLibraryItem = (item: AdStudioGeneration) => {
     setSelectedLibraryId(item.id)
-    setPreviewUrls(item.video_urls || [])
+    setPreviewUrls(resolvePlayableVideoUrls(item))
     setActivePreviewIndex(0)
     setBrief(item.brief || '')
     setAspectRatio(item.aspect_ratio)
-    setDuration((item.duration_seconds as 6 | 8 | 10) || 6)
+    setDuration(item.duration_seconds || 6)
     setModelKey(resolveSeedanceModel(item.model).key)
     if (item.creative) setCreative({ ...DEFAULT_CREATIVE_SELECTIONS, ...item.creative })
     if (item.mode === 'storyboard' && item.scenes?.length) {
@@ -493,7 +644,7 @@ export function useAdStudio(initialBrief = '') {
 
   const canGenerate =
     mode === 'single'
-      ? Boolean(brief.trim())
+      ? Boolean(brief.trim()) || references.some((r) => r.url.startsWith('http'))
       : sceneBriefs.every((b) => b.trim()) && sceneBriefs.length >= 2
 
   const generate = async () => {
@@ -542,6 +693,8 @@ export function useAdStudio(initialBrief = '') {
             aspect_ratio: aspectRatio,
             reference_images: references,
             model: modelKey,
+            generate_audio: generateAudio,
+            resolution,
           }),
           signal: controller.signal,
         })
@@ -572,8 +725,14 @@ export function useAdStudio(initialBrief = '') {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 first_frame_image: lastFrame,
-                reference_images: references,
+                reference_images: references.map((r) => ({
+                  url: r.url,
+                  useAsFirstFrame: false,
+                  useAsLastFrame: false,
+                })),
                 enhance,
+                generate_audio: generateAudio,
+                resolution,
               }),
               signal: controller.signal,
             })
@@ -598,8 +757,11 @@ export function useAdStudio(initialBrief = '') {
           setActivePreviewIndex(i)
 
           if (i < sceneBriefs.length - 1) {
-            setStatusText(`Scene ${i + 1} done · Capturing frame for next…`)
-            lastFrame = await extractLastFrame(polled.videoUrl)
+            setStatusText(`Scene ${i + 1} done · Capturing last frame…`)
+            lastFrame = await captureLastFrameHttps(polled.videoUrl, storyboardId)
+            if (!lastFrame) {
+              throw new Error('Could not capture last frame to continue the storyboard.')
+            }
           }
         }
 
@@ -612,6 +774,42 @@ export function useAdStudio(initialBrief = '') {
               scenes: scenesState,
               video_urls: completedUrls,
               thumbnail_url: completedUrls[0] || null,
+              status: 'processing',
+            },
+          }),
+        })
+
+        setStatusText('Stitching cut…')
+        let previewList = [...completedUrls]
+        try {
+          const stitchRes = await fetch(`/api/video/storyboard/${storyboardId}/stitch`, {
+            method: 'POST',
+            signal: controller.signal,
+          })
+          const stitchData = await stitchRes.json()
+          if (stitchRes.ok && Array.isArray(stitchData.video_urls) && stitchData.video_urls.length) {
+            previewList = stitchData.video_urls
+          } else if (typeof stitchData.url === 'string') {
+            previewList = [stitchData.url, ...completedUrls]
+          } else {
+            setError(stitchData.error || 'Stitch failed — playing scenes separately')
+          }
+        } catch {
+          setError('Stitch failed — playing scenes separately')
+        }
+
+        setPreviewUrls(previewList)
+        setActivePreviewIndex(0)
+
+        await fetch('/api/video/library', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: storyboardId,
+            patch: {
+              scenes: scenesState,
+              video_urls: previewList,
+              thumbnail_url: previewList[0] || null,
               status: 'completed',
             },
           }),
@@ -627,7 +825,7 @@ export function useAdStudio(initialBrief = '') {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            brief,
+            brief: brief.trim() || FROM_STILL_VIDEO,
             creative,
             enhance,
             duration_seconds: duration,
@@ -636,7 +834,9 @@ export function useAdStudio(initialBrief = '') {
             variations,
             saveToLibrary: true,
             model: modelKey,
+            generate_audio: generateAudio,
             enhancedPrompt: enhance && enhancedPreview ? enhancedPreview : null,
+            resolution,
           }),
           signal: controller.signal,
         })
@@ -741,10 +941,17 @@ export function useAdStudio(initialBrief = '') {
     setVariations,
     modelKey,
     setModelKey,
+    generateAudio,
+    setGenerateAudio,
+    resolution,
+    setResolution,
+    lookCharacterId,
+    setLookCharacterId,
     references,
     addReferenceFiles,
     removeReference,
     toggleFirstFrame,
+    toggleLastFrame,
     lookOpen,
     setLookOpen,
     pricing,
@@ -769,6 +976,9 @@ export function useAdStudio(initialBrief = '') {
     savePreset,
     applyPreset,
     deletePreset,
+    resetJob,
+    applyJobChip,
+    startStoryboardFromStill,
     queue,
     progressStep,
   }

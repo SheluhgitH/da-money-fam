@@ -6,7 +6,8 @@ import { isActiveFanClubMember } from '@/lib/fan-club'
 import type { CreativeSelections } from '@/lib/ad-creative-presets'
 import { normalizeDuration, submitSeedanceJob } from '@/lib/seedance-submit'
 import { createAdStudioGeneration } from '@/lib/ad-studio-jobs'
-import { resolveSeedanceModel } from '@/lib/seedance-models'
+import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
+import { FROM_STILL_VIDEO } from '@/lib/studio-templates'
 
 export async function POST(req: Request) {
   const user = await getCurrentUser()
@@ -25,18 +26,31 @@ export async function POST(req: Request) {
     reference_images,
     reference_image_urls,
     first_frame_image,
+    last_frame_image,
+    generate_audio,
     variations,
     saveToLibrary,
     model: modelInput,
     enhancedPrompt,
+    resolution: resolutionInput,
   } = body
 
-  const userBrief =
+  const refSource =
+    Array.isArray(reference_images) && reference_images.length
+      ? reference_images
+      : reference_image_urls
+  const hasRefs = Array.isArray(refSource) && refSource.length > 0
+
+  let userBrief =
     typeof brief === 'string' && brief.trim()
       ? brief.trim()
       : typeof prompt === 'string'
         ? prompt.trim()
         : ''
+
+  if (!userBrief && hasRefs) {
+    userBrief = FROM_STILL_VIDEO
+  }
 
   if (!userBrief) {
     return NextResponse.json({ error: 'Brief is required' }, { status: 400 })
@@ -54,19 +68,17 @@ export async function POST(req: Request) {
   }
 
   const model = resolveSeedanceModel(modelInput)
-  const duration = normalizeDuration(duration_seconds)
+  const duration = normalizeDuration(duration_seconds, model.key)
   const variationCount = Math.min(2, Math.max(1, Number(variations) || 1))
-  const refSource =
-    Array.isArray(reference_images) && reference_images.length
-      ? reference_images
-      : reference_image_urls
+  const wantsAudio = generate_audio === true
+  const resolution = resolveSubmitResolution(model, resolutionInput)
 
   let debited = false
   let priceCoins = 0
   let totalPrice = 0
 
   try {
-    const pricing = await getAdVideoCoinPrice(model.key, duration)
+    const pricing = await getAdVideoCoinPrice(model.key, duration, wantsAudio, resolution)
     if (!pricing.isAuthenticated) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
@@ -92,7 +104,10 @@ export async function POST(req: Request) {
           aspect_ratio,
           reference_images: refSource,
           first_frame_image,
+          last_frame_image,
+          generate_audio: wantsAudio,
           model: model.key,
+          resolution,
         })
         jobs.push({ jobId: result.jobId, variationIndex: i })
       } catch (err) {

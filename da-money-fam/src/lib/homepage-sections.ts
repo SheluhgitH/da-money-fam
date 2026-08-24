@@ -2,6 +2,7 @@ export type HomepageSectionId =
   | 'songs'
   | 'music'
   | 'about'
+  | 'artist-music'
   | 'streams'
   | 'ad-studio'
   | 'collage'
@@ -26,6 +27,7 @@ export const HOMEPAGE_SECTION_META: Record<HomepageSectionId, { label: string; e
   songs: { label: 'Song store', eager: true },
   music: { label: 'Music player', eager: true },
   about: { label: 'Who we are', eager: true },
+  'artist-music': { label: 'Artist music strip', eager: true },
   streams: { label: 'Streams', eager: false },
   'ad-studio': { label: 'Ad Studio promo', eager: false },
   collage: { label: 'Collective collage', eager: false },
@@ -67,7 +69,15 @@ export function asHomepageSections(value: unknown): HomepageSectionConfig[] {
     }
   }
   for (const row of DEFAULT_HOMEPAGE_SECTIONS) {
-    if (!seen.has(row.id)) fromSettings.push({ ...row })
+    if (seen.has(row.id)) continue
+    seen.add(row.id)
+    if (row.id === 'artist-music') {
+      const aboutIdx = fromSettings.findIndex((s) => s.id === 'about')
+      if (aboutIdx >= 0) fromSettings.splice(aboutIdx + 1, 0, { ...row })
+      else fromSettings.push({ ...row })
+    } else {
+      fromSettings.push({ ...row })
+    }
   }
   return fromSettings
 }

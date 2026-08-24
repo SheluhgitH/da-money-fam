@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { SEEDANCE_MODELS } from '@/lib/seedance-models'
+import { IMAGE_MODELS } from '@/lib/image-models'
 import { COIN_PACKAGES, type CoinPackage } from '@/lib/coin-packages'
 import { HIDDEN_STREAM_VIDEO_IDS } from '@/data/kick-videos'
 import { DEFAULT_HOMEPAGE_SECTIONS } from '@/lib/homepage-sections'
@@ -8,6 +9,7 @@ export type SiteSettingsMap = Record<string, unknown>
 
 export interface AdStudioPricingSettings {
   liteBaseCoins: number
+  miniBaseCoins: number
   fastBaseCoins: number
   fanClubDiscountPercent: number
   durations: number[]
@@ -39,15 +41,16 @@ export function defaultSiteSettings(): SiteSettingsMap {
   return {
     'ad_studio.pricing': {
       liteBaseCoins: SEEDANCE_MODELS.lite.baseCoins,
+      miniBaseCoins: SEEDANCE_MODELS.mini.baseCoins,
       fastBaseCoins: SEEDANCE_MODELS.fast.baseCoins,
       fanClubDiscountPercent: 15,
-      durations: [6, 8, 10],
+      durations: [4, 6, 8, 10, 12],
     },
     'ad_studio.image_models': {
-      draft: { baseCoins: 4 },
-      fast: { baseCoins: 4 },
-      edit: { baseCoins: 6 },
-      smart: { baseCoins: 10 },
+      draft: { baseCoins: IMAGE_MODELS.draft.baseCoins },
+      fast: { baseCoins: IMAGE_MODELS.fast.baseCoins },
+      edit: { baseCoins: IMAGE_MODELS.edit.baseCoins },
+      smart: { baseCoins: IMAGE_MODELS.smart.baseCoins },
     },
     'ad_studio.packs': Object.fromEntries(
       COIN_PACKAGES.map((p) => [p.id, { amount: p.amount, price: p.price, label: p.label }])
@@ -130,6 +133,7 @@ export function asPricingSettings(value: unknown): AdStudioPricingSettings {
   const v = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
   return {
     liteBaseCoins: Number(v.liteBaseCoins) || defaults.liteBaseCoins,
+    miniBaseCoins: Number(v.miniBaseCoins) || defaults.miniBaseCoins,
     fastBaseCoins: Number(v.fastBaseCoins) || defaults.fastBaseCoins,
     fanClubDiscountPercent: Number(v.fanClubDiscountPercent) || defaults.fanClubDiscountPercent,
     durations: Array.isArray(v.durations)
@@ -171,15 +175,15 @@ export function packsFromSettings(value: unknown): CoinPackage[] {
   return ids.map((id) => {
     const row = obj[id] || {}
     const amount = Number(row.amount) || 100
-    const draftBase = 4
     return {
       id,
       amount,
       price: Number(row.price) || 8,
       label: String(row.label || id),
       liteAds: Math.max(1, Math.floor(amount / SEEDANCE_MODELS.lite.baseCoins)),
+      miniAds: Math.max(1, Math.floor(amount / SEEDANCE_MODELS.mini.baseCoins)),
       fastAds: Math.max(1, Math.floor(amount / SEEDANCE_MODELS.fast.baseCoins)),
-      draftImages: Math.max(1, Math.floor(amount / draftBase)),
+      draftImages: Math.max(1, Math.floor(amount / IMAGE_MODELS.draft.baseCoins)),
     }
   })
 }

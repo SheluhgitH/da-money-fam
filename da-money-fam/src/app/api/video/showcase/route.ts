@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { listFeaturedGenerations } from '@/lib/ad-studio-jobs'
+import { isImagePosterUrl, resolvePublicVideoUrl } from '@/lib/ad-studio-video-urls'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,7 +9,9 @@ export async function GET() {
     const rows = await listFeaturedGenerations(12)
     const items = rows.map((row) => ({
       id: row.id,
-      videoUrl: `/api/video/showcase/${row.id}/content`,
+      videoUrl:
+        resolvePublicVideoUrl(row) || `/api/video/showcase/${row.id}/content`,
+      thumbnailUrl: isImagePosterUrl(row.thumbnail_url) ? row.thumbnail_url : null,
       aspect_ratio: row.aspect_ratio || '9:16',
       created_at: row.created_at,
     }))

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ImageTier } from '@/lib/image-models'
 import { DEFAULT_IMAGE_TIER, IMAGE_MODELS } from '@/lib/image-models'
+import type { EditStrength } from '@/lib/image-edit-prompt'
+import { FROM_STILL_IMAGE } from '@/lib/studio-templates'
 import { MAX_REFERENCE_IMAGES } from '@/lib/ad-studio-types'
 import { getGtaStyle } from '@/lib/gta-image-styles'
 import { compressImageForUpload } from '@/lib/compress-image'
@@ -45,6 +47,23 @@ async function fetchQuoteForTier(tier: ImageTier): Promise<ImageQuote | null> {
   }
 }
 
+function httpsImageUrls(...groups: Array<string | null | undefined | string[]>): string[] {
+  const out: string[] = []
+  for (const group of groups) {
+    const list = Array.isArray(group) ? group : group ? [group] : []
+    for (const url of list) {
+      if (
+        typeof url === 'string' &&
+        (url.startsWith('http://') || url.startsWith('https://')) &&
+        !out.includes(url)
+      ) {
+        out.push(url)
+      }
+    }
+  }
+  return out.slice(0, 4)
+}
+
 async function uploadCompressed(file: File): Promise<string> {
   const compressed = await compressImageForUpload(file)
   const res = await fetch('/api/ad-studio/upload-ref', {
@@ -62,6 +81,13 @@ export function useImageStudio() {
   const [tier, setTier] = useState<ImageTier>(DEFAULT_IMAGE_TIER)
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [mode, setMode] = useState<'generate' | 'edit'>('generate')
+  const [editStrength, setEditStrength] = useState<EditStrength>('medium')
+  const [stillCount, setStillCount] = useState<1 | 2 | 4>(1)
+  const [enhance, setEnhance] = useState(false)
+  const [paintOpen, setPaintOpen] = useState(false)
+  const [maskDataUrl, setMaskDataUrl] = useState<string | null>(null)
+  const [jobNonce, setJobNonce] = useState(0)
+  const [canEnhance, setCanEnhance] = useState(false)
   const [references, setReferences] = useState<string[]>([])
   const [quote, setQuote] = useState<ImageQuote | null>(null)
   const [library, setLibrary] = useState<AdStudioImageRow[]>([])
@@ -97,7 +123,7 @@ export function useImageStudio() {
 
   const fetchLibrary = useCallback(async () => {
     try {
-      const res = await fetch('/api/images/generate?limit=24')
+      const res = await fetch('/api/images/generate?limit=48')
       if (res.ok) {
         const data = await res.json()
         setLibrary(data.items || [])
@@ -105,6 +131,13 @@ export function useImageStudio() {
     } catch {
       /* ignore */
     }
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/video/quote?scenes=1&variations=1&model=mini&duration=6')
+      .then((r) => r.json())
+      .then((d) => setCanEnhance(d.canEnhance === true || d.fanClub === true))
+      .catch(() => setCanEnhance(false))
   }, [])
 
   useEffect(() => {
@@ -177,30 +210,72 @@ export function useImageStudio() {
     setPreviewUrl(url)
   }
 
-  const generate = async () => {
-    if (!prompt.trim() || generating) return
+  const generate = async (
+    promptOverride?: string,
+    opts?: { tier?: ImageTier; mode?: 'generate' | 'edit'; count?: number; inpaint?: boolean }
+  ) => {
+    const text = (promptOverride ?? prompt).trim()
+    const hasStill = Boolean(previewUrl) || references.some((u) => u.startsWith('http'))
+    if (generating) return
+    if (!text && !hasStill) return
+    const resolvedText = text || FROM_STILL_IMAGE
+    let useTier = opts?.tier ?? tier
+    let useMode = opts?.mode ?? mode
+    const inpaint = opts?.inpaint === true && Boolean(maskDataUrl) && Boolean(previewUrl)
+    if (inpaint) {
+      useMode = 'edit'
+      if (useTier === 'draft' || useTier === 'fast') useTier = 'edit'
+    }
+    const count = Math.min(4, Math.max(1, opts?.count ?? stillCount)) as 1 | 2 | 4
+    if (promptOverride != null) setPrompt(promptOverride)
+    if (opts?.tier) setTier(opts.tier)
+    if (opts?.mode) setMode(opts.mode)
     setGenerating(true)
     setError(null)
     try {
       let q = quote
-      if (!q || Date.now() > q.expiresAt - 10_000) {
-        const res = await fetch(`/api/images/quote?tier=${tier}`)
+      if (!q || Date.now() > q.expiresAt - 10_000 || q.tier !== useTier) {
+        const res = await fetch(`/api/images/quote?tier=${useTier}`)
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Quote failed')
         q = data
         setQuote(data)
       }
 
+      let maskUrl: string | null = null
+      if (inpaint && maskDataUrl) {
+        const up = await fetch('/api/ad-studio/upload-ref', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl: maskDataUrl, contentType: 'image/png' }),
+        })
+        const upData = await up.json()
+        if (!up.ok) throw new Error(upData.error || 'Mask upload failed')
+        maskUrl = upData.url
+      }
+
+      const isEditJob =
+        inpaint || useMode === 'edit' || useTier === 'edit' || useTier === 'smart'
+      const sourceRefs =
+        isEditJob || !text
+          ? httpsImageUrls(previewUrl, references)
+          : httpsImageUrls(references)
+
       const res = await fetch('/api/images/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           quoteId: q!.quoteId,
-          prompt,
-          tier,
-          mode,
+          prompt: resolvedText,
+          tier: useTier,
+          mode: useMode,
           aspect_ratio: aspectRatio,
-          reference_urls: references,
+          reference_urls: sourceRefs,
+          edit_strength: editStrength,
+          count,
+          enhance: enhance && !inpaint,
+          inpaint: Boolean(maskUrl),
+          mask_url: maskUrl,
         }),
       })
       const data = await res.json()
@@ -212,6 +287,8 @@ export function useImageStudio() {
       if (!res.ok) throw new Error(data.error || 'Generation failed')
 
       setPreviewUrl(data.url)
+      setPaintOpen(false)
+      setMaskDataUrl(null)
       await fetchLibrary()
       await fetchQuote()
     } catch (err) {
@@ -319,6 +396,46 @@ export function useImageStudio() {
     generateGtaStyle,
     activeGtaStyleId,
     gtaPriceCoins,
+    editStrength,
+    setEditStrength,
+    stillCount,
+    setStillCount,
+    enhance,
+    setEnhance,
+    canEnhance,
+    paintOpen,
+    setPaintOpen,
+    setMaskDataUrl,
+    jobNonce,
+    resetJob: () => {
+      if (generating) return
+      setPrompt('')
+      setReferences([])
+      setPreviewUrl(null)
+      setMaskDataUrl(null)
+      setPaintOpen(false)
+      setError(null)
+      setGtaPhotoUrl(null)
+      setJobNonce((n) => n + 1)
+    },
+    enhancePrompt: async () => {
+      if (!prompt.trim() || !canEnhance) return
+      setOptimizing(true)
+      try {
+        const res = await fetch('/api/images/enhance-preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, reference_urls: references }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Enhance failed')
+        if (typeof data.enhancedPrompt === 'string') setPrompt(data.enhancedPrompt)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Enhance failed')
+      } finally {
+        setOptimizing(false)
+      }
+    },
   }
 }
 

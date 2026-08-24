@@ -5,14 +5,17 @@ import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { scrollRevealViewport } from '@/lib/motion'
 import { ASPECT_CLASS, type AdStudioShowcaseItem } from '@/lib/ad-studio-types'
+import { SEEDANCE_MODELS } from '@/lib/seedance-models'
 import { useAuth } from '@/contexts/AuthProvider'
 
 function PromoReelVideo({
   src,
+  poster,
   aspectClass,
   delay = 0,
 }: {
   src: string
+  poster?: string | null
   aspectClass: string
   delay?: number
 }) {
@@ -90,7 +93,8 @@ function PromoReelVideo({
         loop
         playsInline
         autoPlay
-        preload="auto"
+        preload="metadata"
+        poster={poster || undefined}
         disablePictureInPicture
         className="absolute inset-0 w-full h-full object-cover"
       >
@@ -175,7 +179,7 @@ export default function AdStudioPromoSection() {
           Ads made by the Fam
         </h2>
         <p className="text-gray-400 text-sm md:text-base mt-3 max-w-xl mx-auto">
-          Latest clips from Seedance — make yours in Coinz, Lite from 10.
+          Latest clips from Seedance — make yours in Coinz, Lite from {SEEDANCE_MODELS.lite.baseCoins}.
         </p>
         <Link
           href={ctaHref}
@@ -214,6 +218,7 @@ export default function AdStudioPromoSection() {
             <PromoReelVideo
               key={item.id}
               src={item.videoUrl}
+              poster={item.thumbnailUrl}
               aspectClass={ASPECT_CLASS[item.aspect_ratio] || ASPECT_CLASS['9:16']}
               delay={Math.min(index * 0.05, 0.3)}
             />

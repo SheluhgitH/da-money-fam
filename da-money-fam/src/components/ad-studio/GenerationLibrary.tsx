@@ -4,6 +4,11 @@ import { motion } from 'framer-motion'
 import type { AdStudioController } from '@/hooks/useAdStudio'
 import type { AdStudioGeneration } from '@/lib/ad-studio-types'
 import { resolveSeedanceModel } from '@/lib/seedance-models'
+import {
+  isDurableVideoUrl,
+  isImagePosterUrl,
+  resolvePlayableVideoUrl,
+} from '@/lib/ad-studio-video-urls'
 
 export default function GenerationLibrary({
   studio,
@@ -18,13 +23,12 @@ export default function GenerationLibrary({
   }
 
   const download = async (item: AdStudioGeneration) => {
-    const url = item.video_urls?.[0]
-    if (!url) return
+    const playable = resolvePlayableVideoUrl(item)
+    if (!playable) return
     try {
-      const proxy = `/api/video/showcase/${item.id}/content`
-      const res = await fetch(proxy)
+      const res = await fetch(playable)
       if (!res.ok) {
-        window.open(url, '_blank')
+        window.open(playable, '_blank')
         return
       }
       const blob = await res.blob()
@@ -34,12 +38,14 @@ export default function GenerationLibrary({
       a.click()
       URL.revokeObjectURL(a.href)
     } catch {
-      window.open(url, '_blank')
+      window.open(playable, '_blank')
     }
   }
 
   const copyLink = async (item: AdStudioGeneration) => {
-    const share = `${window.location.origin}/api/video/showcase/${item.id}/content`
+    const durable = item.video_urls?.find(isDurableVideoUrl)
+    const share =
+      durable || `${window.location.origin}/api/video/showcase/${item.id}/content`
     try {
       await navigator.clipboard.writeText(share)
     } catch {
@@ -48,8 +54,8 @@ export default function GenerationLibrary({
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-gold/15 flex items-center justify-between">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden">
+      <div className="shrink-0 p-4 border-b border-gold/15 flex items-center justify-between">
         <div>
           <p className="text-[10px] uppercase tracking-[0.25em] text-gold/50">Library</p>
           <h2 className="text-sm font-serif text-gold">Your ads</h2>
@@ -61,14 +67,16 @@ export default function GenerationLibrary({
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain studio-scroll">
         {studio.library.length === 0 ? (
           <p className="text-[11px] text-white/35 p-2 leading-relaxed">
             Generations appear here. Create your first ad with the prompt dock below.
           </p>
         ) : (
-          studio.library.map((item, index) => {
-            const thumb = item.video_urls?.[0]
+          <div className="grid grid-cols-2 gap-2 p-3">
+          {studio.library.map((item, index) => {
+            const thumb = resolvePlayableVideoUrl(item)
+            const poster = isImagePosterUrl(item.thumbnail_url) ? item.thumbnail_url : null
             const active = studio.selectedLibraryId === item.id
             const onSite = item.featured !== false
             const modelLabel = resolveSeedanceModel(item.model).label
@@ -83,17 +91,25 @@ export default function GenerationLibrary({
                 }`}
               >
                 <button type="button" onClick={() => select(item)} className="w-full text-left">
-                  <div className="aspect-video bg-black/60 relative flex items-center justify-center">
-                    {thumb ? (
+                  <div className="relative aspect-square overflow-hidden bg-black">
+                    {poster && !thumb ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={poster}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    ) : thumb ? (
                       <video
                         src={thumb}
+                        poster={poster || undefined}
                         muted
                         playsInline
                         preload="metadata"
-                        className="w-full h-full object-cover"
+                        className="absolute inset-0 h-full w-full object-cover"
                       />
                     ) : (
-                      <span className="text-[9px] text-white/30 uppercase tracking-widest">
+                      <span className="absolute inset-0 flex items-center justify-center text-[9px] text-white/30 uppercase tracking-widest">
                         {item.status}
                       </span>
                     )}
@@ -109,16 +125,13 @@ export default function GenerationLibrary({
                       </span>
                     )}
                   </div>
-                  <div className="p-2">
-                    <p className="text-[11px] text-white/80 line-clamp-2">
+                  <div className="p-1.5">
+                    <p className="text-[10px] text-white/80 line-clamp-2">
                       {item.brief || 'Untitled ad'}
-                    </p>
-                    <p className="text-[9px] text-white/30 mt-1">
-                      {new Date(item.created_at).toLocaleString()}
                     </p>
                   </div>
                 </button>
-                <div className="px-2 pb-2 flex flex-wrap gap-1">
+                <div className="px-1.5 pb-1.5 flex flex-wrap gap-1">
                   {item.status === 'failed' ? (
                     <button
                       type="button"
@@ -174,7 +187,8 @@ export default function GenerationLibrary({
                 </div>
               </motion.div>
             )
-          })
+          })}
+          </div>
         )}
       </div>
     </div>

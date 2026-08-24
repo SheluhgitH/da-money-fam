@@ -111,7 +111,11 @@ export default function PreviewCanvas({ studio }: { studio: AdStudioController }
                   : 'border-gold/25 text-gold/70'
               }`}
             >
-              Take {i + 1}
+              {i === 0 && studio.mode === 'storyboard' && studio.previewUrls.length > 1
+                ? 'Cut'
+                : studio.mode === 'storyboard' && studio.previewUrls.length > 1
+                  ? `Scene ${i}`
+                  : `Take ${i + 1}`}
             </button>
           ))}
         </div>

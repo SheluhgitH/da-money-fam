@@ -4,14 +4,18 @@ import type { AdStudioImageRow } from '@/hooks/useImageStudio'
 
 export default function ImageLibrary({
   items,
+  selectedUrl,
   onSelect,
   onEdit,
   onUseForVideo,
+  onUseAsFirst,
 }: {
   items: AdStudioImageRow[]
+  selectedUrl?: string | null
   onSelect: (url: string) => void
   onEdit: (url: string) => void
   onUseForVideo: (url: string) => void
+  onUseAsFirst?: (url: string) => void
 }) {
   if (items.length === 0) {
     return (
@@ -20,43 +24,67 @@ export default function ImageLibrary({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-2 p-3 max-h-64 overflow-y-auto">
-      {items.map((item) => (
-        <div
-          key={item.id}
-          className="relative group rounded-lg overflow-hidden border border-white/10 bg-black"
-        >
-          <button type="button" onClick={() => onSelect(item.output_url)} className="block w-full">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={item.output_url} alt="" className="w-full aspect-square object-cover" />
-          </button>
-          <div className="absolute inset-x-0 bottom-0 bg-black/80 p-1.5 flex flex-wrap gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              type="button"
-              onClick={() => onEdit(item.output_url)}
-              className="text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/10 text-white"
+    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain studio-scroll">
+      <div className="grid grid-cols-2 gap-2 p-3">
+        {items.map((item) => {
+          const active = selectedUrl === item.output_url
+          return (
+            <div
+              key={item.id}
+              className={`rounded-lg overflow-hidden border bg-black ${
+                active ? 'border-gold' : 'border-white/10'
+              }`}
             >
-              Edit
-            </button>
-            <button
-              type="button"
-              onClick={() => onUseForVideo(item.output_url)}
-              className="text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-gold text-black"
-            >
-              Video
-            </button>
-            <a
-              href={item.output_url}
-              download
-              target="_blank"
-              rel="noreferrer"
-              className="text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/10 text-white"
-            >
-              DL
-            </a>
-          </div>
-        </div>
-      ))}
+              <button
+                type="button"
+                onClick={() => onSelect(item.output_url)}
+                className="relative block w-full aspect-square overflow-hidden bg-black"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={item.output_url}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              </button>
+              <div className="bg-black/90 p-1.5 flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={() => onEdit(item.output_url)}
+                  className="text-[9px] uppercase tracking-wider px-2 py-1 rounded bg-white/10 text-white"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUseForVideo(item.output_url)}
+                  className="text-[9px] uppercase tracking-wider px-2 py-1 rounded bg-gold text-black"
+                >
+                  Video
+                </button>
+                {onUseAsFirst && (
+                  <button
+                    type="button"
+                    onClick={() => onUseAsFirst(item.output_url)}
+                    className="text-[9px] uppercase tracking-wider px-2 py-1 rounded bg-white/10 text-white"
+                  >
+                    First
+                  </button>
+                )}
+                <a
+                  href={item.output_url}
+                  download
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[9px] uppercase tracking-wider px-2 py-1 rounded bg-white/10 text-white"
+                >
+                  DL
+                </a>
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

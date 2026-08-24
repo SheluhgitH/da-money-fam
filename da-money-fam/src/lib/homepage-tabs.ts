@@ -18,7 +18,7 @@ export const HOMEPAGE_TABS: HomepageTabConfig[] = [
   {
     id: 'discover',
     label: 'Discover',
-    sections: ['about', 'collage', 'testimonials'],
+    sections: ['about', 'artist-music', 'collage', 'testimonials'],
   },
   {
     id: 'music',
@@ -64,6 +64,7 @@ export const HASH_ALIASES: Record<string, string> = {
   reputation: 'reputation',
   about: 'about',
   collage: 'collage',
+  'artist-music': 'artist-music',
   testimonials: 'testimonials',
   social: 'social',
   membership: 'membership',
@@ -78,6 +79,7 @@ export const HASH_ALIASES: Record<string, string> = {
 /** Map a section id or nav hash to the tab that contains it */
 const SECTION_TO_TAB: Record<string, HomepageTabId> = {
   about: 'discover',
+  'artist-music': 'discover',
   collage: 'discover',
   testimonials: 'discover',
   songs: 'music',

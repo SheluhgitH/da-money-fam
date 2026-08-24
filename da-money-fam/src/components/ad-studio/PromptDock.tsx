@@ -4,39 +4,17 @@ import { useEffect, useRef, useState } from 'react'
 import type { AdStudioController } from '@/hooks/useAdStudio'
 import LookDrawer from './LookDrawer'
 import StoryboardTimeline from './StoryboardTimeline'
+import CoinzPriceCut from './CoinzPriceCut'
+import StudioTemplateChips from './StudioTemplateChips'
 import { COIN_PACKAGES, packAdCopy, type CoinPackage } from '@/lib/coin-packages'
 import { packsFromSettings } from '@/lib/site-settings'
-import {
-  AD_PROMPT_TEMPLATES,
-  PROMPT_TEMPLATE_GROUPS,
-  type PromptTemplateGroup,
-} from '@/lib/ad-prompt-templates'
-
-function CoinPriceLabel({
-  effective,
-  base,
-  discounted,
-}: {
-  effective: number
-  base: number
-  discounted: boolean
-}) {
-  if (discounted && base !== effective) {
-    return (
-      <span className="inline-flex items-center gap-1">
-        <span className="line-through opacity-50">{base}</span>
-        <span>{effective}</span>
-      </span>
-    )
-  }
-  return <span>{effective}</span>
-}
+import { SEEDANCE_MODELS, audioAddonCoins } from '@/lib/seedance-models'
+import { legacyVideoPrice } from '@/lib/ad-studio-legacy-prices'
 
 export default function PromptDock({ studio }: { studio: AdStudioController }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [buyingId, setBuyingId] = useState<string | null>(null)
   const [packs, setPacks] = useState<CoinPackage[]>(COIN_PACKAGES)
-  const [templateGroup, setTemplateGroup] = useState<PromptTemplateGroup | 'all'>('all')
 
   useEffect(() => {
     fetch('/api/site-settings')
@@ -44,10 +22,11 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
       .then((data) => setPacks(packsFromSettings(data.settings?.['ad_studio.packs'])))
       .catch(() => {})
   }, [])
-  const price = studio.pricing?.totalPriceCoins ?? studio.pricing?.priceCoins ?? 40
-  const perClip = studio.pricing?.priceCoins ?? 40
-  const discountPercent = studio.pricing?.discountPercent ?? 0
-  const discounted = discountPercent > 0
+  const price =
+    studio.pricing?.totalPriceCoins ??
+    studio.pricing?.priceCoins ??
+    SEEDANCE_MODELS.mini.baseCoins
+  const perClip = studio.pricing?.priceCoins ?? SEEDANCE_MODELS.mini.baseCoins
   const units =
     studio.mode === 'storyboard'
       ? studio.sceneBriefs.length
@@ -57,13 +36,17 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
   const showBuy = studio.pricing?.isAuthenticated && !canAfford && !studio.generating
 
   const lite = studio.pricing?.modelPrices?.lite
+  const mini = studio.pricing?.modelPrices?.mini
   const fast = studio.pricing?.modelPrices?.fast
   const durationPrices = studio.pricing?.durationPrices
-
-  const templates =
-    templateGroup === 'all'
-      ? AD_PROMPT_TEMPLATES
-      : AD_PROMPT_TEMPLATES.filter((t) => t.group === templateGroup)
+  const modelCfg = SEEDANCE_MODELS[studio.modelKey]
+  const legacyLite = legacyVideoPrice('lite', studio.duration)
+  const legacyFast = legacyVideoPrice('fast', studio.duration)
+  const legacyPerClip = legacyVideoPrice(studio.modelKey, studio.duration)
+  const legacyTotal = legacyPerClip != null ? legacyPerClip * units : null
+  const audioAddon =
+    studio.pricing?.audioAddonCoins ??
+    (modelCfg.supportsAudio ? audioAddonCoins(modelCfg.baseCoins) : 0)
 
   const buyPack = async (packageId: string) => {
     setBuyingId(packageId)
@@ -107,6 +90,13 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
         <div className="flex gap-2">
           <button
             type="button"
+            onClick={() => studio.resetJob()}
+            className="text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full border border-white/15 text-white/60"
+          >
+            New
+          </button>
+          <button
+            type="button"
             onClick={() => studio.setMode('single')}
             className={`text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full border transition-colors ${
               studio.mode === 'single'
@@ -129,49 +119,30 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
           </button>
         </div>
 
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 studio-scroll">
+          {(
+            [
+              ['hook', '15s hook'],
+              ['hero', 'Product hero'],
+              ['end', 'End card'],
+              ['storyboard', 'Storyboard 3-shot'],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => studio.applyJobChip(id)}
+              className="shrink-0 text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-gold/25 text-gold/80"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         {studio.mode === 'single' && (
-          <div className="space-y-2">
-            <div className="flex gap-1.5 overflow-x-auto pb-0.5">
-              <button
-                type="button"
-                onClick={() => setTemplateGroup('all')}
-                className={`shrink-0 text-[9px] uppercase tracking-wider px-2 py-1 rounded-full border ${
-                  templateGroup === 'all'
-                    ? 'border-gold text-gold'
-                    : 'border-white/10 text-white/40'
-                }`}
-              >
-                Starters
-              </button>
-              {PROMPT_TEMPLATE_GROUPS.map((g) => (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => setTemplateGroup(g.id)}
-                  className={`shrink-0 text-[9px] uppercase tracking-wider px-2 py-1 rounded-full border ${
-                    templateGroup === g.id
-                      ? 'border-gold text-gold'
-                      : 'border-white/10 text-white/40'
-                  }`}
-                >
-                  {g.label}
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-1.5 overflow-x-auto pb-1">
-              {templates.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => studio.applyTemplate(t.brief, t.creative)}
-                  className="shrink-0 text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-gold/20 text-gold/70 hover:border-gold/50"
-                  title={t.brief}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <StudioTemplateChips
+            onPick={(t) => studio.applyTemplate(t.video, t.creative)}
+          />
         )}
 
         {studio.mode === 'single' && (
@@ -180,7 +151,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
               rows={2}
               value={studio.brief}
               onChange={(e) => studio.setBrief(e.target.value)}
-              placeholder="Describe your 6–10 second ad…"
+              placeholder="Optional — add a still and Generate, or pick a shot…"
               className="w-full bg-white/5 border border-white/10 rounded-2xl p-3 pr-12 text-white text-sm outline-none focus:border-gold resize-none"
             />
             <input
@@ -237,7 +208,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
               <div key={`${index}-${ref.url.slice(0, 24)}`} className="w-16 flex flex-col gap-1">
                 <div
                   className={`relative w-16 h-14 rounded-lg overflow-hidden border ${
-                    ref.useAsFirstFrame ? 'border-gold' : 'border-gold/25'
+                    ref.useAsFirstFrame || ref.useAsLastFrame ? 'border-gold' : 'border-gold/25'
                   }`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -261,9 +232,31 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                 >
                   {ref.useAsFirstFrame ? 'First' : 'As first'}
                 </button>
+                {modelCfg.supportsLastFrame && (
+                  <button
+                    type="button"
+                    onClick={() => studio.toggleLastFrame(index)}
+                    className={`text-[7px] uppercase tracking-wide px-1 py-0.5 rounded border ${
+                      ref.useAsLastFrame
+                        ? 'bg-gold/20 border-gold text-gold'
+                        : 'border-white/15 text-white/40'
+                    }`}
+                  >
+                    {ref.useAsLastFrame ? 'Last' : 'As last'}
+                  </button>
+                )}
               </div>
             ))}
           </div>
+        )}
+
+        {studio.references.length > 0 && (
+          <p className="text-[10px] text-white/40">
+            As first locks the opening shot. Off = identity/style only (new first frame from your
+            prompt).
+            {(studio.modelKey === 'mini' || studio.modelKey === 'fast') &&
+              ' Mini/Fast also block photoreal faces, including AI.'}
+          </p>
         )}
 
         <div className="flex flex-wrap items-center gap-2">
@@ -278,11 +271,22 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
             title="Seedance 1.5 Pro"
           >
             Lite ·{' '}
-            <CoinPriceLabel
-              effective={lite?.priceCoins ?? 10}
-              base={lite?.baseCoinsBeforeDiscount ?? 10}
-              discounted={discounted}
+            <CoinzPriceCut
+              current={lite?.priceCoins ?? SEEDANCE_MODELS.lite.baseCoins}
+              legacy={legacyLite}
             />
+          </button>
+          <button
+            type="button"
+            onClick={() => studio.setModelKey('mini')}
+            className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
+              studio.modelKey === 'mini'
+                ? 'bg-gold text-black border-gold'
+                : 'border-white/15 text-white/60'
+            }`}
+            title="Seedance 2.0 Mini"
+          >
+            Mini · {mini?.priceCoins ?? SEEDANCE_MODELS.mini.baseCoins}
           </button>
           <button
             type="button"
@@ -295,14 +299,15 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
             title="Seedance 2.0 Fast"
           >
             Fast ·{' '}
-            <CoinPriceLabel
-              effective={fast?.priceCoins ?? 20}
-              base={fast?.baseCoinsBeforeDiscount ?? 20}
-              discounted={discounted}
+            <CoinzPriceCut
+              current={fast?.priceCoins ?? SEEDANCE_MODELS.fast.baseCoins}
+              legacy={legacyFast}
             />
           </button>
-          {([6, 8, 10] as const).map((d) => {
+          {modelCfg.durations.map((d) => {
             const dp = durationPrices?.[d]
+            const current = dp?.priceCoins
+            const legacy = legacyVideoPrice(studio.modelKey, d)
             return (
               <button
                 key={d}
@@ -314,10 +319,55 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                     : 'border-white/15 text-white/60'
                 }`}
               >
-                {d}s · {dp?.priceCoins ?? '—'}
+                {d}s ·{' '}
+                {current != null ? (
+                  <CoinzPriceCut current={current} legacy={legacy} />
+                ) : (
+                  '—'
+                )}
               </button>
             )
           })}
+          {modelCfg.supportsAudio && (
+            <button
+              type="button"
+              onClick={() => studio.setGenerateAudio(!studio.generateAudio)}
+              className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
+                studio.generateAudio
+                  ? 'bg-gold text-black border-gold'
+                  : 'border-white/15 text-white/60'
+              }`}
+            >
+              Sound {studio.generateAudio ? 'on' : 'off'}
+              {!studio.generateAudio && audioAddon > 0 ? ` · +${audioAddon}` : ''}
+            </button>
+          )}
+          {modelCfg.resolutions.includes('720p') && (
+            <>
+              <button
+                type="button"
+                onClick={() => studio.setResolution('480p')}
+                className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
+                  studio.resolution === '480p'
+                    ? 'bg-gold text-black border-gold'
+                    : 'border-white/15 text-white/60'
+                }`}
+              >
+                480
+              </button>
+              <button
+                type="button"
+                onClick={() => studio.setResolution('720p')}
+                className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
+                  studio.resolution === '720p'
+                    ? 'bg-gold text-black border-gold'
+                    : 'border-white/15 text-white/60'
+                }`}
+              >
+                720
+              </button>
+            </>
+          )}
           <select
             value={studio.aspectRatio}
             onChange={(e) => studio.setAspectRatio(e.target.value)}
@@ -378,7 +428,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
         </div>
 
         {studio.presets.length > 0 && (
-          <div className="flex gap-1.5 overflow-x-auto pb-1">
+          <div className="flex gap-1.5 overflow-x-auto pb-1 studio-scroll">
             {studio.presets.slice(0, 8).map((p) => (
               <button
                 key={p.id}
@@ -446,7 +496,8 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
               disabled={!studio.canGenerate || !canAfford}
               className="flex-1 py-3 rounded-full bg-gold text-black text-xs font-bold uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Generate · {price} Coinz
+              Generate ·{' '}
+              <CoinzPriceCut current={price} legacy={legacyTotal} suffix=" Coinz" />
             </button>
           )}
         </div>

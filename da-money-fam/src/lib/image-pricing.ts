@@ -47,8 +47,9 @@ export async function getImageCoinPrice(tierInput?: ImageTier | string | null): 
   let discountPercent = 0
   let tierOrFanClub: string | null = null
 
-  // Edit + Smart never discounted
-  if (model.tier === 'draft' || model.tier === 'fast') {
+  // Edit + Smart never discounted. Draft/Fast at volume floor skip % discount.
+  const atVolumeFloor = base <= TIER_FLOOR[model.tier]
+  if ((model.tier === 'draft' || model.tier === 'fast') && !atVolumeFloor) {
     if (fanClub) {
       discountPercent = IMAGE_DISCOUNT_CAP
       tierOrFanClub = 'Fan Club'
@@ -62,6 +63,16 @@ export async function getImageCoinPrice(tierInput?: ImageTier | string | null): 
       discountPercent = Math.min(IMAGE_DISCOUNT_CAP, 5)
       tierOrFanClub = 'Level 3'
     }
+  } else if (
+    (model.tier === 'draft' || model.tier === 'fast') &&
+    atVolumeFloor &&
+    (fanClub || level >= 3)
+  ) {
+    // Still label Fan Club / level for UX, but no Coinz off at floor prices
+    if (fanClub) tierOrFanClub = 'Fan Club'
+    else if (level >= 5) tierOrFanClub = 'Level 5'
+    else if (level >= 4) tierOrFanClub = 'Level 4'
+    else tierOrFanClub = 'Level 3'
   }
 
   const priceCoins = Math.max(

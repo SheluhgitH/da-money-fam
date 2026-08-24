@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthProvider'
 import { COIN_PACKAGES, packAdCopy, type CoinPackage } from '@/lib/coin-packages'
 import { packsFromSettings } from '@/lib/site-settings'
+import { SEEDANCE_MODELS } from '@/lib/seedance-models'
 
 export default function CoinWallet() {
   const { user, loading: authLoading } = useAuth()
@@ -98,7 +99,9 @@ export default function CoinWallet() {
           <span className="text-gold font-bold text-lg">{coinBalance} Coinz</span>
         </p>
         <p className="text-gray-500 text-xs mb-8">
-          Ad Studio: Lite from 10 Coinz · Fast from 20 Coinz (6s). Longer clips cost more.
+          Ad Studio: Lite from {SEEDANCE_MODELS.lite.baseCoins} · Mini from{' '}
+          {SEEDANCE_MODELS.mini.baseCoins} · Fast from {SEEDANCE_MODELS.fast.baseCoins} Coinz (6s
+          silent). Sound and longer clips cost more. Draft images from 1 Coinz.
         </p>
 
         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}

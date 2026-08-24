@@ -13,15 +13,26 @@ function service() {
 }
 
 function mapPreset(row: Record<string, unknown>): AdStudioPreset {
+  const creative = (row.creative as Record<string, string>) || null
+  const lookFromCreative = creative?.lookRefUrls
+    ? creative.lookRefUrls.split('|').filter(Boolean)
+    : []
   return {
     id: String(row.id),
     user_id: String(row.user_id),
     name: String(row.name),
     brief: row.brief ? String(row.brief) : null,
-    creative: (row.creative as Record<string, string>) || null,
+    creative,
     aspect_ratio: String(row.aspect_ratio || '9:16'),
     model: row.model ? String(row.model) : null,
     duration_seconds: Number(row.duration_seconds || 6),
+    look_ref_urls: Array.isArray(row.look_ref_urls)
+      ? (row.look_ref_urls as unknown[]).filter((u): u is string => typeof u === 'string')
+      : lookFromCreative,
+    look_character_id:
+      typeof row.look_character_id === 'string'
+        ? row.look_character_id
+        : creative?.lookCharacterId || null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   }
@@ -56,13 +67,24 @@ export async function POST(req: Request) {
   const name = String(body.name || 'Saved look').trim().slice(0, 80)
   const now = new Date().toISOString()
 
+  const lookRefUrls = Array.isArray(body.look_ref_urls)
+    ? (body.look_ref_urls as unknown[]).filter((u): u is string => typeof u === 'string').slice(0, 4)
+    : []
+  const lookCharacterId =
+    typeof body.look_character_id === 'string' ? body.look_character_id.slice(0, 80) : ''
+  const creativePayload = {
+    ...(body.creative && typeof body.creative === 'object' ? body.creative : {}),
+    ...(lookRefUrls.length ? { lookRefUrls: lookRefUrls.join('|') } : {}),
+    ...(lookCharacterId ? { lookCharacterId } : {}),
+  }
+
   const { data, error } = await supabase
     .from('ad_studio_presets')
     .insert({
       user_id: user.id,
       name,
       brief: body.brief || null,
-      creative: body.creative || null,
+      creative: creativePayload,
       aspect_ratio: body.aspect_ratio || '9:16',
       model: body.model || null,
       duration_seconds: Number(body.duration_seconds) || 6,

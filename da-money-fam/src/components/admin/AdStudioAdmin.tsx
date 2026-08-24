@@ -237,13 +237,43 @@ export default function AdStudioAdmin({
         <p className="text-xs text-gray-500">
           {fetchedAt ? `Updated ${new Date(fetchedAt).toLocaleString()}` : 'Loading stats…'}
         </p>
-        <button
-          type="button"
-          onClick={refresh}
-          className="text-xs px-3 py-1 rounded-full border border-gold/30 text-gold"
-        >
-          Refresh
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={async () => {
+              setMessage('Persisting featured videos to CDN…')
+              try {
+                const res = await fetch('/api/admin/ad-studio/persist-videos', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ limit: 20, featuredOnly: true }),
+                })
+                const data = await res.json()
+                if (!res.ok) {
+                  setMessage(data.error || 'Persist failed')
+                  return
+                }
+                setMessage(
+                  `Persisted ${data.succeeded}/${data.attempted} videos to storage` +
+                    (data.failed ? ` (${data.failed} failed)` : '')
+                )
+                await refresh()
+              } catch {
+                setMessage('Persist request failed')
+              }
+            }}
+            className="text-xs px-3 py-1 rounded-full border border-white/20 text-gray-300 hover:border-gold/40 hover:text-gold"
+          >
+            Persist videos to CDN
+          </button>
+          <button
+            type="button"
+            onClick={refresh}
+            className="text-xs px-3 py-1 rounded-full border border-gold/30 text-gold"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div>
@@ -417,9 +447,16 @@ export default function AdStudioAdmin({
               <p className="text-gray-500 text-sm">Select a video generation.</p>
             ) : (
               <>
-                {selected.video_urls?.[0] && (
-                  <video src={selected.video_urls[0]} controls className="w-full rounded-lg bg-black" />
-                )}
+              {selected.video_urls?.[0] && (
+                <video
+                  src={
+                    selected.video_urls.find((u) => /^https?:\/\//i.test(u) && !u.includes('/api/video/')) ||
+                    `/api/video/showcase/${selected.id}/content`
+                  }
+                  controls
+                  className="w-full rounded-lg bg-black"
+                />
+              )}
                 <p className="text-white text-sm">{selected.brief}</p>
                 <p className="text-xs text-gray-500">
                   {selected.user_email || selected.user_id} ·{' '}

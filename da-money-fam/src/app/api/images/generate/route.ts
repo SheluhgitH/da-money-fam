@@ -5,6 +5,10 @@ import { creditUserCoins, debitUserCoins } from '@/lib/user-store'
 import { parseImageQuoteId } from '@/lib/image-pricing'
 import { resolveImageModel, type ImageTier } from '@/lib/image-models'
 import { generateOpenRouterImage } from '@/lib/openrouter-images'
+import { wrapImageEditPrompt, wrapInpaintPrompt, type EditStrength } from '@/lib/image-edit-prompt'
+import { enhanceStillPrompt } from '@/lib/ad-prompt-enhance'
+import { isActiveFanClubMember } from '@/lib/fan-club'
+import { FROM_STILL_IMAGE } from '@/lib/studio-templates'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -61,15 +65,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Quote expired or invalid', code: 'REQUOTE' }, { status: 409 })
     }
 
-    const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : ''
-    if (!prompt) {
+    const promptRaw = typeof body.prompt === 'string' ? body.prompt.trim() : ''
+    const referenceUrls = Array.isArray(body.reference_urls)
+      ? (body.reference_urls as unknown[]).filter(
+          (u): u is string => typeof u === 'string' && (u.startsWith('http://') || u.startsWith('https://'))
+        )
+      : []
+    if (!promptRaw && referenceUrls.length === 0) {
       return NextResponse.json({ error: 'Prompt is required' }, { status: 400 })
     }
 
     const tier = quote.tier as ImageTier
     const model = resolveImageModel(tier)
     const mode: 'generate' | 'edit' =
-      body.mode === 'edit' || (Array.isArray(body.reference_urls) && body.reference_urls.length > 0)
+      body.mode === 'edit' || referenceUrls.length > 0
         ? model.mode === 'generate'
           ? 'generate'
           : 'edit'
@@ -77,52 +86,108 @@ export async function POST(req: Request) {
 
     const aspectRatio =
       typeof body.aspect_ratio === 'string' && body.aspect_ratio ? body.aspect_ratio : '9:16'
-    const referenceUrls = Array.isArray(body.reference_urls)
-      ? (body.reference_urls as unknown[]).filter(
-          (u): u is string => typeof u === 'string' && (u.startsWith('http://') || u.startsWith('https://'))
-        )
-      : []
 
-    priceCoins = quote.priceCoins
+    const resolvedRaw = promptRaw || FROM_STILL_IMAGE
+    const alreadyLocked = /IMAGE EDIT of the provided|INPAINT:/i.test(resolvedRaw)
+    const isEditPass =
+      mode === 'edit' ||
+      (referenceUrls.length > 0 && (tier === 'edit' || tier === 'smart'))
+    const strength: EditStrength =
+      body.edit_strength === 'subtle' || body.edit_strength === 'heavy'
+        ? body.edit_strength
+        : 'medium'
+    const inpaint = body.inpaint === true
+    const maskUrl =
+      typeof body.mask_url === 'string' &&
+      (body.mask_url.startsWith('http://') || body.mask_url.startsWith('https://'))
+        ? body.mask_url
+        : null
+    const count = Math.min(4, Math.max(1, Number(body.count) || 1))
+
+    if ((mode === 'edit' || inpaint) && referenceUrls.length === 0) {
+      return NextResponse.json(
+        { error: 'Add or select a still to edit' },
+        { status: 400 }
+      )
+    }
+
+    if (inpaint && (tier === 'draft' || tier === 'fast')) {
+      return NextResponse.json(
+        { error: 'Painted edits require Edit or Smart' },
+        { status: 400 }
+      )
+    }
+
+    if (body.enhance === true) {
+      const fanClub = await isActiveFanClubMember(user.id)
+      if (!fanClub) {
+        return NextResponse.json(
+          { error: 'Enhance is available for Fan Club members only' },
+          { status: 403 }
+        )
+      }
+    }
+
+    let prompt = resolvedRaw
+    if (body.enhance === true && !alreadyLocked) {
+      prompt = await enhanceStillPrompt(prompt, referenceUrls)
+    }
+    if (inpaint && maskUrl && !alreadyLocked) {
+      prompt = wrapInpaintPrompt(prompt, strength)
+    } else if (isEditPass && !alreadyLocked) {
+      prompt = wrapImageEditPrompt(prompt, strength)
+    }
+
+    const inputRefs =
+      inpaint && maskUrl && referenceUrls[0]
+        ? [referenceUrls[0], maskUrl]
+        : referenceUrls
+
+    priceCoins = quote.priceCoins * count
     await debitUserCoins(user.id, priceCoins, {
       reason: 'ad_studio_image',
       referenceId: quoteId.slice(0, 64),
     })
     debited = true
 
-    const result = await generateOpenRouterImage({
-      tier,
-      prompt,
-      aspectRatio,
-      inputReferences: referenceUrls,
-      userId: user.id,
-    })
-
     const supabase = service()
     let imageId: string | null = null
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('ad_studio_images')
-        .insert({
-          user_id: user.id,
-          prompt,
-          model: result.modelId,
-          mode,
-          aspect_ratio: aspectRatio,
-          input_ref_urls: referenceUrls,
-          output_url: result.url,
-          coinz_spent: priceCoins,
-          usd_cost: result.usdCost,
-        })
-        .select('id')
-        .single()
-      if (!error && data) imageId = data.id
+    const urls: string[] = []
+    let lastResult: Awaited<ReturnType<typeof generateOpenRouterImage>> | null = null
+    for (let i = 0; i < count; i++) {
+      lastResult = await generateOpenRouterImage({
+        tier,
+        prompt,
+        aspectRatio,
+        inputReferences: inputRefs,
+        userId: user.id,
+      })
+      urls.push(lastResult.url)
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('ad_studio_images')
+          .insert({
+            user_id: user.id,
+            prompt,
+            model: lastResult.modelId,
+            mode,
+            aspect_ratio: aspectRatio,
+            input_ref_urls: inputRefs,
+            output_url: lastResult.url,
+            coinz_spent: quote.priceCoins,
+            usd_cost: lastResult.usdCost,
+          })
+          .select('id')
+          .single()
+        if (!error && data && i === 0) imageId = data.id
+      }
     }
 
     return NextResponse.json({
       id: imageId,
-      url: result.url,
-      modelId: result.modelId,
+      url: urls[0],
+      urls,
+      modelId: lastResult?.modelId,
       coinzSpent: priceCoins,
       tier,
       mode,

@@ -1,0 +1,44 @@
+import { NextResponse } from 'next/server'
+import { getCurrentUser } from '@/lib/auth/user'
+import { getAdStudioGeneration } from '@/lib/ad-studio-jobs'
+import { extractLastFrameJpeg } from '@/lib/ad-studio-poster'
+import { uploadReferenceImage } from '@/lib/reference-upload'
+import { MAX_VIDEO_UPLOAD_BYTES } from '@/lib/ad-studio-video-storage'
+
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60
+
+export async function POST(req: Request, { params }: { params: { id: string } }) {
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const gen = await getAdStudioGeneration(user.id, params.id)
+  if (!gen || gen.mode !== 'storyboard') {
+    return NextResponse.json({ error: 'Storyboard not found' }, { status: 404 })
+  }
+
+  const body = await req.json().catch(() => ({}))
+  const videoUrl = typeof body.videoUrl === 'string' ? body.videoUrl : ''
+  if (!videoUrl.startsWith('http://') && !videoUrl.startsWith('https://')) {
+    return NextResponse.json({ error: 'videoUrl required' }, { status: 400 })
+  }
+
+  try {
+    const res = await fetch(videoUrl)
+    if (!res.ok) throw new Error('Failed to download clip')
+    const buf = Buffer.from(await res.arrayBuffer())
+    if (buf.byteLength > MAX_VIDEO_UPLOAD_BYTES) throw new Error('Clip too large')
+    const jpeg = await extractLastFrameJpeg(buf)
+    if (!jpeg) throw new Error('Could not extract last frame')
+    const dataUrl = `data:image/jpeg;base64,${jpeg.toString('base64')}`
+    const uploaded = await uploadReferenceImage({
+      userId: user.id,
+      dataUrlOrBase64: dataUrl,
+      contentType: 'image/jpeg',
+    })
+    return NextResponse.json({ url: uploaded.url })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Last-frame extract failed'
+    return NextResponse.json({ error: message }, { status: 502 })
+  }
+}

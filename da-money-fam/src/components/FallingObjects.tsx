@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { useSiteSettings } from '@/contexts/SiteSettingsProvider'
 
 const FALLING_OBJECTS = [
@@ -28,6 +29,7 @@ const FALLING_OBJECTS = [
 
 export default function FallingObjects() {
   const { showAnimations } = useSiteSettings()
+  const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -35,6 +37,7 @@ export default function FallingObjects() {
   }, [])
 
   if (!mounted || !showAnimations) return null
+  if (pathname?.startsWith('/ad-studio')) return null
 
   const viewportWidth = window.innerWidth
   const viewportHeight = window.innerHeight

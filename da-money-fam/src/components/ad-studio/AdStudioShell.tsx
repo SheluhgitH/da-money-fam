@@ -11,6 +11,7 @@ import PromptDock from './PromptDock'
 import ImageStudioPanel from './ImageStudioPanel'
 import ImageLibrary from './ImageLibrary'
 import GtaStylePanel from './GtaStylePanel'
+import CharacterStudioPanel from './CharacterStudioPanel'
 import { COIN_PACKAGES, packAdCopy, type CoinPackage } from '@/lib/coin-packages'
 import { packsFromSettings } from '@/lib/site-settings'
 import { GTA_MARKETING_SAMPLES } from '@/lib/gta-marketing-samples'
@@ -24,12 +25,12 @@ export default function AdStudioShell({
   initialBrief?: string
   checkoutStatus?: string | null
   initialTab?: 'video' | 'images'
-  initialImageMode?: 'stills' | 'gta'
+  initialImageMode?: 'stills' | 'gta' | 'characters'
 }) {
   const studio = useAdStudio(initialBrief)
   const images = useImageStudio()
   const [studioTab, setStudioTab] = useState<'video' | 'images'>(initialTab)
-  const [imageMode, setImageMode] = useState<'stills' | 'gta'>(initialImageMode)
+  const [imageMode, setImageMode] = useState<'stills' | 'gta' | 'characters'>(initialImageMode)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [buyOpen, setBuyOpen] = useState(false)
   const [packs, setPacks] = useState<CoinPackage[]>(COIN_PACKAGES)
@@ -123,11 +124,11 @@ export default function AdStudioShell({
     }
   }
 
-  const applyImageForVideo = (url: string) => {
-    studio.addReferenceFromUrl(url, true)
+  const applyImageForVideo = (url: string, asFirstFrame = false) => {
+    studio.addReferenceFromUrl(url, asFirstFrame)
     setStudioTab('video')
-    setToast('Image added as video reference')
-    window.setTimeout(() => setToast(null), 3000)
+    setToast(asFirstFrame ? 'Added as opening frame' : 'Added as style ref — tap As first to lock the opening shot')
+    window.setTimeout(() => setToast(null), 4000)
   }
 
   const balance =
@@ -278,13 +279,23 @@ export default function AdStudioShell({
         </div>
       ) : studioTab === 'images' ? (
         <div className="flex-1 flex min-h-0 relative z-10">
-          <aside className="hidden md:flex w-64 lg:w-72 border-r border-gold/15 flex-col bg-black/50 backdrop-blur-sm">
-            <p className="px-3 pt-3 text-[10px] uppercase tracking-widest text-gold/50">Images</p>
+          <aside className="hidden md:flex w-80 lg:w-96 border-r border-gold/15 flex-col min-h-0 overflow-hidden bg-black/50 backdrop-blur-sm">
+            <p className="shrink-0 px-3 pt-3 pb-1 text-[10px] uppercase tracking-widest text-gold/50">
+              Images
+            </p>
             <ImageLibrary
               items={images.library}
-              onSelect={(url) => images.setPreviewUrl(url)}
-              onEdit={(url) => images.useImageAsEdit(url)}
+              selectedUrl={images.previewUrl}
+              onSelect={(url) => {
+                setImageMode('stills')
+                images.useImageAsEdit(url)
+              }}
+              onEdit={(url) => {
+                setImageMode('stills')
+                images.useImageAsEdit(url)
+              }}
               onUseForVideo={applyImageForVideo}
+              onUseAsFirst={(url) => applyImageForVideo(url, true)}
             />
           </aside>
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
@@ -311,17 +322,49 @@ export default function AdStudioShell({
               >
                 GTA Styles
               </button>
+              <button
+                type="button"
+                onClick={() => setImageMode('characters')}
+                className={`text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border ${
+                  imageMode === 'characters'
+                    ? 'bg-gold text-black border-gold'
+                    : 'border-gold/25 text-gold/70'
+                }`}
+              >
+                Characters
+              </button>
             </div>
             {imageMode === 'gta' ? (
               <GtaStylePanel images={images} onUseForVideo={applyImageForVideo} />
+            ) : imageMode === 'characters' ? (
+              <CharacterStudioPanel
+                images={images}
+                onUseForVideo={(url, characterId) => {
+                  applyImageForVideo(url)
+                  if (characterId) studio.setLookCharacterId(characterId)
+                }}
+                onMakeStoryboard={(url) => {
+                  studio.startStoryboardFromStill(url)
+                  setStudioTab('video')
+                }}
+              />
             ) : (
-              <ImageStudioPanel images={images} onUseForVideo={applyImageForVideo} />
+              <ImageStudioPanel
+                images={images}
+                onUseForVideo={applyImageForVideo}
+                onMakeStoryboard={(url) => {
+                  studio.startStoryboardFromStill(url, images.prompt)
+                  setStudioTab('video')
+                  setToast('Storyboard started from still')
+                  window.setTimeout(() => setToast(null), 4000)
+                }}
+              />
             )}
           </div>
         </div>
       ) : (
         <div className="flex-1 flex min-h-0 relative z-10">
-          <aside className="hidden md:flex w-64 lg:w-72 border-r border-gold/15 flex-col bg-black/50 backdrop-blur-sm">
+          <aside className="hidden md:flex w-80 lg:w-96 border-r border-gold/15 flex-col min-h-0 overflow-hidden bg-black/50 backdrop-blur-sm">
             <GenerationLibrary studio={studio} />
           </aside>
 
@@ -337,22 +380,29 @@ export default function AdStudioShell({
       {libraryOpen && (
         <div className="md:hidden fixed inset-0 z-50 bg-black/80" onClick={() => setLibraryOpen(false)}>
           <div
-            className="absolute inset-y-0 left-0 w-[80%] max-w-xs bg-matte-black border-r border-gold/20"
+            className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-matte-black border-r border-gold/20 flex flex-col h-full min-h-0 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {studioTab === 'images' ? (
               <ImageLibrary
                 items={images.library}
+                selectedUrl={images.previewUrl}
                 onSelect={(url) => {
-                  images.setPreviewUrl(url)
+                  setImageMode('stills')
+                  images.useImageAsEdit(url)
                   setLibraryOpen(false)
                 }}
                 onEdit={(url) => {
+                  setImageMode('stills')
                   images.useImageAsEdit(url)
                   setLibraryOpen(false)
                 }}
                 onUseForVideo={(url) => {
                   applyImageForVideo(url)
+                  setLibraryOpen(false)
+                }}
+                onUseAsFirst={(url) => {
+                  applyImageForVideo(url, true)
                   setLibraryOpen(false)
                 }}
               />

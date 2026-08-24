@@ -19,7 +19,7 @@ export const IMAGE_MODELS: Record<ImageTier, ImageModelConfig> = {
     tier: 'draft',
     id: 'black-forest-labs/flux.2-klein-4b',
     label: 'Draft',
-    baseCoins: 4,
+    baseCoins: 1,
     usdEstimate: 0.014,
     mode: 'generate',
     fallbackIds: ['krea/krea-2-medium-turbo', 'google/gemini-3.1-flash-lite-image'],
@@ -28,7 +28,7 @@ export const IMAGE_MODELS: Record<ImageTier, ImageModelConfig> = {
     tier: 'fast',
     id: 'krea/krea-2-medium-turbo',
     label: 'Fast',
-    baseCoins: 4,
+    baseCoins: 2,
     usdEstimate: 0.015,
     mode: 'generate',
     fallbackIds: ['black-forest-labs/flux.2-klein-4b', 'google/gemini-3.1-flash-lite-image'],
@@ -37,8 +37,8 @@ export const IMAGE_MODELS: Record<ImageTier, ImageModelConfig> = {
     tier: 'edit',
     id: 'sourceful/riverflow-v2.5-fast',
     label: 'Edit',
-    baseCoins: 6,
-    usdEstimate: 0.025,
+    baseCoins: 4,
+    usdEstimate: 0.02,
     mode: 'edit',
     fallbackIds: ['recraft/recraft-v4.1-utility', 'google/gemini-3.1-flash-lite-image'],
     imageConfig: { reasoning: 'low' },
@@ -47,21 +47,21 @@ export const IMAGE_MODELS: Record<ImageTier, ImageModelConfig> = {
     tier: 'smart',
     id: 'google/gemini-3.1-flash-lite-image',
     label: 'Smart',
-    baseCoins: 10,
-    usdEstimate: 0.04,
+    baseCoins: 5,
+    usdEstimate: 0.034,
     mode: 'both',
     fallbackIds: ['google/gemini-2.5-flash-image', 'sourceful/riverflow-v2.5-fast'],
-    imageConfig: { resolution: '1K' },
+    imageConfig: { resolution: '2K' },
   },
 }
 
 export const DEFAULT_IMAGE_TIER: ImageTier = 'fast'
 
 export const TIER_FLOOR: Record<ImageTier, number> = {
-  draft: 4,
-  fast: 4,
-  edit: 6,
-  smart: 10,
+  draft: 1,
+  fast: 2,
+  edit: 4,
+  smart: 5,
 }
 
 export type ImageModelOverrides = Partial<Record<ImageTier, { baseCoins?: number }>>

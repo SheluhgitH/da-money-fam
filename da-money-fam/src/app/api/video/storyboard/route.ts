@@ -7,7 +7,7 @@ import type { CreativeSelections } from '@/lib/ad-creative-presets'
 import { normalizeDuration, submitSeedanceJob } from '@/lib/seedance-submit'
 import { createAdStudioGeneration } from '@/lib/ad-studio-jobs'
 import type { StoryboardScene } from '@/lib/ad-studio-types'
-import { resolveSeedanceModel } from '@/lib/seedance-models'
+import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
 
 /**
  * Starts a storyboard: debits for all scenes, generates scene 0.
@@ -28,6 +28,8 @@ export async function POST(req: Request) {
     aspect_ratio,
     reference_images,
     model: modelInput,
+    generate_audio,
+    resolution: resolutionInput,
   } = body
 
   if (!Array.isArray(rawScenes) || rawScenes.length < 2 || rawScenes.length > 5) {
@@ -56,13 +58,15 @@ export async function POST(req: Request) {
   }
 
   const model = resolveSeedanceModel(modelInput)
-  const duration = normalizeDuration(duration_seconds)
+  const duration = normalizeDuration(duration_seconds, model.key)
+  const wantsAudio = generate_audio === true
+  const resolution = resolveSubmitResolution(model, resolutionInput)
   const sceneCount = sceneBriefs.length
   let debited = false
   let totalPrice = 0
 
   try {
-    const pricing = await getAdVideoCoinPrice(model.key, duration)
+    const pricing = await getAdVideoCoinPrice(model.key, duration, wantsAudio, resolution)
     if (!pricing.isAuthenticated) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
@@ -79,7 +83,9 @@ export async function POST(req: Request) {
       duration,
       aspect_ratio,
       reference_images,
+      generate_audio: wantsAudio,
       model: model.key,
+      resolution,
     })
 
     const scenes: StoryboardScene[] = sceneBriefs.map((brief, i) => ({

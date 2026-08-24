@@ -18,25 +18,59 @@ export async function GET(req: Request) {
     const variations = Math.min(2, Math.max(1, Number(searchParams.get('variations')) || 1))
     const model = resolveSeedanceModel(searchParams.get('model'))
     const duration = Number(searchParams.get('duration')) || 6
+    const generateAudio = searchParams.get('audio') === '1' || searchParams.get('audio') === 'true'
+    const resolution = searchParams.get('resolution') === '720p' ? '720p' : '480p'
+    const hd720 = resolution === '720p' && model.resolutions.includes('720p')
 
-    const pricing = await getAdVideoCoinPrice(model.key, duration)
+    const pricing = await getAdVideoCoinPrice(model.key, duration, generateAudio, resolution)
     const studioPricing = asPricingSettings((await loadSiteSettingsMap())['ad_studio.pricing'])
     const userCoins = await getUserCoins(user.id)
     const fanClub = await isActiveFanClubMember(user.id)
     const totalPriceCoins = pricing.priceCoins * scenes * variations
 
+    const previewDiscount = fanClub
+      ? studioPricing.fanClubDiscountPercent
+      : pricing.discountPercent
+
     const litePreview = previewAdClipCoinPrice(
       'lite',
       pricing.durationSeconds,
-      pricing.discountPercent,
-      studioPricing.liteBaseCoins
+      previewDiscount,
+      studioPricing.liteBaseCoins,
+      false,
+      false
+    )
+    const miniPreview = previewAdClipCoinPrice(
+      'mini',
+      pricing.durationSeconds,
+      previewDiscount,
+      studioPricing.miniBaseCoins,
+      generateAudio,
+      hd720
     )
     const fastPreview = previewAdClipCoinPrice(
       'fast',
       pricing.durationSeconds,
-      pricing.discountPercent,
-      studioPricing.fastBaseCoins
+      previewDiscount,
+      studioPricing.fastBaseCoins,
+      generateAudio,
+      false
     )
+
+    const durationPrices: Record<
+      number,
+      { priceCoins: number; baseCoinsBeforeDiscount: number; audioAddon: number }
+    > = {}
+    for (const d of model.durations) {
+      durationPrices[d] = previewAdClipCoinPrice(
+        model.key,
+        d,
+        previewDiscount,
+        pricing.baseCoins,
+        generateAudio && model.supportsAudio,
+        hd720
+      )
+    }
 
     return NextResponse.json({
       priceCoins: pricing.priceCoins,
@@ -55,15 +89,19 @@ export async function GET(req: Request) {
       modelId: model.id,
       baseCoins: model.baseCoins,
       baseCoinsBeforeDiscount: pricing.baseCoinsBeforeDiscount,
+      generateAudio: pricing.generateAudio,
+      audioAddonCoins: pricing.audioAddon,
+      resolution: pricing.resolution,
+      resolutions: model.resolutions,
       modelPrices: {
         lite: litePreview,
+        mini: miniPreview,
         fast: fastPreview,
       },
-      durationPrices: {
-        6: previewAdClipCoinPrice(model.key, 6, pricing.discountPercent, pricing.baseCoins),
-        8: previewAdClipCoinPrice(model.key, 8, pricing.discountPercent, pricing.baseCoins),
-        10: previewAdClipCoinPrice(model.key, 10, pricing.discountPercent, pricing.baseCoins),
-      },
+      durationPrices,
+      durations: model.durations,
+      supportsAudio: model.supportsAudio,
+      supportsLastFrame: model.supportsLastFrame,
     })
   } catch (error) {
     console.error('Error fetching video quote:', error)
