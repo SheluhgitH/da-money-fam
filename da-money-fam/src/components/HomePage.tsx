@@ -20,6 +20,7 @@ import PreviewUpsellModal from '@/components/store/PreviewUpsellModal'
 import StickyShopBar from '@/components/StickyShopBar'
 import MiniCartDrawer from '@/components/MiniCartDrawer'
 import EmailCaptureModal from '@/components/EmailCaptureModal'
+import LiveNowPopup from '@/components/LiveNowPopup'
 import ScrollSkewProvider from '@/components/ScrollSkewProvider'
 import {
   asHomepageSections,
@@ -201,6 +202,7 @@ function renderSection(id: HomepageSectionId) {
 export default function HomePage() {
   const [sections, setSections] = useState(asHomepageSections(null))
   const [activeTab, setActiveTab] = useState<HomepageTabId>(DEFAULT_HOMEPAGE_TAB)
+  const [livePopupOpen, setLivePopupOpen] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
   const pendingScrollRef = useRef<string | null>(null)
   const initialUrlHandled = useRef(false)
@@ -349,7 +351,8 @@ export default function HomePage() {
     <MiniCartProvider>
     <ReferralCapture />
     <ScrollSkewProvider />
-    <EmailCaptureModal />
+    <EmailCaptureModal hold={livePopupOpen} />
+    <LiveNowPopup onOpenChange={setLivePopupOpen} />
     <main className="min-h-screen bg-matte-black pb-24 md:pb-12">
       <Navigation />
       <FloatingShapes />

@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 
-export default function EmailCaptureModal() {
+export default function EmailCaptureModal({ hold = false }: { hold?: boolean }) {
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
@@ -11,10 +11,10 @@ export default function EmailCaptureModal() {
 
   useEffect(() => {
     const dismissed = localStorage.getItem('dmf-email-capture')
-    if (dismissed === '1') return
+    if (dismissed === '1' || hold) return
     const timer = window.setTimeout(() => setOpen(true), 18000)
     return () => window.clearTimeout(timer)
-  }, [])
+  }, [hold])
 
   const close = () => {
     setOpen(false)
