@@ -11,12 +11,20 @@ import {
 const MAX_REFERENCE_IMAGES = 3
 
 type ImageRef = { type: 'image_url'; image_url: { url: string } }
+type AudioRef = { type: 'audio_url'; audio_url: { url: string } }
 type FrameImage = ImageRef & { frame_type: 'first_frame' | 'last_frame' }
+
+function isAudioItem(item: unknown): boolean {
+  if (!item || typeof item !== 'object') return false
+  const rec = item as { kind?: unknown; type?: unknown }
+  return rec.kind === 'audio' || rec.type === 'audio_url'
+}
 
 export function toInputReferences(images: unknown): ImageRef[] {
   if (!Array.isArray(images)) return []
 
   return images
+    .filter((item) => !isAudioItem(item))
     .map((item) => {
       if (typeof item === 'string' && item.length > 0) return item
       if (item && typeof item === 'object' && 'url' in item) {
@@ -33,6 +41,22 @@ export function toInputReferences(images: unknown): ImageRef[] {
     }))
 }
 
+export function toAudioReferences(images: unknown): AudioRef[] {
+  if (!Array.isArray(images)) return []
+  const urls: string[] = []
+  for (const item of images) {
+    if (!isAudioItem(item)) continue
+    if (item && typeof item === 'object' && 'url' in item) {
+      const url = (item as { url?: unknown }).url
+      if (typeof url === 'string' && url.startsWith('http')) urls.push(url)
+    }
+  }
+  return urls.slice(0, 3).map((url) => ({
+    type: 'audio_url' as const,
+    audio_url: { url },
+  }))
+}
+
 function frameFromRef(
   images: unknown,
   frameType: 'first_frame' | 'last_frame'
@@ -40,7 +64,7 @@ function frameFromRef(
   if (!Array.isArray(images)) return null
 
   for (const item of images) {
-    if (!item || typeof item !== 'object') continue
+    if (!item || typeof item !== 'object' || isAudioItem(item)) continue
     const record = item as {
       url?: unknown
       useAsFirstFrame?: unknown
@@ -141,6 +165,11 @@ export async function submitSeedanceJob(input: {
   const inputReferences = toInputReferences(input.reference_images).filter(
     (ref) => !frameUrls.has(ref.image_url.url)
   )
+  const audioReferences = toAudioReferences(input.reference_images)
+
+  if (audioReferences.length > 0 && inputReferences.length === 0 && frame_images.length === 0) {
+    throw new Error('Add at least one still with the audio track.')
+  }
 
   const refUrls = toInputReferences(input.reference_images).map((r) => r.image_url.url)
   let finalPrompt = await resolveAdPrompt({
@@ -154,8 +183,15 @@ export async function submitSeedanceJob(input: {
     finalPrompt = `${finalPrompt} Do not use the reference image as the first frame or opening still. Start on a new shot that matches this prompt. Use references only for identity, wardrobe, and style.`
   }
 
-  const generateAudio = model.supportsAudio && input.generate_audio === true
+  if (audioReferences.length > 0) {
+    finalPrompt = `${finalPrompt} Follow @Audio1 for soundtrack, rhythm, and timing.`
+  }
+
+  const generateAudio =
+    (model.supportsAudio && input.generate_audio === true) || audioReferences.length > 0
   const duration = normalizeDuration(input.duration, model.key)
+
+  const mixedReferences = [...inputReferences, ...audioReferences]
 
   const response = await fetch('https://openrouter.ai/api/v1/videos', {
     method: 'POST',
@@ -173,7 +209,7 @@ export async function submitSeedanceJob(input: {
       resolution: resolveSubmitResolution(model, input.resolution),
       ...(generateAudio ? { generate_audio: true } : {}),
       ...(frame_images.length > 0 ? { frame_images } : {}),
-      ...(inputReferences.length > 0 ? { input_references: inputReferences } : {}),
+      ...(mixedReferences.length > 0 ? { input_references: mixedReferences } : {}),
     }),
   })
 

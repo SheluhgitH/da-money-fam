@@ -4,6 +4,8 @@ export interface AdReferenceImage {
   url: string
   useAsFirstFrame: boolean
   useAsLastFrame?: boolean
+  kind?: 'image' | 'audio'
+  name?: string
 }
 
 export interface AdVideoPricingResponse {
@@ -83,7 +85,9 @@ export const ASPECT_CLASS: Record<string, string> = {
 }
 
 export const MAX_REFERENCE_IMAGES = 3
+export const MAX_REFERENCE_AUDIO = 1
 export const MAX_REFERENCE_BYTES = 4 * 1024 * 1024
+export const MAX_REFERENCE_AUDIO_BYTES = 15 * 1024 * 1024
 export const MAX_STORYBOARD_SCENES = 5
 export const MIN_STORYBOARD_SCENES = 2
 export const MAX_CONCURRENT_GENERATIONS = 2

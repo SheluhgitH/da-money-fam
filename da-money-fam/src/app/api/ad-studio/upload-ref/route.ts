@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/user'
-import { uploadReferenceImage } from '@/lib/reference-upload'
+import {
+  isAudioContentType,
+  uploadReferenceAudio,
+  uploadReferenceImage,
+} from '@/lib/reference-upload'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -21,6 +25,15 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'file required' }, { status: 400 })
       }
       const buf = Buffer.from(await file.arrayBuffer())
+      if (isAudioContentType(file.type, file.name)) {
+        const uploaded = await uploadReferenceAudio({
+          userId: user.id,
+          buffer: buf,
+          contentType: file.type,
+          filename: file.name,
+        })
+        return NextResponse.json({ ...uploaded, kind: 'audio', name: file.name })
+      }
       const dataUrl = `data:${file.type || 'image/jpeg'};base64,${buf.toString('base64')}`
       const uploaded = await uploadReferenceImage({
         userId: user.id,

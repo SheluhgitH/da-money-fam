@@ -16,6 +16,8 @@ import type {
   StoryboardScene,
 } from '@/lib/ad-studio-types'
 import {
+  MAX_REFERENCE_AUDIO,
+  MAX_REFERENCE_AUDIO_BYTES,
   MAX_REFERENCE_IMAGES,
   MAX_STORYBOARD_SCENES,
   MIN_STORYBOARD_SCENES,
@@ -33,6 +35,17 @@ import { FROM_STILL_VIDEO } from '@/lib/studio-templates'
 
 const DRAFT_KEY = 'dmf-ad-studio-draft-v1'
 const POLL_TIMEOUT_MS = 8 * 60 * 1000
+
+function isAudioFile(file: File) {
+  return (
+    file.type.startsWith('audio/') ||
+    /\.(mp3|wav)$/i.test(file.name)
+  )
+}
+
+function isImageRef(ref: AdReferenceImage) {
+  return ref.kind !== 'audio'
+}
 
 async function uploadDataUrlAsRef(dataUrl: string): Promise<string | null> {
   try {
@@ -366,57 +379,122 @@ export function useAdStudio(initialBrief = '') {
 
   const addReferenceFromUrl = (url: string, useAsFirstFrame = false) => {
     setReferences((prev) => {
-      if (prev.length >= MAX_REFERENCE_IMAGES) return prev
+      const images = prev.filter(isImageRef)
+      if (images.length >= MAX_REFERENCE_IMAGES) return prev
       if (prev.some((r) => r.url === url)) return prev
-      return [...prev, { url, useAsFirstFrame, useAsLastFrame: false }]
+      return [...prev, { url, useAsFirstFrame, useAsLastFrame: false, kind: 'image' as const }]
     })
   }
 
   const addReferenceFiles = (files: FileList | null) => {
     if (!files?.length) return
-    const remaining = MAX_REFERENCE_IMAGES - references.length
-    if (remaining <= 0) {
-      setError(`You can add up to ${MAX_REFERENCE_IMAGES} reference images.`)
-      return
-    }
 
-    Array.from(files)
-      .slice(0, remaining)
-      .forEach((file) => {
-        if (!file.type.startsWith('image/') && !/\.(heic|heif)$/i.test(file.name)) {
-          setError('Only image files are supported.')
+    Array.from(files).forEach((file) => {
+      if (isAudioFile(file)) {
+        if (file.size > MAX_REFERENCE_AUDIO_BYTES) {
+          setError('Audio too large (max 15MB).')
           return
         }
         const localPreview = URL.createObjectURL(file)
         setReferences((prev) => {
-          if (prev.length >= MAX_REFERENCE_IMAGES) return prev
-          return [...prev, { url: localPreview, useAsFirstFrame: false, useAsLastFrame: false }]
+          const withoutAudio = prev.filter((r) => r.kind !== 'audio')
+          const audioCount = prev.filter((r) => r.kind === 'audio').length
+          if (audioCount >= MAX_REFERENCE_AUDIO) {
+            return [
+              ...withoutAudio,
+              {
+                url: localPreview,
+                useAsFirstFrame: false,
+                useAsLastFrame: false,
+                kind: 'audio' as const,
+                name: file.name,
+              },
+            ]
+          }
+          return [
+            ...prev,
+            {
+              url: localPreview,
+              useAsFirstFrame: false,
+              useAsLastFrame: false,
+              kind: 'audio' as const,
+              name: file.name,
+            },
+          ]
         })
+        setGenerateAudio(true)
 
         ;(async () => {
           try {
-            const compressed = await compressImageForUpload(file)
+            const form = new FormData()
+            form.append('file', file)
             const res = await fetch('/api/ad-studio/upload-ref', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                dataUrl: compressed.dataUrl,
-                contentType: compressed.contentType,
-              }),
+              body: form,
             })
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || 'Upload failed')
             setReferences((prev) =>
-              prev.map((r) => (r.url === localPreview ? { ...r, url: data.url as string } : r))
+              prev.map((r) =>
+                r.url === localPreview
+                  ? { ...r, url: data.url as string, kind: 'audio', name: file.name }
+                  : r
+              )
             )
             URL.revokeObjectURL(localPreview)
           } catch (err) {
             setReferences((prev) => prev.filter((r) => r.url !== localPreview))
             URL.revokeObjectURL(localPreview)
-            setError(err instanceof Error ? err.message : 'Reference upload failed')
+            setError(err instanceof Error ? err.message : 'Audio upload failed')
           }
         })()
+        return
+      }
+
+      if (!file.type.startsWith('image/') && !/\.(heic|heif)$/i.test(file.name)) {
+        setError('Use an image still or an MP3/WAV track.')
+        return
+      }
+
+      const imageCount = references.filter(isImageRef).length
+      if (imageCount >= MAX_REFERENCE_IMAGES) {
+        setError(`You can add up to ${MAX_REFERENCE_IMAGES} reference images.`)
+        return
+      }
+
+      const localPreview = URL.createObjectURL(file)
+      setReferences((prev) => {
+        if (prev.filter(isImageRef).length >= MAX_REFERENCE_IMAGES) return prev
+        return [
+          ...prev,
+          { url: localPreview, useAsFirstFrame: false, useAsLastFrame: false, kind: 'image' as const },
+        ]
       })
+
+      ;(async () => {
+        try {
+          const compressed = await compressImageForUpload(file)
+          const res = await fetch('/api/ad-studio/upload-ref', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              dataUrl: compressed.dataUrl,
+              contentType: compressed.contentType,
+            }),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || 'Upload failed')
+          setReferences((prev) =>
+            prev.map((r) => (r.url === localPreview ? { ...r, url: data.url as string } : r))
+          )
+          URL.revokeObjectURL(localPreview)
+        } catch (err) {
+          setReferences((prev) => prev.filter((r) => r.url !== localPreview))
+          URL.revokeObjectURL(localPreview)
+          setError(err instanceof Error ? err.message : 'Reference upload failed')
+        }
+      })()
+    })
   }
 
   const removeReference = (index: number) => {
@@ -424,23 +502,25 @@ export function useAdStudio(initialBrief = '') {
   }
 
   const toggleFirstFrame = (index: number) => {
-    setReferences((prev) =>
-      prev.map((img, i) =>
+    setReferences((prev) => {
+      if (prev[index]?.kind === 'audio') return prev
+      return prev.map((img, i) =>
         i === index
           ? { ...img, useAsFirstFrame: !img.useAsFirstFrame, useAsLastFrame: false }
           : { ...img, useAsFirstFrame: false }
       )
-    )
+    })
   }
 
   const toggleLastFrame = (index: number) => {
-    setReferences((prev) =>
-      prev.map((img, i) =>
+    setReferences((prev) => {
+      if (prev[index]?.kind === 'audio') return prev
+      return prev.map((img, i) =>
         i === index
           ? { ...img, useAsLastFrame: !img.useAsLastFrame, useAsFirstFrame: false }
           : { ...img, useAsLastFrame: false }
       )
-    )
+    })
   }
 
   const setModelKey = (key: SeedanceModelKey) => {
@@ -644,7 +724,8 @@ export function useAdStudio(initialBrief = '') {
 
   const canGenerate =
     mode === 'single'
-      ? Boolean(brief.trim()) || references.some((r) => r.url.startsWith('http'))
+      ? Boolean(brief.trim()) ||
+        references.some((r) => r.kind !== 'audio' && r.url.startsWith('http'))
       : sceneBriefs.every((b) => b.trim()) && sceneBriefs.length >= 2
 
   const generate = async () => {
@@ -655,6 +736,12 @@ export function useAdStudio(initialBrief = '') {
     }
     if (!pricing.canAfford) {
       setError('Insufficient Coinz. Buy more below or use Buy Coinz.')
+      return
+    }
+    const hasAudio = references.some((r) => r.kind === 'audio')
+    const hasStill = references.some((r) => r.kind !== 'audio' && r.url.startsWith('http'))
+    if (hasAudio && !hasStill) {
+      setError('Add at least one still with the audio track.')
       return
     }
 
@@ -693,7 +780,7 @@ export function useAdStudio(initialBrief = '') {
             aspect_ratio: aspectRatio,
             reference_images: references,
             model: modelKey,
-            generate_audio: generateAudio,
+            generate_audio: generateAudio || references.some((r) => r.kind === 'audio'),
             resolution,
           }),
           signal: controller.signal,
@@ -731,7 +818,7 @@ export function useAdStudio(initialBrief = '') {
                   useAsLastFrame: false,
                 })),
                 enhance,
-                generate_audio: generateAudio,
+                generate_audio: generateAudio || references.some((r) => r.kind === 'audio'),
                 resolution,
               }),
               signal: controller.signal,
@@ -834,7 +921,7 @@ export function useAdStudio(initialBrief = '') {
             variations,
             saveToLibrary: true,
             model: modelKey,
-            generate_audio: generateAudio,
+            generate_audio: generateAudio || references.some((r) => r.kind === 'audio'),
             enhancedPrompt: enhance && enhancedPreview ? enhancedPreview : null,
             resolution,
           }),

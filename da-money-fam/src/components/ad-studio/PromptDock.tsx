@@ -157,7 +157,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="image/*,audio/mpeg,audio/mp3,audio/wav,.mp3,.wav"
               multiple
               className="hidden"
               onChange={(e) => {
@@ -169,7 +169,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
               type="button"
               onClick={() => fileRef.current?.click()}
               className="absolute right-3 bottom-3 w-8 h-8 rounded-full border border-gold/30 text-gold hover:bg-gold hover:text-black transition-colors text-lg leading-none"
-              title="Add reference images"
+              title="Add stills or MP3/WAV"
             >
               +
             </button>
@@ -181,7 +181,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="image/*,audio/mpeg,audio/mp3,audio/wav,.mp3,.wav"
               multiple
               className="hidden"
               onChange={(e) => {
@@ -194,10 +194,10 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
               onClick={() => fileRef.current?.click()}
               className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold/25 text-gold/80 hover:border-gold"
             >
-              + Refs
+              + Refs / audio
             </button>
             <span className="text-[10px] text-white/35">
-              Scenes use shared refs; last frame chains between shots
+              Scenes use shared stills and one MP3/WAV; last frame chains between shots
             </span>
           </div>
         )}
@@ -208,11 +208,24 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
               <div key={`${index}-${ref.url.slice(0, 24)}`} className="w-16 flex flex-col gap-1">
                 <div
                   className={`relative w-16 h-14 rounded-lg overflow-hidden border ${
-                    ref.useAsFirstFrame || ref.useAsLastFrame ? 'border-gold' : 'border-gold/25'
+                    ref.kind === 'audio'
+                      ? 'border-gold/40 bg-black/60'
+                      : ref.useAsFirstFrame || ref.useAsLastFrame
+                        ? 'border-gold'
+                        : 'border-gold/25'
                   }`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={ref.url} alt="" className="w-full h-full object-cover" />
+                  {ref.kind === 'audio' ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center px-1">
+                      <span className="text-gold text-[9px] uppercase tracking-wider">MP3</span>
+                      <span className="text-white/50 text-[8px] truncate w-full text-center">
+                        {ref.name || 'audio'}
+                      </span>
+                    </div>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={ref.url} alt="" className="w-full h-full object-cover" />
+                  )}
                   <button
                     type="button"
                     onClick={() => studio.removeReference(index)}
@@ -221,29 +234,33 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                     ×
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => studio.toggleFirstFrame(index)}
-                  className={`text-[7px] uppercase tracking-wide px-1 py-0.5 rounded border ${
-                    ref.useAsFirstFrame
-                      ? 'bg-gold/20 border-gold text-gold'
-                      : 'border-white/15 text-white/40'
-                  }`}
-                >
-                  {ref.useAsFirstFrame ? 'First' : 'As first'}
-                </button>
-                {modelCfg.supportsLastFrame && (
-                  <button
-                    type="button"
-                    onClick={() => studio.toggleLastFrame(index)}
-                    className={`text-[7px] uppercase tracking-wide px-1 py-0.5 rounded border ${
-                      ref.useAsLastFrame
-                        ? 'bg-gold/20 border-gold text-gold'
-                        : 'border-white/15 text-white/40'
-                    }`}
-                  >
-                    {ref.useAsLastFrame ? 'Last' : 'As last'}
-                  </button>
+                {ref.kind !== 'audio' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => studio.toggleFirstFrame(index)}
+                      className={`text-[7px] uppercase tracking-wide px-1 py-0.5 rounded border ${
+                        ref.useAsFirstFrame
+                          ? 'bg-gold/20 border-gold text-gold'
+                          : 'border-white/15 text-white/40'
+                      }`}
+                    >
+                      {ref.useAsFirstFrame ? 'First' : 'As first'}
+                    </button>
+                    {modelCfg.supportsLastFrame && (
+                      <button
+                        type="button"
+                        onClick={() => studio.toggleLastFrame(index)}
+                        className={`text-[7px] uppercase tracking-wide px-1 py-0.5 rounded border ${
+                          ref.useAsLastFrame
+                            ? 'bg-gold/20 border-gold text-gold'
+                            : 'border-white/15 text-white/40'
+                        }`}
+                      >
+                        {ref.useAsLastFrame ? 'Last' : 'As last'}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             ))}
