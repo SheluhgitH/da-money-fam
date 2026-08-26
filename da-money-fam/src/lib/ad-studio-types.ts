@@ -6,6 +6,8 @@ export interface AdReferenceImage {
   useAsLastFrame?: boolean
   kind?: 'image' | 'audio'
   name?: string
+  /** Auto/user role for seamless in-video placement (not Seedance frame locks). */
+  refRole?: 'opening_subject' | 'appears_later' | 'identity'
 }
 
 export interface AdVideoPricingResponse {

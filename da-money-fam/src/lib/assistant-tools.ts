@@ -199,14 +199,34 @@ export const ASSISTANT_TOOLS: OpenAiTool[] = [
     type: 'function',
     function: {
       name: 'attachLibraryRef',
-      description: 'Attach a library image/video URL as an Ad Studio reference.',
+      description:
+        'Attach an image URL as an Ad Studio identity reference (living subject in motion). Always pass asFirstFrame=false — never lock user stills as frozen first/last frames.',
       parameters: {
         type: 'object',
         properties: {
           url: { type: 'string' },
-          asFirstFrame: { type: 'boolean' },
+          asFirstFrame: {
+            type: 'boolean',
+            description: 'Must be false. Identity-only attachment.',
+          },
         },
         required: ['url'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'classifyRefs',
+      description:
+        'Classify attached still URLs into opening_subject / appears_later / identity for video timing. Returns roles JSON.',
+      parameters: {
+        type: 'object',
+        properties: {
+          brief: { type: 'string' },
+          urls: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['urls'],
       },
     },
   },
@@ -264,7 +284,13 @@ export const ASSISTANT_TOOLS: OpenAiTool[] = [
   },
 ]
 
-const SERVER_TOOLS = new Set(['quoteImage', 'quoteVideo', 'listLibrary', 'searchBlog'])
+const SERVER_TOOLS = new Set([
+  'quoteImage',
+  'quoteVideo',
+  'listLibrary',
+  'searchBlog',
+  'classifyRefs',
+])
 
 export function isServerTool(name: string): boolean {
   return SERVER_TOOLS.has(name)
@@ -383,6 +409,16 @@ export async function executeServerTool(
       })
     }
 
+    if (name === 'classifyRefs') {
+      const urls = Array.isArray(args.urls)
+        ? args.urls.filter((u): u is string => typeof u === 'string' && u.startsWith('http'))
+        : []
+      const brief = typeof args.brief === 'string' ? args.brief : ''
+      const { classifyReferenceRoles } = await import('@/lib/classify-reference-roles')
+      const result = await classifyReferenceRoles({ brief, urls })
+      return JSON.stringify(result)
+    }
+
     return JSON.stringify({ error: `Unknown server tool: ${name}` })
   } catch (err) {
     return JSON.stringify({
@@ -440,7 +476,7 @@ export function clientToolToAction(
         ? {
             type: 'attachLibraryRef',
             url: args.url,
-            asFirstFrame: args.asFirstFrame === true,
+            asFirstFrame: false,
           }
         : null
     case 'continueStoryboard':

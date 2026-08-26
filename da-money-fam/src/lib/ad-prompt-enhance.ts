@@ -95,9 +95,10 @@ Rules:
 - Preserve creative choices: ${fragments.join('; ')}
 - DMF brand: luxury hip-hop, gold and black, premium commercial polish.
 - Physical realism: solid props occlude the body; no limbs or torso passing through furniture, trees, railings, or benches; feet stay on the ground when walking.
+- Timing: early scenes open on the primary subject; products and secondary cast appear later unless a scene brief demands them now. Never treat reference stills as frozen first/last frames.
 ${
   referenceUrls.length
-    ? '- Preserve identity and wardrobe from reference images. Do not treat a reference as a literal opening still; put the subject in the scene action. When chaining scenes, preserve environment layout and depth from the prior shot; avoid intersection artifacts with props.'
+    ? '- Preserve identity and wardrobe from reference images. Do not treat a reference as a literal opening still; put the subject in the scene action. When chaining scenes, preserve environment layout and depth from the prior shot; avoid intersection artifacts with props. Keep later subjects out of scene-1 opens.'
     : ''
 }
 ${selections.motion === 'walking' ? '- Walking: natural gait, clear path that avoids obstacles, no clipping through static props.' : ''}`

@@ -3,6 +3,7 @@ import {
   getChatFallbackChain,
   isGroqConfigured,
   isOpenRouterConfigured,
+  messageHasImages,
 } from '@/lib/chat-models'
 import {
   ASSISTANT_TOOLS,
@@ -13,9 +14,13 @@ import {
 } from '@/lib/assistant-tools'
 import type { AssistantAction } from '@/lib/assistant-actions'
 
+export type ChatContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'image_url'; image_url: { url: string } }
+
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system' | 'tool'
-  content: string | null
+  content: string | null | ChatContentPart[]
   tool_calls?: ToolCallMessage[]
   tool_call_id?: string
   name?: string
@@ -238,10 +243,15 @@ export async function streamChatWithTools(
     )
   }
 
-  const chain = getChatFallbackChain(requestedModel)
+  const requiresVision = messageHasImages(messages)
+  const chain = getChatFallbackChain(requestedModel, { requiresVision })
   if (chain.length === 0) {
     return new Response(
-      JSON.stringify({ error: 'No AI API Key is configured correctly' }),
+      JSON.stringify({
+        error: requiresVision
+          ? 'Vision chat requires OpenRouter. Attach images after configuring OPENROUTER_API_KEY.'
+          : 'No AI API Key is configured correctly',
+      }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }
@@ -393,10 +403,15 @@ export async function streamChatWithFallback(
     )
   }
 
-  const chain = getChatFallbackChain(requestedModel)
+  const requiresVision = messageHasImages(messages)
+  const chain = getChatFallbackChain(requestedModel, { requiresVision })
   if (chain.length === 0) {
     return new Response(
-      JSON.stringify({ error: 'No AI API Key is configured correctly' }),
+      JSON.stringify({
+        error: requiresVision
+          ? 'Vision chat requires OpenRouter. Attach images after configuring OPENROUTER_API_KEY.'
+          : 'No AI API Key is configured correctly',
+      }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }

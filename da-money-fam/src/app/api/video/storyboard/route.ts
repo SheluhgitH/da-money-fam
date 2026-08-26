@@ -10,6 +10,29 @@ import type { StoryboardScene } from '@/lib/ad-studio-types'
 import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
 import { composeVideoFirstFrame } from '@/lib/compose-video-first-frame'
 import { appendStoryboardContinuity } from '@/lib/storyboard-prompts'
+import {
+  classifyReferenceRoles,
+  openingSubjectUrls,
+  type ReferenceRoleKind,
+} from '@/lib/classify-reference-roles'
+
+function refOverridesFromSource(refSource: unknown): Record<string, ReferenceRoleKind> {
+  const out: Record<string, ReferenceRoleKind> = {}
+  if (!Array.isArray(refSource)) return out
+  for (const item of refSource) {
+    if (!item || typeof item !== 'object') continue
+    const rec = item as { url?: unknown; refRole?: unknown }
+    if (typeof rec.url !== 'string') continue
+    if (
+      rec.refRole === 'opening_subject' ||
+      rec.refRole === 'appears_later' ||
+      rec.refRole === 'identity'
+    ) {
+      out[rec.url] = rec.refRole
+    }
+  }
+  return out
+}
 
 export const maxDuration = 120
 
@@ -84,17 +107,39 @@ export async function POST(req: Request) {
       `${sceneBriefs[0]}. Scene 1 of ${sceneCount} in a continuous ad storyboard.`,
       { walking: creativeSel?.motion === 'walking' }
     )
-    const hasStills = toInputReferences(reference_images).length > 0
+    const stillRefs = toInputReferences(reference_images)
+    const hasStills = stillRefs.length > 0
+    const refUrls = stillRefs.map((r) => r.image_url.url)
+    const refNames = Array.isArray(reference_images)
+      ? reference_images.map((item: unknown) =>
+          item && typeof item === 'object' && 'name' in item
+            ? String((item as { name?: unknown }).name || '')
+            : undefined
+        )
+      : []
+    const classified = hasStills
+      ? await classifyReferenceRoles({
+          brief: sceneBriefs.join(' / '),
+          urls: refUrls,
+          names: refNames,
+          overrides: refOverridesFromSource(reference_images),
+        })
+      : { roles: [], shotPlan: '' }
+    const openUrls = openingSubjectUrls(classified.roles)
+    const scene1Brief = classified.shotPlan
+      ? `${continuityBrief} ${classified.shotPlan}`
+      : continuityBrief
     const composedFirst = hasStills
       ? await composeVideoFirstFrame({
           userId: user.id,
-          brief: continuityBrief,
+          brief: scene1Brief,
           aspectRatio: typeof aspect_ratio === 'string' ? aspect_ratio : '9:16',
           referenceImages: reference_images,
+          openingRefUrls: openUrls.length ? openUrls : undefined,
         })
       : null
     const result = await submitSeedanceJob({
-      brief: continuityBrief,
+      brief: scene1Brief,
       creative: creativeSel,
       enhance: wantsEnhance,
       duration,
@@ -107,6 +152,7 @@ export async function POST(req: Request) {
       resolution,
       storyboardMode: true,
       ignoreRefFrames: true,
+      shotPlan: classified.shotPlan || null,
     })
 
     const scenes: StoryboardScene[] = sceneBriefs.map((brief, i) => ({

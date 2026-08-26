@@ -34,6 +34,8 @@ interface Message {
   reasoning?: string
   timestamp: number
   imageUrl?: string
+  /** User-uploaded stills for this turn (chat vision). */
+  imageUrls?: string[]
   videoUrl?: string
   assets?: Array<{
     id: string
@@ -150,6 +152,9 @@ export default function PremiumChat() {
   const [muted, setMuted] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [messageInput, setMessageInput] = useState('')
+  const [pendingImages, setPendingImages] = useState<string[]>([])
+  const [uploadingImages, setUploadingImages] = useState(false)
+  const chatFileRef = useRef<HTMLInputElement>(null)
   const [selectedModel, setSelectedModel] = useState('google/gemma-4-31b-it')
   const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([])
 
@@ -385,20 +390,58 @@ export default function PremiumChat() {
 
   const handleSend = async (customMessage?: string) => {
     const textToSend = customMessage || messageInput
-    if (!textToSend.trim() || isTyping) return
+    const imagesToSend = [...pendingImages]
+    if ((!textToSend.trim() && imagesToSend.length === 0) || isTyping || uploadingImages) return
 
-    const userMsg: Message = { sender: 'user', text: textToSend, timestamp: Date.now() }
+    const caption =
+      textToSend.trim() ||
+      (imagesToSend.length
+        ? 'Use these images for an Ad Studio video — detect who opens vs what appears later.'
+        : '')
+
+    const userMsg: Message = {
+      sender: 'user',
+      text: caption,
+      timestamp: Date.now(),
+      imageUrls: imagesToSend.length ? imagesToSend : undefined,
+    }
     updateCurrentChatMessages((prev) => [...prev, userMsg])
     setMessageInput('')
+    setPendingImages([])
     setIsTyping(true)
 
     try {
       const prior = (currentChat?.messages || [])
         .filter((m) => m.text !== 'Welcome to DMF Premium. How can I assist you today?')
-        .map((m) => ({
-          role: m.sender === 'user' ? 'user' : 'assistant',
-          content: m.text,
-        }))
+        .map((m) => {
+          if (m.imageUrls?.length) {
+            return {
+              role: m.sender === 'user' ? 'user' : 'assistant',
+              content: [
+                { type: 'text' as const, text: m.text },
+                ...m.imageUrls.map((url) => ({
+                  type: 'image_url' as const,
+                  image_url: { url },
+                })),
+              ],
+            }
+          }
+          return {
+            role: m.sender === 'user' ? 'user' : 'assistant',
+            content: m.text,
+          }
+        })
+
+      const userContent =
+        imagesToSend.length > 0
+          ? [
+              { type: 'text' as const, text: caption },
+              ...imagesToSend.map((url) => ({
+                type: 'image_url' as const,
+                image_url: { url },
+              })),
+            ]
+          : caption
 
       const path = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
       let studioSnap = ''
@@ -413,7 +456,7 @@ export default function PremiumChat() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [...prior, { role: 'user', content: textToSend }],
+          messages: [...prior, { role: 'user', content: userContent }],
           model: selectedModel,
           pageContext: buildPageContext({ path, studioSnap, account }),
         }),
@@ -553,6 +596,54 @@ export default function PremiumChat() {
     }
   }
   handleSendRef.current = handleSend
+
+  const MAX_CHAT_IMAGES = 4
+
+  const attachChatImages = (files: FileList | File[] | null) => {
+    if (!files?.length || uploadingImages) return
+    const list = Array.from(files).filter(
+      (f) => f.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|heic)$/i.test(f.name)
+    )
+    if (!list.length) return
+
+    void (async () => {
+      setUploadingImages(true)
+      try {
+        const { compressImageForUpload } = await import('@/lib/compress-image')
+        const room = Math.max(0, MAX_CHAT_IMAGES - pendingImages.length)
+        for (const file of list.slice(0, room)) {
+          const compressed = await compressImageForUpload(file)
+          const res = await fetch('/api/ad-studio/upload-ref', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              dataUrl: compressed.dataUrl,
+              contentType: compressed.contentType,
+            }),
+          })
+          const data = await res.json()
+          if (!res.ok || typeof data.url !== 'string') {
+            throw new Error(data.error || 'Upload failed')
+          }
+          setPendingImages((prev) =>
+            prev.length >= MAX_CHAT_IMAGES ? prev : [...prev, data.url as string]
+          )
+        }
+      } catch (err) {
+        updateCurrentChatMessages((prev) => [
+          ...prev,
+          {
+            sender: 'bot',
+            text: err instanceof Error ? err.message : 'Could not attach that image.',
+            timestamp: Date.now(),
+          },
+        ])
+      } finally {
+        setUploadingImages(false)
+        if (chatFileRef.current) chatFileRef.current.value = ''
+      }
+    })()
+  }
 
   const runParsedActions = async (actions: AssistantAction[]) => {
     const seen = new Set<string>()
@@ -1140,7 +1231,33 @@ export default function PremiumChat() {
                 </div>
               )
             })()}
-            <div className="flex items-end gap-2">
+            <div className="flex flex-col gap-2">
+              {pendingImages.length > 0 && (
+                <div className="flex gap-1.5 flex-wrap">
+                  {pendingImages.map((url) => (
+                    <div key={url} className="relative h-10 w-10">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="" className="h-10 w-10 rounded object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setPendingImages((prev) => prev.filter((u) => u !== url))}
+                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-black text-white text-[8px]"
+                      >
+                        x
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-end gap-2">
+              <button
+                type="button"
+                onClick={() => chatFileRef.current?.click()}
+                className="shrink-0 h-10 px-2 rounded-xl border border-gold/30 text-gold text-[9px] uppercase"
+                title="Attach images"
+              >
+                Img
+              </button>
               <textarea
                 rows={2}
                 value={messageInput}
@@ -1164,12 +1281,17 @@ export default function PremiumChat() {
               </button>
               <button
                 type="button"
-                disabled={isTyping || !messageInput.trim()}
+                disabled={
+                  isTyping ||
+                  uploadingImages ||
+                  (!messageInput.trim() && pendingImages.length === 0)
+                }
                 onClick={() => void handleSend()}
                 className="shrink-0 h-10 px-3 rounded-xl bg-gold text-black text-[10px] uppercase tracking-wider font-bold disabled:opacity-40"
               >
                 Send
               </button>
+              </div>
             </div>
             <div className="mt-2 flex items-center justify-between">
               <button
@@ -1507,7 +1629,22 @@ export default function PremiumChat() {
                               </div>
                             </div>
                           ) : (
-                            msg.text
+                            <div className="flex flex-col gap-2">
+                              {msg.imageUrls && msg.imageUrls.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {msg.imageUrls.map((url) => (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      key={url}
+                                      src={url}
+                                      alt=""
+                                      className="h-16 w-16 rounded-lg object-cover border border-black/20"
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                              {msg.text}
+                            </div>
                           )}
                         </div>
                         <span className="text-[8px] text-white/20 uppercase tracking-tighter">
@@ -1548,10 +1685,56 @@ export default function PremiumChat() {
                       </div>
                     )}
 
-                    <div className="p-4 md:p-6 flex gap-3 items-end">
+                    <div className="p-4 md:p-6 flex flex-col gap-2">
+                      <input
+                        ref={chatFileRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif,.heic"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => attachChatImages(e.target.files)}
+                      />
+                      {pendingImages.length > 0 && (
+                        <div className="flex gap-2 flex-wrap px-1">
+                          {pendingImages.map((url) => (
+                            <div key={url} className="relative h-14 w-14">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={url}
+                                alt=""
+                                className="h-14 w-14 rounded-lg object-cover border border-gold/30"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPendingImages((prev) => prev.filter((u) => u !== url))
+                                }
+                                className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-black text-white text-[10px]"
+                              >
+                                x
+                              </button>
+                            </div>
+                          ))}
+                          {uploadingImages && (
+                            <span className="text-[9px] text-gold/60 self-center uppercase tracking-wider">
+                              Uploading…
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <div className="flex gap-3 items-end">
+                      <button
+                        type="button"
+                        onClick={() => chatFileRef.current?.click()}
+                        disabled={uploadingImages || pendingImages.length >= MAX_CHAT_IMAGES}
+                        className="shrink-0 h-[52px] w-[52px] rounded-[18px] border border-gold/30 text-gold text-[10px] uppercase tracking-wider font-bold disabled:opacity-40"
+                        title="Attach images"
+                      >
+                        Img
+                      </button>
                       <div className="grow relative bg-white/5 border border-white/10 rounded-[18px] transition-all focus-within:border-gold">
                         <textarea
-                          placeholder="Ask DMF anything…"
+                          placeholder="Ask DMF anything… or attach stills"
                           rows={1}
                           className="w-full bg-transparent p-4 pr-12 text-white text-[13px] outline-none resize-none no-scrollbar"
                           value={messageInput}
@@ -1559,7 +1742,7 @@ export default function PremiumChat() {
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault()
-                              handleSend()
+                              void handleSend()
                             }
                           }}
                         />
@@ -1585,8 +1768,10 @@ export default function PremiumChat() {
                         </button>
                       </div>
                       <button
-                        onClick={() => handleSend()}
-                        disabled={!messageInput.trim()}
+                        onClick={() => void handleSend()}
+                        disabled={
+                          (!messageInput.trim() && pendingImages.length === 0) || uploadingImages
+                        }
                         className="bg-gold border-none w-[52px] h-[52px] rounded-[18px] flex items-center justify-center cursor-pointer hover:scale-105 hover:bg-white transition-all disabled:opacity-10 shadow-xl shadow-gold/10 group"
                       >
                         <svg
@@ -1604,6 +1789,7 @@ export default function PremiumChat() {
                           <path d="M22 2 11 13" />
                         </svg>
                       </button>
+                      </div>
                     </div>
                   </div>
                 </>

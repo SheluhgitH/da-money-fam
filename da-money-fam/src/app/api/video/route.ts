@@ -9,6 +9,30 @@ import { createAdStudioGeneration } from '@/lib/ad-studio-jobs'
 import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
 import { FROM_STILL_VIDEO } from '@/lib/studio-templates'
 import { composeVideoFirstFrame } from '@/lib/compose-video-first-frame'
+import {
+  classifyReferenceRoles,
+  openingSubjectUrls,
+  type ReferenceRoleKind,
+} from '@/lib/classify-reference-roles'
+import { toInputReferences } from '@/lib/seedance-submit'
+
+function refOverridesFromSource(refSource: unknown): Record<string, ReferenceRoleKind> {
+  const out: Record<string, ReferenceRoleKind> = {}
+  if (!Array.isArray(refSource)) return out
+  for (const item of refSource) {
+    if (!item || typeof item !== 'object') continue
+    const rec = item as { url?: unknown; refRole?: unknown }
+    if (typeof rec.url !== 'string') continue
+    if (
+      rec.refRole === 'opening_subject' ||
+      rec.refRole === 'appears_later' ||
+      rec.refRole === 'identity'
+    ) {
+      out[rec.url] = rec.refRole
+    }
+  }
+  return out
+}
 
 export const maxDuration = 120
 
@@ -91,12 +115,31 @@ export async function POST(req: Request) {
 
     const jobs: Array<{ jobId: string; variationIndex: number }> = []
 
+    const refUrls = toInputReferences(refSource).map((r) => r.image_url.url)
+    const refNames = Array.isArray(refSource)
+      ? refSource.map((item: unknown) =>
+          item && typeof item === 'object' && 'name' in item
+            ? String((item as { name?: unknown }).name || '')
+            : undefined
+        )
+      : []
+    const classified = hasRefs
+      ? await classifyReferenceRoles({
+          brief: userBrief,
+          urls: refUrls,
+          names: refNames,
+          overrides: refOverridesFromSource(refSource),
+        })
+      : { roles: [], shotPlan: '' }
+    const openUrls = openingSubjectUrls(classified.roles)
+
     const composedFirst = hasRefs
       ? await composeVideoFirstFrame({
           userId: user.id,
           brief: userBrief,
           aspectRatio: typeof aspect_ratio === 'string' ? aspect_ratio : '9:16',
           referenceImages: refSource,
+          openingRefUrls: openUrls.length ? openUrls : undefined,
         })
       : null
 
@@ -119,6 +162,7 @@ export async function POST(req: Request) {
           model: model.key,
           resolution,
           ignoreRefFrames: true,
+          shotPlan: classified.shotPlan || null,
         })
         jobs.push({ jobId: result.jobId, variationIndex: i })
       } catch (err) {

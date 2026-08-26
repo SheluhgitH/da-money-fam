@@ -124,6 +124,8 @@ export async function submitSeedanceJob(input: {
   ignoreRefFrames?: boolean
   /** Storyboard scenes: refs are identity/style unless user locked a first/last frame. */
   storyboardMode?: boolean
+  /** Timing plan from reference role classifier (appended to prompt). */
+  shotPlan?: string | null
 }): Promise<{ jobId: string; pollingUrl?: string; modelId: string }> {
   const openRouterApiKey = process.env.OPENROUTER_API_KEY
   if (!openRouterApiKey || openRouterApiKey === 'your_openrouter_key_here') {
@@ -194,6 +196,10 @@ export async function submitSeedanceJob(input: {
 
   if (input.storyboardMode) {
     finalPrompt = `${finalPrompt} ${STORYBOARD_PHYSICS_SUFFIX}`
+  }
+
+  if (typeof input.shotPlan === 'string' && input.shotPlan.trim()) {
+    finalPrompt = `${finalPrompt} Shot timing: ${input.shotPlan.trim()}`
   }
 
   if (audioReferences.length > 0) {

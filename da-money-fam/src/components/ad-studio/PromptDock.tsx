@@ -478,6 +478,20 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                     x
                   </button>
                 </div>
+                {ref.kind !== 'audio' && (
+                  <button
+                    type="button"
+                    onClick={() => studio.cycleRefRole(index)}
+                    className="text-[8px] uppercase tracking-wider text-gold/80 border border-gold/20 rounded-full py-0.5 hover:bg-gold/10"
+                    title="Tap to cycle: Opens → Later → Identity"
+                  >
+                    {ref.refRole === 'opening_subject'
+                      ? 'Opens'
+                      : ref.refRole === 'appears_later'
+                        ? 'Later'
+                        : 'Identity'}
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -485,7 +499,8 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
 
         {studio.references.some((r) => r.kind !== 'audio') && (
           <p className="text-[10px] text-white/40">
-            Stills are used for identity. Gemini composes the opening frame from your prompt.
+            Stills guide identity and timing—they are not frozen start/end frames. Tap a badge to
+            override (Opens / Later / Identity).
           </p>
         )}
 

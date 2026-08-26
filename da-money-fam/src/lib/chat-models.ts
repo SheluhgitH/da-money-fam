@@ -33,6 +33,14 @@ export const OPENROUTER_CHAT_MODELS: ChatModelOption[] = [
   },
 ]
 
+/** Vision-capable OpenRouter models for multimodal chat (images attached). */
+export const OPENROUTER_VISION_MODELS: ChatModelOption[] = [
+  { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash (Vision)', provider: 'openrouter' },
+  { id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash (Vision)', provider: 'openrouter' },
+]
+
+export const DEFAULT_VISION_MODEL = 'google/gemini-2.5-flash'
+
 /** Picker list for UI — Groq entries shown when server reports Groq configured */
 export const ALL_CHAT_MODEL_OPTIONS: ChatModelOption[] = [
   ...GROQ_CHAT_MODELS,
@@ -43,7 +51,10 @@ export const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile'
 export const DEFAULT_OPENROUTER_MODEL = 'google/gemma-4-31b-it'
 
 const GROQ_MODEL_IDS = new Set(GROQ_CHAT_MODELS.map((m) => m.id))
-const OPENROUTER_MODEL_IDS = new Set(OPENROUTER_CHAT_MODELS.map((m) => m.id))
+const OPENROUTER_MODEL_IDS = new Set([
+  ...OPENROUTER_CHAT_MODELS.map((m) => m.id),
+  ...OPENROUTER_VISION_MODELS.map((m) => m.id),
+])
 
 export function isGroqConfigured(): boolean {
   const key = process.env.GROQ_API_KEY
@@ -68,8 +79,12 @@ export function getPickerModels(): ChatModelOption[] {
 /**
  * Cascade: Groq → Gemma → openrouter/free → other OpenRouter models.
  * If the user picked a model in the UI, that attempt is tried first.
+ * When `requiresVision` is true, only OpenRouter vision models are used.
  */
-export function getChatFallbackChain(requestedModel?: string | null): ChatModelAttempt[] {
+export function getChatFallbackChain(
+  requestedModel?: string | null,
+  options?: { requiresVision?: boolean }
+): ChatModelAttempt[] {
   const chain: ChatModelAttempt[] = []
   const seen = new Set<string>()
 
@@ -78,6 +93,18 @@ export function getChatFallbackChain(requestedModel?: string | null): ChatModelA
     if (seen.has(key)) return
     seen.add(key)
     chain.push({ provider, modelId })
+  }
+
+  if (options?.requiresVision) {
+    if (isOpenRouterConfigured()) {
+      if (requestedModel && OPENROUTER_VISION_MODELS.some((m) => m.id === requestedModel)) {
+        add('openrouter', requestedModel)
+      }
+      for (const m of OPENROUTER_VISION_MODELS) add('openrouter', m.id)
+      add('openrouter', 'google/gemini-2.5-flash-lite')
+      add('openrouter', DEFAULT_OPENROUTER_MODEL)
+    }
+    return chain
   }
 
   if (requestedModel && requestedModel !== 'ollama') {
@@ -104,4 +131,25 @@ export function resolveProviderForModel(modelId: string): ChatProvider | null {
   if (GROQ_MODEL_IDS.has(modelId)) return 'groq'
   if (OPENROUTER_MODEL_IDS.has(modelId)) return 'openrouter'
   return null
+}
+
+export function messageHasImages(
+  messages: Array<{ content?: unknown }> | null | undefined
+): boolean {
+  if (!Array.isArray(messages)) return false
+  for (const m of messages) {
+    const c = m?.content
+    if (Array.isArray(c)) {
+      for (const part of c) {
+        if (
+          part &&
+          typeof part === 'object' &&
+          (part as { type?: string }).type === 'image_url'
+        ) {
+          return true
+        }
+      }
+    }
+  }
+  return false
 }

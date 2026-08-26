@@ -7,6 +7,12 @@ import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-mo
 import { extractAndUploadLastFrame } from '@/lib/storyboard-last-frame'
 import { composeVideoFirstFrame } from '@/lib/compose-video-first-frame'
 import { appendStoryboardContinuity } from '@/lib/storyboard-prompts'
+import {
+  appearsLaterUrls,
+  classifyReferenceRoles,
+  openingSubjectUrls,
+} from '@/lib/classify-reference-roles'
+import { toInputReferences } from '@/lib/seedance-submit'
 
 export const maxDuration = 120
 
@@ -71,8 +77,42 @@ export async function POST(
   const scene = gen.scenes[nextIndex]
   const sceneCount = gen.scenes.length
   const creative = gen.creative as Partial<CreativeSelections> | null
+  const isLastScene = nextIndex === sceneCount - 1
+  const refUrls = toInputReferences(reference_images).map((r) => r.image_url.url)
+  const classified = refUrls.length
+    ? await classifyReferenceRoles({
+        brief: scene.brief,
+        urls: refUrls,
+        overrides: (() => {
+          const out: Record<string, 'opening_subject' | 'appears_later' | 'identity'> = {}
+          if (!Array.isArray(reference_images)) return out
+          for (const item of reference_images) {
+            if (!item || typeof item !== 'object') continue
+            const rec = item as { url?: unknown; refRole?: unknown }
+            if (typeof rec.url !== 'string') continue
+            if (
+              rec.refRole === 'opening_subject' ||
+              rec.refRole === 'appears_later' ||
+              rec.refRole === 'identity'
+            ) {
+              out[rec.url] = rec.refRole
+            }
+          }
+          return out
+        })(),
+      })
+    : { roles: [], shotPlan: '' }
+  const later = appearsLaterUrls(classified.roles)
+  const laterHint =
+    isLastScene && later.length
+      ? ' Feature the later subjects (product / secondary cast) as living subjects in this shot; keep identity from refs.'
+      : nextIndex === 0
+        ? ''
+        : later.length
+          ? ' You may begin introducing later subjects if the brief calls for it; keep them out of a cold open.'
+          : ''
   const continuityBrief = appendStoryboardContinuity(
-    `${scene.brief}. Scene ${nextIndex + 1} of ${sceneCount} in a continuous ad storyboard. Continue seamlessly from the previous shot.`,
+    `${scene.brief}. Scene ${nextIndex + 1} of ${sceneCount} in a continuous ad storyboard. Continue seamlessly from the previous shot.${laterHint}`,
     { walking: creative?.motion === 'walking' }
   )
   const model = resolveSeedanceModel(gen.model)
@@ -80,11 +120,13 @@ export async function POST(
   // Only compose when we have no continuity frame — never replace the last frame.
   let composedFirst: string | null = null
   if (!continuityFrame) {
+    const openUrls = openingSubjectUrls(classified.roles)
     composedFirst = await composeVideoFirstFrame({
       userId: user.id,
       brief: continuityBrief,
       aspectRatio: gen.aspect_ratio || '9:16',
       referenceImages: reference_images,
+      openingRefUrls: openUrls.length ? openUrls : undefined,
     })
   }
 
@@ -104,6 +146,7 @@ export async function POST(
       ignoreRefFrames: true,
       storyboardMode: true,
       resolution: resolveSubmitResolution(model, resolution),
+      shotPlan: classified.shotPlan || null,
     })
 
     const scenes = gen.scenes.map((s, i) =>

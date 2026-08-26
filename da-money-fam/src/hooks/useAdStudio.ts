@@ -32,6 +32,7 @@ import {
 import { resolvePlayableVideoUrls } from '@/lib/ad-studio-video-urls'
 import { compressImageForUpload } from '@/lib/compress-image'
 import { FROM_STILL_VIDEO } from '@/lib/studio-templates'
+import { classifyReferenceRolesHeuristic } from '@/lib/classify-reference-roles'
 
 const DRAFT_KEY = 'dmf-ad-studio-draft-v1'
 const POLL_TIMEOUT_MS = 8 * 60 * 1000
@@ -629,9 +630,27 @@ export function useAdStudio(initialBrief = '') {
           })
           const data = await res.json()
           if (!res.ok) throw new Error(data.error || 'Upload failed')
-          setReferences((prev) =>
-            prev.map((r) => (r.url === localPreview ? { ...r, url: data.url as string } : r))
-          )
+          setReferences((prev) => {
+            const next = prev.map((r) =>
+              r.url === localPreview
+                ? {
+                    ...r,
+                    url: data.url as string,
+                    name: file.name,
+                  }
+                : r
+            )
+            const images = next.filter(isImageRef)
+            const classified = classifyReferenceRolesHeuristic(
+              images.map((r) => r.url),
+              images.map((r) => r.name)
+            )
+            return next.map((r) => {
+              if (r.kind === 'audio') return r
+              const hit = classified.roles.find((c) => c.url === r.url)
+              return hit && !r.refRole ? { ...r, refRole: hit.role } : r
+            })
+          })
           URL.revokeObjectURL(localPreview)
         } catch (err) {
           setReferences((prev) => prev.filter((r) => r.url !== localPreview))
@@ -665,6 +684,19 @@ export function useAdStudio(initialBrief = '') {
           ? { ...img, useAsLastFrame: !img.useAsLastFrame, useAsFirstFrame: false }
           : { ...img, useAsLastFrame: false }
       )
+    })
+  }
+
+  const cycleRefRole = (index: number) => {
+    setReferences((prev) => {
+      if (prev[index]?.kind === 'audio') return prev
+      const order = ['opening_subject', 'appears_later', 'identity'] as const
+      return prev.map((img, i) => {
+        if (i !== index) return img
+        const cur = img.refRole || 'identity'
+        const next = order[(order.indexOf(cur as (typeof order)[number]) + 1) % order.length]
+        return { ...img, refRole: next, useAsFirstFrame: false, useAsLastFrame: false }
+      })
     })
   }
 
@@ -959,8 +991,9 @@ export function useAdStudio(initialBrief = '') {
               url: r.url,
               kind: r.kind,
               name: r.name,
-              useAsFirstFrame: r.useAsFirstFrame === true,
-              useAsLastFrame: r.useAsLastFrame === true,
+              useAsFirstFrame: false,
+              useAsLastFrame: false,
+              refRole: r.refRole || 'identity',
             })),
             model: modelKey,
             generate_audio: generateAudio || references.some((r) => r.kind === 'audio'),
@@ -1000,6 +1033,8 @@ export function useAdStudio(initialBrief = '') {
                   url: r.url,
                   useAsFirstFrame: false,
                   useAsLastFrame: false,
+                  refRole: r.refRole || 'identity',
+                  name: r.name,
                 })),
                 enhance,
                 generate_audio: generateAudio || references.some((r) => r.kind === 'audio'),
@@ -1288,6 +1323,7 @@ export function useAdStudio(initialBrief = '') {
     removeReference,
     toggleFirstFrame,
     toggleLastFrame,
+    cycleRefRole,
     lookOpen,
     setLookOpen,
     pricing,
