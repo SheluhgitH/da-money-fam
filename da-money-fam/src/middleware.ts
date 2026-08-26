@@ -1,6 +1,22 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms)
+    promise.then(
+      (v) => {
+        clearTimeout(t)
+        resolve(v)
+      },
+      (err) => {
+        clearTimeout(t)
+        reject(err)
+      }
+    )
+  })
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   let response = NextResponse.next({ request: { headers: request.headers } })
@@ -27,7 +43,12 @@ export async function middleware(request: NextRequest) {
       },
     })
 
-    await supabase.auth.getUser()
+    // Fail open: never block the site if Supabase is slow
+    try {
+      await withTimeout(supabase.auth.getUser(), 2500)
+    } catch {
+      /* ignore */
+    }
   }
 
   if (pathname.startsWith('/store/audio')) {
@@ -72,9 +93,20 @@ export async function middleware(request: NextRequest) {
           remove() {},
         },
       })
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        return NextResponse.redirect(new URL(`/login?redirect=${encodeURIComponent(pathname)}`, request.url))
+      try {
+        const {
+          data: { user },
+        } = await withTimeout(supabase.auth.getUser(), 2500)
+        if (!user) {
+          return NextResponse.redirect(
+            new URL(`/login?redirect=${encodeURIComponent(pathname)}`, request.url)
+          )
+        }
+      } catch {
+        // Fail closed for private pages if auth is unavailable
+        return NextResponse.redirect(
+          new URL(`/login?redirect=${encodeURIComponent(pathname)}`, request.url)
+        )
       }
     }
   }
