@@ -7,6 +7,8 @@ export type AssistantAction =
   | { type: 'setBrief'; text: string }
   | { type: 'setScenes'; scenes: string[] }
   | { type: 'appendBrief'; text: string }
+  | { type: 'generateVideo'; brief: string; scenes?: string[] }
+  | { type: 'generateImage'; prompt: string; tier?: 'fast' | 'smart' }
 
 const OPEN_ALLOW = new Set([
   '/ad-studio',
@@ -63,6 +65,9 @@ function isAction(value: unknown): value is AssistantAction {
     href?: unknown
     text?: unknown
     scenes?: unknown
+    brief?: unknown
+    prompt?: unknown
+    tier?: unknown
   }
   if (rec.type === 'navigate' && typeof rec.target === 'string') return true
   if (rec.type === 'open' && typeof rec.path === 'string') return true
@@ -76,6 +81,8 @@ function isAction(value: unknown): value is AssistantAction {
   ) {
     return true
   }
+  if (rec.type === 'generateVideo' && typeof rec.brief === 'string') return true
+  if (rec.type === 'generateImage' && typeof rec.prompt === 'string') return true
   return false
 }
 
@@ -101,6 +108,25 @@ export function runAssistantActions(actions: AssistantAction[]) {
       window.dispatchEvent(new CustomEvent('dmf-studio-apply', { detail: { append: action.text } }))
     } else if (action.type === 'setScenes') {
       window.dispatchEvent(new CustomEvent('dmf-studio-apply', { detail: { scenes: action.scenes } }))
+    } else if (action.type === 'generateVideo') {
+      if (action.scenes && action.scenes.length >= 2) {
+        window.dispatchEvent(
+          new CustomEvent('dmf-studio-apply', { detail: { scenes: action.scenes } })
+        )
+      } else {
+        window.dispatchEvent(new CustomEvent('dmf-studio-apply', { detail: { brief: action.brief } }))
+      }
+      if (window.location.pathname.startsWith('/ad-studio')) {
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('dmf-studio-generate'))
+        }, 80)
+      } else {
+        const q = new URLSearchParams({
+          brief: action.brief.slice(0, 2000),
+          autogen: '1',
+        })
+        window.location.href = `/ad-studio?${q.toString()}`
+      }
     }
   }
 }

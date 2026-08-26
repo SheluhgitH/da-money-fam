@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { usePathname, useSearchParams } from 'next/navigation'
 import AssistantVoiceOverlay, { type VoicePhase } from './AssistantVoiceOverlay'
 import { parseAssistantActions, runAssistantActions } from '@/lib/assistant-actions'
-import { speakAssistantText, stopAssistantSpeech } from '@/lib/assistant-tts'
+import { speakAssistantText, stopAssistantSpeech, unlockAssistantAudio } from '@/lib/assistant-tts'
+import { ensureMicStream } from '@/lib/assistant-mic'
 import {
   ASSISTANT_MUTE_KEY,
   ASSISTANT_OPEN_EVENT,
@@ -20,6 +21,7 @@ interface Message {
   text: string
   reasoning?: string
   timestamp: number
+  imageUrl?: string
 }
 
 interface ChatSession {
@@ -28,19 +30,6 @@ interface ChatSession {
   messages: Message[]
   timestamp: number
 }
-
-interface AdVideoPricingResponse {
-  priceCoins: number
-  balance: number
-  canAfford: boolean
-  discountPercent: number
-  tierOrFanClub: string | null
-  isAuthenticated: boolean
-  fanClub?: boolean
-  canEnhance?: boolean
-}
-
-type ChatMode = 'chat' | 'ads'
 
 type Recog = {
   continuous: boolean
@@ -155,11 +144,8 @@ export default function PremiumChat() {
   const recognitionRef = useRef<{ stop: () => void } | null>(null)
   const voiceSend = useRef(false)
   const transcriptRef = useRef('')
-
-  const [chatMode, setChatMode] = useState<ChatMode>('chat')
-  const [adPrompt, setAdPrompt] = useState('')
-  const [generatedVideoUrl] = useState<string | null>(null)
-  const [adPricing, setAdPricing] = useState<AdVideoPricingResponse | null>(null)
+  const pointerHandled = useRef(false)
+  const recogInstance = useRef<Recog | null>(null)
 
   const suggestedQuestions = [
     'What services do you offer?',
@@ -167,22 +153,6 @@ export default function PremiumChat() {
     'Explain your pricing',
     'How can I book a session?',
   ]
-
-  const fetchAdPricing = useCallback(async () => {
-    try {
-      const res = await fetch('/api/video/quote')
-      if (res.ok) {
-        const data: AdVideoPricingResponse = await res.json()
-        setAdPricing(data)
-      } else {
-        console.error('Failed to fetch ad pricing', await res.json())
-        setAdPricing(null)
-      }
-    } catch (error) {
-      console.error('Error fetching ad pricing:', error)
-      setAdPricing(null)
-    }
-  }, [])
 
   useEffect(() => {
     if (!isOpen) return
@@ -195,12 +165,6 @@ export default function PremiumChat() {
       .catch(() => {})
   }, [isOpen])
 
-  useEffect(() => {
-    if (isOpen && chatMode === 'ads') {
-      fetchAdPricing()
-    }
-  }, [isOpen, chatMode, fetchAdPricing])
-
   const speak = async (text: string) => {
     stopAssistantSpeech()
     setIsSpeaking(true)
@@ -211,6 +175,8 @@ export default function PremiumChat() {
           if (voiceSend.current) setVoicePhase(warming ? 'warmup' : 'speaking')
         },
       })
+    } catch (err) {
+      console.warn('speak failed', err)
     } finally {
       setIsSpeaking(false)
     }
@@ -221,7 +187,7 @@ export default function PremiumChat() {
     setIsSpeaking(false)
   }
 
-  const startRecognition = () => {
+  const startRecognition = async () => {
     const Ctor =
       (window as unknown as { SpeechRecognition?: new () => Recog; webkitSpeechRecognition?: new () => Recog })
         .SpeechRecognition ||
@@ -230,26 +196,41 @@ export default function PremiumChat() {
       alert('Voice needs Chrome or Safari with mic permission.')
       return
     }
-    const recognition = new Ctor()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.onstart = () => setIsRecording(true)
-    recognition.onend = () => setIsRecording(false)
-    recognition.onresult = (event: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => {
-      let final = ''
-      let interim = ''
-      for (let i = 0; i < event.results.length; i++) {
-        const piece = event.results[i][0].transcript
-        if (event.results[i].isFinal) final += piece
-        else interim += piece
-      }
-      const shown = (final || interim).trim()
-      transcriptRef.current = shown
-      setVoiceTranscript(shown)
-      setMessageInput(shown)
+    try {
+      await ensureMicStream()
+    } catch {
+      alert('Microphone permission is needed to talk.')
+      return
     }
-    recognitionRef.current = recognition
-    recognition.start()
+    if (!recogInstance.current) {
+      const recognition = new Ctor()
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.onstart = () => setIsRecording(true)
+      recognition.onend = () => setIsRecording(false)
+      recognition.onresult = (event: {
+        results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>
+      }) => {
+        let final = ''
+        let interim = ''
+        for (let i = 0; i < event.results.length; i++) {
+          const piece = event.results[i][0].transcript
+          if (event.results[i].isFinal) final += piece
+          else interim += piece
+        }
+        const shown = (final || interim).trim()
+        transcriptRef.current = shown
+        setVoiceTranscript(shown)
+        setMessageInput(shown)
+      }
+      recogInstance.current = recognition
+      recognitionRef.current = recognition
+    }
+    try {
+      recogInstance.current.start()
+    } catch {
+      /* already started */
+    }
   }
 
   const createNewChat = useCallback(() => {
@@ -476,7 +457,11 @@ export default function PremiumChat() {
         setVoicePhase('done')
         voiceSend.current = false
       }
-      runAssistantActions(parsed.actions)
+      const images = parsed.actions.filter((a) => a.type === 'generateImage')
+      runAssistantActions(parsed.actions.filter((a) => a.type !== 'generateImage'))
+      for (const img of images) {
+        if (img.type === 'generateImage') await runChatImageGen(img.prompt, img.tier)
+      }
     } catch (error) {
       console.error('Chat API Error:', error)
       setIsTyping(false)
@@ -491,8 +476,83 @@ export default function PremiumChat() {
     }
   }
 
-  const makeIntoAd = (text: string) => {
-    window.location.href = `/ad-studio?brief=${encodeURIComponent(text.slice(0, 2000))}`
+  const runChatImageGen = async (prompt: string, tier: 'fast' | 'smart' = 'fast') => {
+    updateCurrentChatMessages((prev) => [
+      ...prev,
+      { sender: 'bot', text: 'Generating still…', timestamp: Date.now() },
+    ])
+    try {
+      const qRes = await fetch(`/api/images/quote?tier=${tier === 'smart' ? 'smart' : 'fast'}`)
+      if (qRes.status === 401) {
+        updateCurrentChatMessages((prev) => [
+          ...prev.slice(0, -1),
+          { sender: 'bot', text: 'Sign in to generate images.', timestamp: Date.now() },
+        ])
+        return
+      }
+      const quote = await qRes.json()
+      if (!qRes.ok) throw new Error(quote.error || 'Quote failed')
+      if (!quote.canAfford) {
+        updateCurrentChatMessages((prev) => [
+          ...prev.slice(0, -1),
+          {
+            sender: 'bot',
+            text: 'Need more Coinz. Open /coin-wallet to top up, then ask again.',
+            timestamp: Date.now(),
+          },
+        ])
+        return
+      }
+      const gRes = await fetch('/api/images/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quoteId: quote.quoteId,
+          prompt,
+          tier: quote.tier,
+          mode: 'generate',
+          aspect_ratio: '1:1',
+        }),
+      })
+      const data = await gRes.json()
+      if (gRes.status === 401) {
+        updateCurrentChatMessages((prev) => [
+          ...prev.slice(0, -1),
+          { sender: 'bot', text: 'Sign in to generate images.', timestamp: Date.now() },
+        ])
+        return
+      }
+      if (gRes.status === 402) {
+        updateCurrentChatMessages((prev) => [
+          ...prev.slice(0, -1),
+          {
+            sender: 'bot',
+            text: 'Need more Coinz. Open /coin-wallet to top up.',
+            timestamp: Date.now(),
+          },
+        ])
+        return
+      }
+      if (!gRes.ok) throw new Error(data.error || 'Generation failed')
+      updateCurrentChatMessages((prev) => [
+        ...prev.slice(0, -1),
+        {
+          sender: 'bot',
+          text: prompt.slice(0, 120),
+          imageUrl: data.url as string,
+          timestamp: Date.now(),
+        },
+      ])
+    } catch (err) {
+      updateCurrentChatMessages((prev) => [
+        ...prev.slice(0, -1),
+        {
+          sender: 'bot',
+          text: err instanceof Error ? err.message : 'Could not generate the image.',
+          timestamp: Date.now(),
+        },
+      ])
+    }
   }
 
   const homepageTab = searchParams.get('tab')
@@ -546,6 +606,7 @@ export default function PremiumChat() {
 
   const onFabPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
+    pointerHandled.current = false
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     holdTimer.current = window.setTimeout(() => {
       holding.current = true
@@ -554,11 +615,14 @@ export default function PremiumChat() {
       setVoiceAnswer('')
       setVoicePhase('listening')
       setIsOpen(false)
-      startRecognition()
+      setAskBarOpen(false)
+      void startRecognition()
     }, 220)
   }
 
-  const onFabPointerUp = () => {
+  const finishPointer = (asCancel: boolean) => {
+    if (pointerHandled.current) return
+    pointerHandled.current = true
     if (holdTimer.current) {
       window.clearTimeout(holdTimer.current)
       holdTimer.current = null
@@ -566,6 +630,7 @@ export default function PremiumChat() {
     if (holding.current) {
       holding.current = false
       recognitionRef.current?.stop()
+      unlockAssistantAudio()
       const text = transcriptRef.current.trim()
       if (text) {
         setVoicePhase('thinking')
@@ -576,15 +641,18 @@ export default function PremiumChat() {
       }
       return
     }
-    setIsOpen((open) => {
-      if (pathname.startsWith('/ad-studio')) {
-        setAskBarOpen((bar) => !bar)
-        return false
-      }
-      setAskBarOpen(false)
-      return !open
-    })
+    if (asCancel) return
+    if (pathname.startsWith('/ad-studio')) {
+      setAskBarOpen((bar) => !bar)
+      setIsOpen(false)
+      return
+    }
+    setAskBarOpen(false)
+    setIsOpen((open) => !open)
   }
+
+  const onFabPointerUp = () => finishPointer(false)
+  const onFabPointerCancel = () => finishPointer(true)
 
   if (!fabVisible && !isOpen && !voicePhase && !askBarOpen) return null
 
@@ -595,7 +663,7 @@ export default function PremiumChat() {
         type="button"
         onPointerDown={onFabPointerDown}
         onPointerUp={onFabPointerUp}
-        onPointerCancel={onFabPointerUp}
+        onPointerCancel={onFabPointerCancel}
         onContextMenu={(e) => e.preventDefault()}
         className="fixed bottom-[20px] left-[20px] md:bottom-[30px] md:left-[30px] w-[60px] h-[60px] md:w-[70px] md:h-[70px] rounded-full z-[1000] flex items-center justify-center cursor-pointer shadow-[0_8px_24px_rgba(255,215,0,0.25)] border border-gold/30 touch-none"
         style={{ background: 'linear-gradient(135deg, #FFD700, #B8860B)' }}
@@ -825,11 +893,6 @@ export default function PremiumChat() {
                     </div>
                   )}
                   <div className="flex items-center gap-2">
-                    {adPricing?.isAuthenticated && (
-                      <span className="hidden sm:inline text-[10px] font-mono text-gold/80 border border-gold/20 px-2 py-1 rounded-md">
-                        {adPricing.balance} Coinz
-                      </span>
-                    )}
                     <button
                       type="button"
                       onClick={() => setShowSettings((s) => !s)}
@@ -876,8 +939,7 @@ export default function PremiumChat() {
                   </div>
                 </div>
 
-                { chatMode === 'chat' && (
-                  <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
                       <span className="text-[9px] text-gold/50 font-bold uppercase tracking-widest shrink-0">
                         Model
@@ -901,34 +963,9 @@ export default function PremiumChat() {
                       Auto-fallback: Groq → Gemma → OpenRouter Free → others
                     </p>
                   </div>
-                )}
               </div>
 
-              <div className="flex border-b border-gold/15 bg-black/30 px-4">
-                  <button
-                    onClick={() => setChatMode('chat')}
-                    className={`flex-1 py-2.5 text-[11px] font-semibold uppercase tracking-[0.2em] transition-colors border-b ${
-                      chatMode === 'chat'
-                        ? 'text-gold border-gold'
-                        : 'text-white/35 border-transparent hover:text-white/70'
-                    }`}
-                  >
-                    Chat
-                  </button>
-                  <button
-                    onClick={() => setChatMode('ads')}
-                    className={`flex-1 py-2.5 text-[11px] font-semibold uppercase tracking-[0.2em] transition-colors border-b ${
-                      chatMode === 'ads'
-                        ? 'text-gold border-gold'
-                        : 'text-white/35 border-transparent hover:text-white/70'
-                    }`}
-                  >
-                    Ads
-                  </button>
-                </div>
-
-              {chatMode === 'chat' && (
-                <>
+              <>
                   <div
                     ref={chatAreaRef}
                     className="grow p-4 md:p-6 overflow-y-auto flex flex-col gap-5 scrollbar-thin scrollbar-thumb-gold/20"
@@ -963,15 +1000,16 @@ export default function PremiumChat() {
                         >
                           {msg.sender === 'bot' ? (
                             <div className="flex flex-col gap-2">
+                              {msg.imageUrl && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={msg.imageUrl}
+                                  alt=""
+                                  className="w-full max-h-64 object-contain rounded-lg border border-gold/20"
+                                />
+                              )}
                               <MarkdownText text={msg.text} onPreview={(code) => setPreviewCode(code)} />
                               <div className="flex justify-end gap-2">
-                                <button
-                                  onClick={() => makeIntoAd(msg.text)}
-                                  className="opacity-40 hover:opacity-100 transition-opacity text-[9px] uppercase tracking-wider text-gold"
-                                  title="Make this into an ad"
-                                >
-                                  Make ad
-                                </button>
                                 <button
                                   onClick={() => speak(msg.text)}
                                   className="opacity-20 hover:opacity-100 transition-opacity p-1"
@@ -1090,126 +1128,6 @@ export default function PremiumChat() {
                     </div>
                   </div>
                 </>
-              )}
-
-              {chatMode === 'ads' && (
-                <div className="grow p-4 md:p-6 overflow-y-auto scrollbar-thin scrollbar-thumb-gold/20 flex flex-col gap-5">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.25em] text-gold/50 mb-1">
-                      Seedance
-                    </p>
-                    <h2 className="text-xl font-serif text-gold">Ad Studio</h2>
-                    <p className="text-xs text-white/40 mt-1">
-                      Full-screen Sora-style studio for single shots and storyboards.
-                    </p>
-                  </div>
-
-                  {adPricing && adPricing.isAuthenticated ? (
-                    <>
-                      <div className="border border-gold/20 rounded-xl p-4 flex flex-col gap-2 bg-gold/[0.03]">
-                        <p className="text-xs text-white/70 uppercase tracking-wider">
-                          Balance:{' '}
-                          <span className="text-gold font-mono font-bold">
-                            {adPricing.balance} Coinz
-                          </span>
-                        </p>
-                        <p className="text-sm text-gold font-mono font-bold">
-                          {adPricing.priceCoins} Coinz / clip
-                          {adPricing.discountPercent > 0 && (
-                            <span className="text-white/50 text-xs ml-2 font-sans font-normal">
-                              −{adPricing.discountPercent}% · {adPricing.tierOrFanClub}
-                            </span>
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-col gap-2">
-                        <label className="text-xs text-white/70 uppercase tracking-wider">
-                          Quick brief
-                        </label>
-                        <textarea
-                          className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white text-sm outline-none focus:border-gold resize-none"
-                          rows={3}
-                          value={adPrompt}
-                          onChange={(e) => setAdPrompt(e.target.value)}
-                          placeholder="Optional — opens with this prompt in Ad Studio…"
-                        />
-                      </div>
-
-                      <a
-                        href={
-                          adPrompt.trim()
-                            ? `/ad-studio?brief=${encodeURIComponent(adPrompt.trim())}`
-                            : '/ad-studio'
-                        }
-                        className="bg-gold text-black py-3 rounded-full text-sm font-bold uppercase tracking-widest hover:bg-white transition-colors text-center"
-                      >
-                        Open Ad Studio
-                      </a>
-
-                      <div className="flex flex-wrap gap-2">
-                        {[
-                          {
-                            label: 'Artist drop',
-                            prompt:
-                              'Cinematic vertical promo for a DMF artist single drop — gold accents, night city energy, luxury hip-hop aesthetic.',
-                          },
-                          {
-                            label: 'Editing service',
-                            prompt:
-                              'Sleek ad for DMF commercial video editing — before/after energy, crisp cuts, premium gold-black brand feel.',
-                          },
-                          {
-                            label: 'Event promo',
-                            prompt:
-                              'High-energy event promo for a Da Money Fam live night — crowd energy, stage lights, luxury nightlife.',
-                          },
-                        ].map((preset) => (
-                          <a
-                            key={preset.label}
-                            href={`/ad-studio?brief=${encodeURIComponent(preset.prompt)}`}
-                            className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold/20 text-gold/80 hover:bg-gold hover:text-black transition-colors"
-                          >
-                            {preset.label}
-                          </a>
-                        ))}
-                      </div>
-
-                      {generatedVideoUrl && (
-                        <div className="mt-2 p-4 border border-gold/20 rounded-xl flex flex-col gap-3 items-center bg-black/40">
-                          <h3 className="text-sm font-serif text-gold">Last result</h3>
-                          <div className="w-full max-w-[200px] aspect-[9/16] bg-black rounded-lg overflow-hidden border border-white/10">
-                            <video
-                              key={generatedVideoUrl}
-                              src={generatedVideoUrl}
-                              controls
-                              playsInline
-                              preload="metadata"
-                              className="w-full h-full object-contain"
-                            />
-                          </div>
-                          <a
-                            href="/ad-studio"
-                            className="text-[10px] text-gold uppercase tracking-widest underline"
-                          >
-                            Open in studio
-                          </a>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-center text-white/60 py-12 space-y-3">
-                      <p className="text-sm">Sign in to generate ads with Coinz.</p>
-                      <a
-                        href="/account"
-                        className="inline-block text-gold text-xs uppercase tracking-widest underline"
-                      >
-                        Go to account
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
 
               <AnimatePresence>
                 {previewCode && (

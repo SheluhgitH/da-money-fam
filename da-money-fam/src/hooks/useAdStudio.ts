@@ -214,6 +214,7 @@ export function useAdStudio(initialBrief = '') {
 
   const abortRef = useRef<AbortController | null>(null)
   const queueBusyRef = useRef(false)
+  const generateRef = useRef<() => void>(() => {})
 
   const sceneCount = mode === 'storyboard' ? sceneBriefs.length : 1
 
@@ -1149,6 +1150,27 @@ export function useAdStudio(initialBrief = '') {
       queueBusyRef.current = false
     }
   }
+
+  generateRef.current = () => {
+    void generate()
+  }
+
+  useEffect(() => {
+    const onGen = () => generateRef.current()
+    window.addEventListener('dmf-studio-generate', onGen)
+    let t: number | undefined
+    try {
+      if (new URLSearchParams(window.location.search).get('autogen') === '1') {
+        t = window.setTimeout(() => generateRef.current(), 900)
+      }
+    } catch {
+      /* ignore */
+    }
+    return () => {
+      window.removeEventListener('dmf-studio-generate', onGen)
+      if (t) window.clearTimeout(t)
+    }
+  }, [])
 
   return {
     mode,

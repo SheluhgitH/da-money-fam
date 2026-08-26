@@ -8,9 +8,8 @@ export function stripForSpeech(text: string): string {
 
 type KokoroHandle = {
   generate: (text: string, opts: { voice: string }) => Promise<{
-    audio: Float32Array | number[]
+    audio: unknown
     sampling_rate?: number
-    toWav?: () => Blob | ArrayBuffer
   }>
 }
 
@@ -18,40 +17,73 @@ let kokoroPromise: Promise<KokoroHandle | null> | null = null
 let audioCtx: AudioContext | null = null
 let currentSource: AudioBufferSourceNode | null = null
 
-async function loadKokoro(): Promise<KokoroHandle | null> {
-  if (kokoroPromise) return kokoroPromise
-  kokoroPromise = (async () => {
-    try {
-      const loadWeb = new Function(
-        'return import("https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js")'
-      ) as () => Promise<{ KokoroTTS: { from_pretrained: Function } }>
-      const { KokoroTTS } = await loadWeb()
-      const webgpu = typeof navigator !== 'undefined' && 'gpu' in navigator
-      const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
-        dtype: webgpu ? 'fp32' : 'q8',
-        device: webgpu ? 'webgpu' : 'wasm',
-      })
-      return tts as KokoroHandle
-    } catch (err) {
-      console.warn('Kokoro TTS failed to load', err)
-      return null
+export function unlockAssistantAudio() {
+  try {
+    audioCtx = audioCtx || new AudioContext()
+    void audioCtx.resume()
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      const u = new SpeechSynthesisUtterance(' ')
+      u.volume = 0
+      window.speechSynthesis.speak(u)
     }
-  })()
-  return kokoroPromise
+  } catch {
+    /* ignore */
+  }
+}
+
+async function loadKokoro(): Promise<KokoroHandle | null> {
+  if (!kokoroPromise) {
+    kokoroPromise = (async () => {
+      try {
+        const loadWeb = new Function(
+          'return import("https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js")'
+        ) as () => Promise<{ KokoroTTS: { from_pretrained: Function } }>
+        const { KokoroTTS } = await loadWeb()
+        const webgpu = typeof navigator !== 'undefined' && 'gpu' in navigator
+        const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
+          dtype: webgpu ? 'fp32' : 'q8',
+          device: webgpu ? 'webgpu' : 'wasm',
+        })
+        return tts as KokoroHandle
+      } catch (err) {
+        console.warn('Kokoro TTS failed to load', err)
+        return null
+      }
+    })()
+  }
+  const timeout = new Promise<null>((resolve) => {
+    window.setTimeout(() => resolve(null), 6000)
+  })
+  return Promise.race([kokoroPromise, timeout])
+}
+
+function toFloat32(audio: unknown): Float32Array {
+  if (audio instanceof Float32Array) return audio
+  if (Array.isArray(audio)) return new Float32Array(audio)
+  if (audio && typeof audio === 'object' && 'data' in audio) {
+    const d = (audio as { data: unknown }).data
+    if (d instanceof Float32Array) return d
+    if (ArrayBuffer.isView(d)) return new Float32Array(d as unknown as ArrayLike<number>)
+    if (Array.isArray(d)) return new Float32Array(d)
+  }
+  return new Float32Array(0)
 }
 
 function playFloat32(samples: Float32Array, sampleRate: number): Promise<void> {
   return new Promise((resolve, reject) => {
     try {
-      audioCtx =
-        audioCtx ||
-        new AudioContext({ sampleRate })
+      if (!audioCtx) audioCtx = new AudioContext({ sampleRate })
       const ctx = audioCtx
-      const buffer = ctx.createBuffer(1, samples.length, sampleRate)
+      const rate = ctx.sampleRate || sampleRate
+      const buffer = ctx.createBuffer(1, samples.length, rate)
       const copy = new Float32Array(samples.length)
       copy.set(samples)
       buffer.copyToChannel(copy, 0)
-      currentSource?.stop()
+      try {
+        currentSource?.stop()
+      } catch {
+        /* ignore */
+      }
       const source = ctx.createBufferSource()
       source.buffer = buffer
       source.connect(ctx.destination)
@@ -99,26 +131,36 @@ export async function speakAssistantText(
   const text = stripForSpeech(raw)
   if (!text) return
 
-  opts.onWarmup?.(true)
-  const tts = await loadKokoro()
-  opts.onWarmup?.(false)
+  try {
+    opts.onWarmup?.(true)
+    const tts = await loadKokoro()
+    opts.onWarmup?.(false)
 
-  if (!tts) {
-    await fallbackSpeak(text)
-    return
-  }
-
-  const chunks = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text]
-  for (const chunk of chunks) {
-    const piece = chunk.trim()
-    if (!piece) continue
-    try {
-      const audio = await tts.generate(piece, { voice: 'af_heart' })
-      const samples = audio.audio instanceof Float32Array ? audio.audio : new Float32Array(audio.audio)
-      await playFloat32(samples, audio.sampling_rate || 24000)
-    } catch (err) {
-      console.warn('Kokoro generate failed, using fallback', err)
-      await fallbackSpeak(piece)
+    if (!tts) {
+      await fallbackSpeak(text)
+      return
     }
+
+    const chunks = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text]
+    for (const chunk of chunks) {
+      const piece = chunk.trim()
+      if (!piece) continue
+      try {
+        const audio = await tts.generate(piece, { voice: 'af_heart' })
+        const samples = toFloat32(audio.audio)
+        if (!samples.length) {
+          await fallbackSpeak(piece)
+          continue
+        }
+        await playFloat32(samples, audio.sampling_rate || 24000)
+      } catch (err) {
+        console.warn('Kokoro generate failed, using fallback', err)
+        await fallbackSpeak(piece)
+      }
+    }
+  } catch (err) {
+    console.warn('speakAssistantText failed', err)
+    opts.onWarmup?.(false)
+    await fallbackSpeak(text)
   }
 }
