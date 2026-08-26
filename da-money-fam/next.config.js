@@ -1,10 +1,24 @@
 /** @type {import('next').NextConfig} */
+
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
-    serverComponentsExternalPackages: ['ffmpeg-static', 'fluent-ffmpeg', '@resvg/resvg-js'],
+    serverComponentsExternalPackages: [
+      'ffmpeg-static',
+      'fluent-ffmpeg',
+      '@resvg/resvg-js',
+      'kokoro-js',
+      '@huggingface/transformers',
+      'onnxruntime-node',
+      'sharp',
+    ],
   },
   webpack: (config, { isServer }) => {
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      'onnxruntime-node$': false,
+      sharp$: false,
+    }
     if (!isServer) {
       config.resolve.fallback = {
         ...(config.resolve.fallback || {}),

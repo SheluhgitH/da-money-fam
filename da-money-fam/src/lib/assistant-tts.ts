@@ -22,8 +22,10 @@ async function loadKokoro(): Promise<KokoroHandle | null> {
   if (kokoroPromise) return kokoroPromise
   kokoroPromise = (async () => {
     try {
-      const mod = await import('kokoro-js')
-      const KokoroTTS = (mod as { KokoroTTS: { from_pretrained: Function } }).KokoroTTS
+      const loadWeb = new Function(
+        'return import("https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js")'
+      ) as () => Promise<{ KokoroTTS: { from_pretrained: Function } }>
+      const { KokoroTTS } = await loadWeb()
       const webgpu = typeof navigator !== 'undefined' && 'gpu' in navigator
       const tts = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
         dtype: webgpu ? 'fp32' : 'q8',
