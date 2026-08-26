@@ -75,7 +75,7 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [volume])
 
-  const playSong = async (song: PublicSong) => {
+  const playSong = useCallback(async (song: PublicSong) => {
     setCurrentSong(song)
     if (audioRef.current) {
       const audio = audioRef.current
@@ -85,7 +85,7 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
       audio.play().then(() => fadeAudio(audio, 0, volume, FADE_DURATION_MS)).catch(() => {})
       setIsPlaying(true)
     }
-  }
+  }, [fadeAudio, volume])
 
   useEffect(() => {
     const onPlay = (e: Event) => {

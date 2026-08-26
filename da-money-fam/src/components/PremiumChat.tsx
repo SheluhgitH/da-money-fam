@@ -834,7 +834,7 @@ export default function PremiumChat() {
     }
   }
 
-  const useAssetInStudio = (asset: { url?: string; title: string; kind: string }) => {
+  const attachAssetToStudio = (asset: { url?: string; title: string; kind: string }) => {
     if (!asset.url) return
     window.dispatchEvent(
       new CustomEvent('dmf-studio-apply', {
@@ -1429,7 +1429,7 @@ export default function PremiumChat() {
                                     <button
                                       key={asset.id}
                                       type="button"
-                                      onClick={() => useAssetInStudio(asset)}
+                                      onClick={() => attachAssetToStudio(asset)}
                                       className="overflow-hidden rounded-lg border border-gold/20 text-left"
                                     >
                                       {asset.thumb || asset.url ? (
@@ -1478,7 +1478,7 @@ export default function PremiumChat() {
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      useAssetInStudio({
+                                      attachAssetToStudio({
                                         url: msg.imageUrl,
                                         title: msg.text,
                                         kind: 'image',
