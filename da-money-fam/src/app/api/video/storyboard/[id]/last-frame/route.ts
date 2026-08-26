@@ -23,8 +23,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     videoUrl: rawUrl,
     requestOrigin: origin,
   })
-  if (!url) {
-    return NextResponse.json({ error: 'Last-frame extract failed' }, { status: 502 })
-  }
-  return NextResponse.json({ url })
+  // Soft-fail: client proceeds to continue even when extraction fails.
+  return NextResponse.json({ url: url || null })
 }

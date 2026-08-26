@@ -11,8 +11,16 @@ async function downloadClipBuffer(videoUrl: string): Promise<Buffer> {
     if ('error' in result) throw new Error(result.error || 'Failed to download clip')
     return Buffer.from(result.buffer)
   }
-  const res = await fetch(videoUrl)
-  if (!res.ok) throw new Error('Failed to download clip')
+  // Durable CDN / Supabase public URLs and other https sources.
+  const res = await fetch(videoUrl, {
+    redirect: 'follow',
+    headers: { Accept: 'video/mp4,video/*,*/*' },
+  })
+  if (!res.ok) throw new Error(`Failed to download clip (${res.status})`)
+  const contentType = res.headers.get('content-type') || ''
+  if (contentType.includes('text/html') || contentType.includes('application/json')) {
+    throw new Error(`Unexpected content-type for clip: ${contentType}`)
+  }
   return Buffer.from(await res.arrayBuffer())
 }
 
@@ -25,14 +33,25 @@ export async function extractAndUploadLastFrame(input: {
   if (videoUrl.startsWith('/') && input.requestOrigin) {
     videoUrl = new URL(videoUrl, input.requestOrigin).href
   }
-  if (!videoUrl.startsWith('http://') && !videoUrl.startsWith('https://') && !extractOpenRouterJobId(videoUrl)) {
+  if (
+    !videoUrl.startsWith('http://') &&
+    !videoUrl.startsWith('https://') &&
+    !extractOpenRouterJobId(videoUrl)
+  ) {
+    console.warn('extractAndUploadLastFrame: unsupported videoUrl', videoUrl.slice(0, 120))
     return null
   }
   try {
     const buf = await downloadClipBuffer(videoUrl)
-    if (buf.byteLength > MAX_VIDEO_UPLOAD_BYTES) return null
+    if (buf.byteLength > MAX_VIDEO_UPLOAD_BYTES) {
+      console.warn('extractAndUploadLastFrame: clip too large', buf.byteLength)
+      return null
+    }
     const jpeg = await extractLastFrameJpeg(buf)
-    if (!jpeg) return null
+    if (!jpeg) {
+      console.warn('extractAndUploadLastFrame: ffmpeg last-frame extract returned null')
+      return null
+    }
     const dataUrl = `data:image/jpeg;base64,${jpeg.toString('base64')}`
     const uploaded = await uploadReferenceImage({
       userId: input.userId,
@@ -40,7 +59,11 @@ export async function extractAndUploadLastFrame(input: {
       contentType: 'image/jpeg',
     })
     return uploaded.url
-  } catch {
+  } catch (err) {
+    console.error(
+      'extractAndUploadLastFrame failed:',
+      err instanceof Error ? err.message : err
+    )
     return null
   }
 }

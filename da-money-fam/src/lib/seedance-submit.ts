@@ -8,6 +8,7 @@ import {
   resolveSubmitResolution,
   type SeedanceModelKey,
 } from '@/lib/seedance-models'
+import { STORYBOARD_PHYSICS_SUFFIX } from '@/lib/storyboard-prompts'
 
 const MAX_REFERENCE_IMAGES = 3
 
@@ -189,6 +190,10 @@ export async function submitSeedanceJob(input: {
     finalPrompt = input.storyboardMode
       ? `${finalPrompt} Place the people and wardrobe from the reference images inside this scene as living subjects. Do not open on a frozen still of a reference photo. Start on a new cinematic shot that matches this prompt. Use references only for identity, wardrobe, and style.`
       : `${finalPrompt} Do not use the reference image as the first frame or opening still. Start on a new shot that matches this prompt. Use references only for identity, wardrobe, and style.`
+  }
+
+  if (input.storyboardMode) {
+    finalPrompt = `${finalPrompt} ${STORYBOARD_PHYSICS_SUFFIX}`
   }
 
   if (audioReferences.length > 0) {

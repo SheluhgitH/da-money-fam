@@ -87,6 +87,29 @@ export const AudioPlayerProvider = ({ children }: { children: ReactNode }) => {
     }
   }
 
+  useEffect(() => {
+    const onPlay = (e: Event) => {
+      const query = String((e as CustomEvent<{ query?: string }>).detail?.query || '')
+        .trim()
+        .toLowerCase()
+      if (!query) return
+      void fetch('/api/songs')
+        .then((r) => r.json())
+        .then((data) => {
+          const songs = (Array.isArray(data.songs) ? data.songs : []) as PublicSong[]
+          const match =
+            songs.find(
+              (s) =>
+                s.title.toLowerCase().includes(query) || s.artist.toLowerCase().includes(query)
+            ) || songs[0]
+          if (match) void playSong(match)
+        })
+        .catch(() => {})
+    }
+    window.addEventListener('dmf-play-song', onPlay)
+    return () => window.removeEventListener('dmf-play-song', onPlay)
+  }, [playSong])
+
   const togglePlayPause = () => {
     const audio = audioRef.current
     if (audio) {

@@ -9,6 +9,7 @@ import { createAdStudioGeneration } from '@/lib/ad-studio-jobs'
 import type { StoryboardScene } from '@/lib/ad-studio-types'
 import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
 import { composeVideoFirstFrame } from '@/lib/compose-video-first-frame'
+import { appendStoryboardContinuity } from '@/lib/storyboard-prompts'
 
 export const maxDuration = 120
 
@@ -78,7 +79,11 @@ export async function POST(req: Request) {
     await debitUserCoins(user.id, totalPrice)
     debited = true
 
-    const continuityBrief = `${sceneBriefs[0]}. Scene 1 of ${sceneCount} in a continuous ad storyboard.`
+    const creativeSel = creative as Partial<CreativeSelections> | undefined
+    const continuityBrief = appendStoryboardContinuity(
+      `${sceneBriefs[0]}. Scene 1 of ${sceneCount} in a continuous ad storyboard.`,
+      { walking: creativeSel?.motion === 'walking' }
+    )
     const hasStills = toInputReferences(reference_images).length > 0
     const composedFirst = hasStills
       ? await composeVideoFirstFrame({
@@ -90,7 +95,7 @@ export async function POST(req: Request) {
       : null
     const result = await submitSeedanceJob({
       brief: continuityBrief,
-      creative: creative as Partial<CreativeSelections> | undefined,
+      creative: creativeSel,
       enhance: wantsEnhance,
       duration,
       aspect_ratio,

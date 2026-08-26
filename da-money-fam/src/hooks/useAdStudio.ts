@@ -71,76 +71,110 @@ function toAbsoluteMediaUrl(videoUrl: string): string {
   }
 }
 
+const LAST_FRAME_TOTAL_MS = 45_000
+const LAST_FRAME_CANVAS_MS = 20_000
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => resolve(fallback), ms)
+    promise
+      .then((value) => {
+        window.clearTimeout(timer)
+        resolve(value)
+      })
+      .catch(() => {
+        window.clearTimeout(timer)
+        resolve(fallback)
+      })
+  })
+}
+
 async function captureLastFrameHttps(
   videoUrl: string,
   storyboardId: string
 ): Promise<string | null> {
-  const absoluteUrl = toAbsoluteMediaUrl(videoUrl)
-  try {
-    const res = await fetch(`/api/video/storyboard/${storyboardId}/last-frame`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ videoUrl: absoluteUrl }),
-    })
-    const data = await res.json()
-    if (res.ok && typeof data.url === 'string') return data.url
-  } catch {
-    /* fall through to client canvas */
-  }
-  const dataUrl = await extractLastFrame(absoluteUrl)
-  if (dataUrl?.startsWith('data:')) {
-    const uploaded = await uploadDataUrlAsRef(dataUrl)
-    if (uploaded) return uploaded
-  }
-  return null
+  return withTimeout(
+    (async () => {
+      const absoluteUrl = toAbsoluteMediaUrl(videoUrl)
+      const abort = new AbortController()
+      const fetchTimer = window.setTimeout(() => abort.abort(), LAST_FRAME_TOTAL_MS - 5_000)
+      try {
+        const res = await fetch(`/api/video/storyboard/${storyboardId}/last-frame`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoUrl: absoluteUrl }),
+          signal: abort.signal,
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && typeof data.url === 'string' && data.url.length > 0) return data.url
+      } catch {
+        /* fall through to client canvas */
+      } finally {
+        window.clearTimeout(fetchTimer)
+      }
+      const dataUrl = await extractLastFrame(absoluteUrl)
+      if (dataUrl?.startsWith('data:')) {
+        const uploaded = await uploadDataUrlAsRef(dataUrl)
+        if (uploaded) return uploaded
+      }
+      return null
+    })(),
+    LAST_FRAME_TOTAL_MS,
+    null
+  )
 }
 
 async function extractLastFrame(videoUrl: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const video = document.createElement('video')
-    video.crossOrigin = 'anonymous'
-    video.muted = true
-    video.playsInline = true
-    video.preload = 'auto'
+  return withTimeout(
+    new Promise((resolve) => {
+      const video = document.createElement('video')
+      video.crossOrigin = 'anonymous'
+      video.muted = true
+      video.playsInline = true
+      video.preload = 'auto'
 
-    const cleanup = () => {
-      video.removeAttribute('src')
-      video.load()
-    }
-
-    video.onerror = () => {
-      cleanup()
-      resolve(null)
-    }
-
-    video.onloadedmetadata = () => {
-      const seekTo = Math.max(0, (video.duration || 0) - 0.15)
-      video.currentTime = seekTo
-    }
-
-    video.onseeked = () => {
-      try {
-        const canvas = document.createElement('canvas')
-        canvas.width = video.videoWidth || 720
-        canvas.height = video.videoHeight || 1280
-        const ctx = canvas.getContext('2d')
-        if (!ctx) {
-          cleanup()
-          resolve(null)
-          return
-        }
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
-        cleanup()
-        resolve(dataUrl)
-      } catch {
-        cleanup()
-        resolve(null)
+      let settled = false
+      const finish = (value: string | null) => {
+        if (settled) return
+        settled = true
+        video.removeAttribute('src')
+        video.load()
+        resolve(value)
       }
-    }
 
-    video.src = videoUrl
-  })
+      video.onerror = () => finish(null)
+
+      video.onloadedmetadata = () => {
+        const seekTo = Math.max(0, (video.duration || 0) - 0.15)
+        try {
+          video.currentTime = seekTo
+        } catch {
+          finish(null)
+        }
+      }
+
+      video.onseeked = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = video.videoWidth || 720
+          canvas.height = video.videoHeight || 1280
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            finish(null)
+            return
+          }
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+          finish(canvas.toDataURL('image/jpeg', 0.85))
+        } catch {
+          finish(null)
+        }
+      }
+
+      video.src = videoUrl
+    }),
+    LAST_FRAME_CANVAS_MS,
+    null
+  )
 }
 
 async function pollJob(
@@ -303,6 +337,11 @@ export function useAdStudio(initialBrief = '') {
         characterName: lookCharacterName,
         refCount: references.length,
         model: modelKey,
+        aspectRatio,
+        duration,
+        generating,
+        error: error ? String(error).slice(0, 160) : null,
+        lastLibraryId: library[0]?.id || null,
       }
       sessionStorage.setItem('dmf-studio-snapshot', JSON.stringify(snap))
     } catch {
@@ -317,6 +356,11 @@ export function useAdStudio(initialBrief = '') {
     lookCharacterName,
     references.length,
     modelKey,
+    aspectRatio,
+    duration,
+    generating,
+    error,
+    library,
   ])
 
   useEffect(() => {
@@ -325,6 +369,9 @@ export function useAdStudio(initialBrief = '') {
         brief?: string
         scenes?: string[]
         append?: string
+        aspect?: string
+        refUrl?: string
+        asFirstFrame?: boolean
       } | null
       if (!detail) return
       if (typeof detail.brief === 'string' && detail.brief.trim()) {
@@ -344,6 +391,12 @@ export function useAdStudio(initialBrief = '') {
       }
       if (typeof detail.append === 'string' && detail.append.trim()) {
         setBrief((prev) => (prev ? `${prev} ${detail.append}` : detail.append!))
+      }
+      if (typeof detail.aspect === 'string' && detail.aspect.trim()) {
+        setAspectRatio(detail.aspect.trim())
+      }
+      if (typeof detail.refUrl === 'string' && detail.refUrl.startsWith('http')) {
+        addReferenceFromUrl(detail.refUrl, detail.asFirstFrame === true)
       }
     }
     window.addEventListener('dmf-studio-apply', onApply)
@@ -961,7 +1014,7 @@ export function useAdStudio(initialBrief = '') {
             jobId = contData.jobId
           }
 
-          const polled = await pollJob(jobId, controller.signal)
+          const polled = await pollJob(jobId, controller.signal, storyboardId)
 
           if (!polled.videoUrl) throw new Error('No video URL returned')
 
@@ -991,6 +1044,7 @@ export function useAdStudio(initialBrief = '') {
 
           if (i < sceneBriefs.length - 1) {
             setStatusText(`Scene ${i + 1} done · Starting scene ${i + 2}…`)
+            // Never block scene N+1 on last-frame success — null still continues.
             lastFrame = await captureLastFrameHttps(polled.videoUrl, storyboardId)
           }
         }
@@ -1171,6 +1225,25 @@ export function useAdStudio(initialBrief = '') {
       if (t) window.clearTimeout(t)
     }
   }, [])
+
+  useEffect(() => {
+    const onCancel = () => cancelGenerate()
+    window.addEventListener('dmf-studio-cancel', onCancel)
+    return () => window.removeEventListener('dmf-studio-cancel', onCancel)
+  }, [])
+
+  useEffect(() => {
+    const onContinue = (e: Event) => {
+      const id = (e as CustomEvent<{ libraryId?: string }>).detail?.libraryId
+      const item = id
+        ? library.find((row) => row.id === id)
+        : library.find((row) => row.mode === 'storyboard') || library[0]
+      if (!item) return
+      selectLibraryItem(item)
+    }
+    window.addEventListener('dmf-studio-continue', onContinue)
+    return () => window.removeEventListener('dmf-studio-continue', onContinue)
+  }, [library])
 
   return {
     mode,

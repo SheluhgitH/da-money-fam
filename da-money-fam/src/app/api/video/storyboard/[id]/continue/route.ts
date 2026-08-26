@@ -6,6 +6,7 @@ import { submitSeedanceJob } from '@/lib/seedance-submit'
 import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
 import { extractAndUploadLastFrame } from '@/lib/storyboard-last-frame'
 import { composeVideoFirstFrame } from '@/lib/compose-video-first-frame'
+import { appendStoryboardContinuity } from '@/lib/storyboard-prompts'
 
 export const maxDuration = 120
 
@@ -24,56 +25,75 @@ export async function POST(
   }
 
   const body = await req.json().catch(() => ({}))
-  const { previous_video_url, reference_images, enhance, generate_audio, resolution } =
-    body
+  const {
+    first_frame_image,
+    previous_video_url,
+    reference_images,
+    enhance,
+    generate_audio,
+    resolution,
+  } = body
 
   const nextIndex = gen.scenes.findIndex(
     (s) =>
       s.status !== 'completed' &&
-      s.status !== 'processing' &&
-      (!s.jobId || s.status === 'pending')
+      (!s.jobId || s.status === 'pending' || s.status === 'failed')
   )
   if (nextIndex < 0) {
     return NextResponse.json({ error: 'All scenes already started' }, { status: 400 })
   }
 
+  const clientFirstFrame =
+    typeof first_frame_image === 'string' && first_frame_image.length > 0
+      ? first_frame_image
+      : ''
+
   let extractedFrame = ''
-  const fromBody =
-    typeof previous_video_url === 'string' ? previous_video_url : ''
-  const prev =
-    fromBody ||
-    [...gen.scenes]
-      .slice(0, nextIndex)
-      .reverse()
-      .find((s) => s.videoUrl)?.videoUrl
-  if (prev) {
-    extractedFrame =
-      (await extractAndUploadLastFrame({
-        userId: user.id,
-        videoUrl: prev,
-        requestOrigin: new URL(req.url).origin,
-      })) || ''
+  if (!clientFirstFrame) {
+    const fromBody = typeof previous_video_url === 'string' ? previous_video_url : ''
+    const prev =
+      fromBody ||
+      [...gen.scenes]
+        .slice(0, nextIndex)
+        .reverse()
+        .find((s) => s.videoUrl)?.videoUrl
+    if (prev) {
+      extractedFrame =
+        (await extractAndUploadLastFrame({
+          userId: user.id,
+          videoUrl: prev,
+          requestOrigin: new URL(req.url).origin,
+        })) || ''
+    }
   }
 
+  const continuityFrame = clientFirstFrame || extractedFrame || ''
   const scene = gen.scenes[nextIndex]
   const sceneCount = gen.scenes.length
-  const continuityBrief = `${scene.brief}. Scene ${nextIndex + 1} of ${sceneCount} in a continuous ad storyboard. Continue seamlessly from the previous shot.`
+  const creative = gen.creative as Partial<CreativeSelections> | null
+  const continuityBrief = appendStoryboardContinuity(
+    `${scene.brief}. Scene ${nextIndex + 1} of ${sceneCount} in a continuous ad storyboard. Continue seamlessly from the previous shot.`,
+    { walking: creative?.motion === 'walking' }
+  )
   const model = resolveSeedanceModel(gen.model)
 
-  const composedFirst = await composeVideoFirstFrame({
-    userId: user.id,
-    brief: continuityBrief,
-    aspectRatio: gen.aspect_ratio || '9:16',
-    referenceImages: reference_images,
-    extraRefUrls: extractedFrame ? [extractedFrame] : [],
-  })
+  // Only compose when we have no continuity frame — never replace the last frame.
+  let composedFirst: string | null = null
+  if (!continuityFrame) {
+    composedFirst = await composeVideoFirstFrame({
+      userId: user.id,
+      brief: continuityBrief,
+      aspectRatio: gen.aspect_ratio || '9:16',
+      referenceImages: reference_images,
+    })
+  }
 
-  const firstFrame = composedFirst || extractedFrame || null
+  const firstFrame = continuityFrame || composedFirst || null
 
   try {
     const result = await submitSeedanceJob({
       brief: continuityBrief,
-      creative: gen.creative as Partial<CreativeSelections> | null,
+      creative,
       enhance: enhance === true,
       duration: gen.duration_seconds,
       aspect_ratio: gen.aspect_ratio,

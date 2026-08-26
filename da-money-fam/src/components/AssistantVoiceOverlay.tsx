@@ -2,7 +2,14 @@
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
-export type VoicePhase = 'listening' | 'thinking' | 'speaking' | 'warmup' | 'done' | null
+export type VoicePhase =
+  | 'listening'
+  | 'thinking'
+  | 'speaking'
+  | 'warmup'
+  | 'confirm'
+  | 'done'
+  | null
 
 export default function AssistantVoiceOverlay({
   phase,
@@ -10,6 +17,10 @@ export default function AssistantVoiceOverlay({
   answer,
   muted,
   showStudioActions,
+  spendLabel,
+  spendCanAfford,
+  onConfirmSpend,
+  onDeclineSpend,
   onUseInPrompt,
   onCopy,
   onMuteToggle,
@@ -20,6 +31,10 @@ export default function AssistantVoiceOverlay({
   answer: string
   muted: boolean
   showStudioActions?: boolean
+  spendLabel?: string | null
+  spendCanAfford?: boolean
+  onConfirmSpend?: () => void
+  onDeclineSpend?: () => void
   onUseInPrompt?: () => void
   onCopy?: () => void
   onMuteToggle: () => void
@@ -37,9 +52,11 @@ export default function AssistantVoiceOverlay({
           ? 'On it…'
           : phase === 'speaking'
             ? 'Speaking…'
-            : phase === 'done'
-              ? 'Reply'
-              : ''
+            : phase === 'confirm'
+              ? 'Confirm spend'
+              : phase === 'done'
+                ? 'Reply'
+                : ''
 
   return (
     <AnimatePresence>
@@ -49,9 +66,11 @@ export default function AssistantVoiceOverlay({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose}
         >
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-2xl" />
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-2xl"
+            onClick={phase === 'done' || phase === 'confirm' ? onClose : undefined}
+          />
           <motion.div
             initial={reduce ? { opacity: 0 } : { opacity: 0, y: 28 }}
             animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0 }}
@@ -124,8 +143,38 @@ export default function AssistantVoiceOverlay({
                 {answer}
               </p>
             )}
+            {phase === 'confirm' && spendLabel && (
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                {spendCanAfford ? (
+                  <button
+                    type="button"
+                    onClick={onConfirmSpend}
+                    className="rounded-full bg-gold px-5 py-2.5 text-[11px] font-bold uppercase tracking-widest text-black"
+                  >
+                    {spendLabel}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.href = '/coin-wallet'
+                    }}
+                    className="rounded-full border border-gold/40 px-5 py-2.5 text-[11px] uppercase tracking-widest text-gold"
+                  >
+                    Get Coinz
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onDeclineSpend}
+                  className="rounded-full border border-white/15 px-4 py-2 text-[10px] uppercase tracking-widest text-white/60"
+                >
+                  Not now
+                </button>
+              </div>
+            )}
             <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
-              {answer && (
+              {answer && phase !== 'confirm' && (
                 <button
                   type="button"
                   onClick={onCopy}
@@ -134,7 +183,7 @@ export default function AssistantVoiceOverlay({
                   Copy
                 </button>
               )}
-              {showStudioActions && answer && (
+              {showStudioActions && answer && phase !== 'confirm' && (
                 <button
                   type="button"
                   onClick={onUseInPrompt}

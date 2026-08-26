@@ -4,10 +4,21 @@ import {
   isGroqConfigured,
   isOpenRouterConfigured,
 } from '@/lib/chat-models'
+import {
+  ASSISTANT_TOOLS,
+  clientToolToAction,
+  executeServerTool,
+  isServerTool,
+  type ToolCallMessage,
+} from '@/lib/assistant-tools'
+import type { AssistantAction } from '@/lib/assistant-actions'
 
 export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system'
-  content: string
+  role: 'user' | 'assistant' | 'system' | 'tool'
+  content: string | null
+  tool_calls?: ToolCallMessage[]
+  tool_call_id?: string
+  name?: string
 }
 
 function getProviderConfig(attempt: ChatModelAttempt): {
@@ -65,7 +76,9 @@ function shouldRetry(status: number, detail: string): boolean {
     lower.includes('not found') ||
     lower.includes('does not exist') ||
     lower.includes('rate limit') ||
-    lower.includes('no endpoints')
+    lower.includes('no endpoints') ||
+    lower.includes('tool') ||
+    lower.includes('function')
   )
 }
 
@@ -133,6 +146,242 @@ function createNdjsonStream(
   })
 }
 
+function streamTextAndActions(text: string, actions: AssistantAction[]): Response {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const chunkSize = 48
+      for (let i = 0; i < text.length; i += chunkSize) {
+        const piece = text.slice(i, i + chunkSize)
+        controller.enqueue(encoder.encode(`${JSON.stringify({ message: piece })}\n`))
+      }
+      if (actions.length) {
+        controller.enqueue(encoder.encode(`${JSON.stringify({ actions })}\n`))
+      }
+      controller.close()
+    },
+  })
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+  })
+}
+
+type ProviderConfig = NonNullable<ReturnType<typeof getProviderConfig>>
+
+async function completeOnce(
+  config: ProviderConfig,
+  messages: ChatMessage[],
+  withTools: boolean
+): Promise<{
+  content: string
+  tool_calls: ToolCallMessage[]
+  status: number
+  error?: string
+}> {
+  const body: Record<string, unknown> = {
+    model: config.modelId,
+    messages,
+    stream: false,
+    max_tokens: 1024,
+    temperature: 0.7,
+  }
+  if (withTools && !config.ollamaBaseUrl) {
+    body.tools = ASSISTANT_TOOLS
+    body.tool_choice = 'auto'
+  }
+
+  const response = await fetch(config.apiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(config.apiKey && { Authorization: `Bearer ${config.apiKey}` }),
+      ...(config.isOpenRouter && {
+        'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3005',
+        'X-Title': 'DMF Premium Chat',
+      }),
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    return {
+      content: '',
+      tool_calls: [],
+      status: response.status,
+      error: await parseErrorDetail(response),
+    }
+  }
+
+  const data = await response.json()
+  const msg = data.choices?.[0]?.message as
+    | { content?: string | null; tool_calls?: ToolCallMessage[] }
+    | undefined
+  return {
+    content: (msg?.content || '').trim(),
+    tool_calls: Array.isArray(msg?.tool_calls) ? msg.tool_calls : [],
+    status: 200,
+  }
+}
+
+/**
+ * Tool loop (max 4 rounds) then stream final assistant text + `{ actions }` line.
+ * Falls back to plain streaming if tools are rejected.
+ */
+export async function streamChatWithTools(
+  messages: ChatMessage[],
+  requestedModel?: string | null
+): Promise<Response> {
+  if (!isGroqConfigured() && !isOpenRouterConfigured() && !process.env.OLLAMA_BASE_URL) {
+    return new Response(
+      JSON.stringify({ error: 'No AI API Key is configured correctly' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+
+  const chain = getChatFallbackChain(requestedModel)
+  if (chain.length === 0) {
+    return new Response(
+      JSON.stringify({ error: 'No AI API Key is configured correctly' }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
+    )
+  }
+
+  let lastError = 'All models failed'
+  const clientActions: AssistantAction[] = []
+
+  for (const attempt of chain) {
+    const config = getProviderConfig(attempt)
+    if (!config) continue
+    if (config.ollamaBaseUrl) {
+      // Ollama path: no tools — plain stream
+      return streamChatWithFallback(messages, requestedModel)
+    }
+
+    console.log(`Chat tools attempt: ${attempt.provider}/${config.modelId}`)
+
+    try {
+      const working: ChatMessage[] = [...messages]
+      let toolsSupported = true
+
+      for (let round = 0; round < 4; round++) {
+        const result = await completeOnce(config, working, toolsSupported)
+
+        if (result.status !== 200) {
+          lastError = result.error || `HTTP ${result.status}`
+          if (shouldRetry(result.status, lastError)) {
+            // If tools rejected, retry without tools then fall back to stream
+            if (toolsSupported && /tool|function/i.test(lastError)) {
+              toolsSupported = false
+              continue
+            }
+            break
+          }
+          break
+        }
+
+        if (!result.tool_calls.length) {
+          return streamTextAndActions(result.content || '…', clientActions)
+        }
+
+        working.push({
+          role: 'assistant',
+          content: result.content || null,
+          tool_calls: result.tool_calls,
+        })
+
+        for (const call of result.tool_calls) {
+          const name = call.function?.name || ''
+          let args: Record<string, unknown> = {}
+          try {
+            args = JSON.parse(call.function?.arguments || '{}') as Record<string, unknown>
+          } catch {
+            args = {}
+          }
+
+          if (isServerTool(name)) {
+            const toolResult = await executeServerTool(name, args)
+            working.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name,
+              content: toolResult,
+            })
+            // After quote, also stage propose action if prompt/brief present
+            if (name === 'quoteImage' && typeof args.prompt === 'string') {
+              try {
+                const parsed = JSON.parse(toolResult) as {
+                  quoteId?: string
+                  priceCoins?: number
+                  canAfford?: boolean
+                }
+                const action = clientToolToAction('proposeImageGenerate', {
+                  prompt: args.prompt,
+                  tier: args.tier,
+                  quoteId: parsed.quoteId,
+                  priceCoins: parsed.priceCoins,
+                  canAfford: parsed.canAfford,
+                })
+                if (action) clientActions.push(action)
+              } catch {
+                /* ignore */
+              }
+            }
+            if (name === 'quoteVideo' && typeof args.brief === 'string') {
+              try {
+                const parsed = JSON.parse(toolResult) as {
+                  totalPriceCoins?: number
+                  canAfford?: boolean
+                  sceneBriefs?: string[]
+                }
+                const action = clientToolToAction('proposeVideoGenerate', {
+                  brief: args.brief,
+                  scenes: parsed.sceneBriefs || args.sceneBriefs,
+                  priceCoins: parsed.totalPriceCoins,
+                  canAfford: parsed.canAfford,
+                })
+                if (action) clientActions.push(action)
+              } catch {
+                /* ignore */
+              }
+            }
+            if (name === 'listLibrary') {
+              const action = clientToolToAction('listLibrary', {})
+              if (action) clientActions.push(action)
+            }
+            if (name === 'searchBlog' && typeof args.query === 'string') {
+              const action = clientToolToAction('searchBlog', { query: args.query })
+              if (action) clientActions.push(action)
+            }
+          } else {
+            const action = clientToolToAction(name, args)
+            if (action) clientActions.push(action)
+            working.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              name,
+              content: JSON.stringify({ ok: true, queued: true }),
+            })
+          }
+        }
+      }
+
+      // Exhausted rounds with leftover — ask once more without tools for a final reply
+      const final = await completeOnce(config, working, false)
+      if (final.status === 200 && (final.content || clientActions.length)) {
+        return streamTextAndActions(final.content || 'Ready when you are.', clientActions)
+      }
+      lastError = final.error || lastError
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : 'Request failed'
+      console.error(`Chat tools error ${attempt.provider}/${attempt.modelId}:`, lastError)
+    }
+  }
+
+  // Full fallback: classic streaming (fence parsing on client)
+  console.warn('Tools path exhausted, falling back to stream:', lastError)
+  return streamChatWithFallback(messages, requestedModel)
+}
+
 export async function streamChatWithFallback(
   messages: ChatMessage[],
   requestedModel?: string | null
@@ -173,7 +422,10 @@ export async function streamChatWithFallback(
         },
         body: JSON.stringify({
           model: config.modelId,
-          messages,
+          messages: messages.map((m) => ({
+            role: m.role,
+            content: m.content ?? '',
+          })),
           stream: true,
           max_tokens: 1024,
           temperature: 0.7,
@@ -246,7 +498,10 @@ export async function completeChatWithFallback(
         },
         body: JSON.stringify({
           model: config.modelId,
-          messages,
+          messages: messages.map((m) => ({
+            role: m.role,
+            content: m.content ?? '',
+          })),
           stream: false,
           max_tokens: options?.maxTokens ?? 300,
           temperature: 0.7,

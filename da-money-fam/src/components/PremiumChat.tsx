@@ -4,9 +4,21 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { usePathname, useSearchParams } from 'next/navigation'
 import AssistantVoiceOverlay, { type VoicePhase } from './AssistantVoiceOverlay'
-import { parseAssistantActions, runAssistantActions } from '@/lib/assistant-actions'
-import { speakAssistantText, stopAssistantSpeech, unlockAssistantAudio } from '@/lib/assistant-tts'
-import { ensureMicStream } from '@/lib/assistant-mic'
+import {
+  parseAssistantActions,
+  normalizeActions,
+  runAssistantActions,
+  startStudioGenerate,
+  type AssistantAction,
+} from '@/lib/assistant-actions'
+import {
+  speakAssistantText,
+  stopAssistantSpeech,
+  unlockAssistantAudio,
+  warmupAssistantVoice,
+} from '@/lib/assistant-tts'
+import { isIosSafariLike, prepareMicForRecognition } from '@/lib/assistant-mic'
+import { buildPageContext, fetchAssistantContext } from '@/lib/assistant-snapshot'
 import {
   ASSISTANT_MUTE_KEY,
   ASSISTANT_OPEN_EVENT,
@@ -22,6 +34,25 @@ interface Message {
   reasoning?: string
   timestamp: number
   imageUrl?: string
+  videoUrl?: string
+  assets?: Array<{
+    id: string
+    kind: 'video' | 'image'
+    title: string
+    thumb?: string
+    url?: string
+  }>
+  spend?: {
+    kind: 'image' | 'video'
+    priceCoins: number
+    canAfford: boolean
+    quoteId?: string
+    prompt?: string
+    brief?: string
+    scenes?: string[]
+    tier?: 'fast' | 'smart'
+    done?: boolean
+  }
 }
 
 interface ChatSession {
@@ -136,6 +167,7 @@ export default function PremiumChat() {
   const [voicePhase, setVoicePhase] = useState<VoicePhase>(null)
   const [voiceTranscript, setVoiceTranscript] = useState('')
   const [voiceAnswer, setVoiceAnswer] = useState('')
+  const [voiceSpend, setVoiceSpend] = useState<Message['spend'] | null>(null)
   const [askBarOpen, setAskBarOpen] = useState(false)
 
   const chatAreaRef = useRef<HTMLDivElement>(null)
@@ -146,6 +178,13 @@ export default function PremiumChat() {
   const transcriptRef = useRef('')
   const pointerHandled = useRef(false)
   const recogInstance = useRef<Recog | null>(null)
+  const voiceHoldEnding = useRef(false)
+  const voicePhaseRef = useRef<VoicePhase>(null)
+  const handleSendRef = useRef<(customMessage?: string) => Promise<void>>(async () => {})
+  const capturedPointerId = useRef<number | null>(null)
+  const fabEl = useRef<HTMLElement | null>(null)
+  const pendingVoiceSpend = useRef<Message['spend'] | null>(null)
+  const confirmListening = useRef(false)
 
   const suggestedQuestions = [
     'What services do you offer?',
@@ -172,7 +211,11 @@ export default function PremiumChat() {
       await speakAssistantText(text, {
         muted,
         onWarmup: (warming) => {
-          if (voiceSend.current) setVoicePhase(warming ? 'warmup' : 'speaking')
+          if (voiceSend.current) {
+            const next: VoicePhase = warming ? 'warmup' : 'speaking'
+            voicePhaseRef.current = next
+            setVoicePhase(next)
+          }
         },
       })
     } catch (err) {
@@ -187,6 +230,24 @@ export default function PremiumChat() {
     setIsSpeaking(false)
   }
 
+  const completeVoiceHold = () => {
+    if (!voiceHoldEnding.current) return
+    voiceHoldEnding.current = false
+    window.setTimeout(() => {
+      const text = transcriptRef.current.trim()
+      if (text) {
+        voicePhaseRef.current = 'thinking'
+        setVoicePhase('thinking')
+        void handleSendRef.current(text)
+      } else {
+        setVoiceAnswer("Didn't catch that. Hold the button and try again.")
+        voicePhaseRef.current = 'done'
+        setVoicePhase('done')
+        voiceSend.current = false
+      }
+    }, 220)
+  }
+
   const startRecognition = async () => {
     const Ctor =
       (window as unknown as { SpeechRecognition?: new () => Recog; webkitSpeechRecognition?: new () => Recog })
@@ -197,7 +258,7 @@ export default function PremiumChat() {
       return
     }
     try {
-      await ensureMicStream()
+      await prepareMicForRecognition()
     } catch {
       alert('Microphone permission is needed to talk.')
       return
@@ -207,7 +268,10 @@ export default function PremiumChat() {
       recognition.continuous = true
       recognition.interimResults = true
       recognition.onstart = () => setIsRecording(true)
-      recognition.onend = () => setIsRecording(false)
+      recognition.onend = () => {
+        setIsRecording(false)
+        completeVoiceHold()
+      }
       recognition.onresult = (event: {
         results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>
       }) => {
@@ -336,22 +400,22 @@ export default function PremiumChat() {
           content: m.text,
         }))
 
+      const path = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
+      let studioSnap = ''
+      try {
+        studioSnap = sessionStorage.getItem('dmf-studio-snapshot') || ''
+      } catch {
+        /* ignore */
+      }
+      const account = await fetchAssistantContext()
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [...prior, { role: 'user', content: textToSend }],
           model: selectedModel,
-          pageContext: (() => {
-            const path = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
-            let snap = ''
-            try {
-              snap = sessionStorage.getItem('dmf-studio-snapshot') || ''
-            } catch {
-              /* ignore */
-            }
-            return snap ? `${path}\nStudio snapshot: ${snap}` : path
-          })(),
+          pageContext: buildPageContext({ path, studioSnap, account }),
         }),
       })
 
@@ -377,6 +441,7 @@ export default function PremiumChat() {
       let botReasoning = ''
       let botMsgStarted = false
       let lineBuffer = ''
+      let streamedActions: AssistantAction[] = []
 
       const ensureBotMsg = () => {
         if (!botMsgStarted) {
@@ -407,6 +472,26 @@ export default function PremiumChat() {
         )
       }
 
+      const ingestLine = (jsonStr: string) => {
+        try {
+          const data = JSON.parse(jsonStr) as {
+            message?: string
+            reasoning?: string
+            actions?: unknown[]
+          }
+          if (Array.isArray(data.actions)) {
+            streamedActions = normalizeActions(data.actions)
+            return
+          }
+          if (data.message) botResponseText += data.message
+          if (data.reasoning) botReasoning += data.reasoning
+          ensureBotMsg()
+          patchBotMsg()
+        } catch {
+          /* incomplete */
+        }
+      }
+
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -418,50 +503,42 @@ export default function PremiumChat() {
         for (const line of lines) {
           const jsonStr = line.trim()
           if (!jsonStr || jsonStr === '[DONE]') continue
-
-          try {
-            const data = JSON.parse(jsonStr)
-            if (data.message) botResponseText += data.message
-            if (data.reasoning) botReasoning += data.reasoning
-            ensureBotMsg()
-            patchBotMsg()
-          } catch {
-            /* incomplete line */
-          }
+          ingestLine(jsonStr)
         }
       }
 
-      if (lineBuffer.trim()) {
-        try {
-          const data = JSON.parse(lineBuffer.trim())
-          if (data.message) botResponseText += data.message
-          if (data.reasoning) botReasoning += data.reasoning
-          ensureBotMsg()
-          patchBotMsg()
-        } catch {
-          /* ignore trailing partial */
-        }
-      }
+      if (lineBuffer.trim()) ingestLine(lineBuffer.trim())
 
       setIsTyping(false)
       if (botMsgStarted) patchBotMsg()
+
       const parsed = parseAssistantActions(botResponseText)
       if (parsed.clean !== botResponseText) {
         botResponseText = parsed.clean
         patchBotMsg()
       }
+
+      const mergedActions =
+        streamedActions.length > 0 ? streamedActions : parsed.actions
+
       setVoiceAnswer(parsed.clean)
+      const hasSpend = mergedActions.some(
+        (a) => a.type === 'generateImage' || a.type === 'generateVideo'
+      )
       if (voiceSend.current) {
-        setVoicePhase(muted ? 'done' : 'speaking')
-        await speak(parsed.clean)
-        setVoicePhase('done')
-        voiceSend.current = false
+        if (!muted && parsed.clean) {
+          voicePhaseRef.current = 'speaking'
+          setVoicePhase('speaking')
+          await speak(parsed.clean)
+        }
+        if (!hasSpend) {
+          voicePhaseRef.current = 'done'
+          setVoicePhase('done')
+          voiceSend.current = false
+        }
       }
-      const images = parsed.actions.filter((a) => a.type === 'generateImage')
-      runAssistantActions(parsed.actions.filter((a) => a.type !== 'generateImage'))
-      for (const img of images) {
-        if (img.type === 'generateImage') await runChatImageGen(img.prompt, img.tier)
-      }
+
+      await runParsedActions(mergedActions)
     } catch (error) {
       console.error('Chat API Error:', error)
       setIsTyping(false)
@@ -475,41 +552,344 @@ export default function PremiumChat() {
       ])
     }
   }
+  handleSendRef.current = handleSend
 
-  const runChatImageGen = async (prompt: string, tier: 'fast' | 'smart' = 'fast') => {
+  const runParsedActions = async (actions: AssistantAction[]) => {
+    const seen = new Set<string>()
+    const unique = actions.filter((a) => {
+      const key =
+        a.type === 'generateImage'
+          ? `img:${a.prompt}`
+          : a.type === 'generateVideo'
+            ? `vid:${a.brief}`
+            : a.type === 'searchBlog'
+              ? `blog:${a.query}`
+              : a.type
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    const spendLater = unique.filter(
+      (a) => a.type === 'generateImage' || a.type === 'generateVideo'
+    )
+    const listLib = unique.some((a) => a.type === 'listLibrary')
+    const blogQ = unique.find((a) => a.type === 'searchBlog')
+    runAssistantActions(
+      unique.filter(
+        (a) =>
+          a.type !== 'generateImage' &&
+          a.type !== 'generateVideo' &&
+          a.type !== 'listLibrary' &&
+          a.type !== 'searchBlog'
+      )
+    )
+    if (listLib) await showLibraryCards()
+    if (blogQ && blogQ.type === 'searchBlog') await showBlogResults(blogQ.query)
+    for (const action of spendLater) {
+      if (action.type === 'generateVideo') await quoteVideoSpend(action.brief, action.scenes)
+      if (action.type === 'generateImage') await quoteImageSpend(action.prompt, action.tier)
+    }
+  }
+
+  const showLibraryCards = async () => {
+    const ctx = await fetchAssistantContext(true)
+    const assets = [
+      ...(ctx?.lastVideos || []).map((v) => ({
+        id: v.id,
+        kind: 'video' as const,
+        title: v.brief,
+        thumb: v.thumb || undefined,
+        url: v.url || v.thumb || undefined,
+      })),
+      ...(ctx?.lastImages || []).map((img) => ({
+        id: img.id,
+        kind: 'image' as const,
+        title: img.prompt || 'Still',
+        thumb: img.url,
+        url: img.url,
+      })),
+    ].slice(0, 6)
+    updateCurrentChatMessages((prev) => [
+      ...prev,
+      {
+        sender: 'bot',
+        text: assets.length ? 'Recent library' : 'No library items yet. Generate in Ad Studio first.',
+        assets,
+        timestamp: Date.now(),
+      },
+    ])
+  }
+
+  const showBlogResults = async (query: string) => {
+    try {
+      const res = await fetch(`/api/blog/search?q=${encodeURIComponent(query)}`)
+      const data = await res.json()
+      const posts = Array.isArray(data.posts) ? data.posts : []
+      const lines = posts.length
+        ? posts
+            .map((p: { title: string; slug: string; excerpt?: string }) => `**${p.title}** — /blog/${p.slug}`)
+            .join('\n')
+        : 'No matching posts.'
+      updateCurrentChatMessages((prev) => [
+        ...prev,
+        { sender: 'bot', text: lines, timestamp: Date.now() },
+      ])
+    } catch {
+      updateCurrentChatMessages((prev) => [
+        ...prev,
+        { sender: 'bot', text: 'Could not search the blog.', timestamp: Date.now() },
+      ])
+    }
+  }
+
+  const presentSpend = async (spend: NonNullable<Message['spend']>, text: string) => {
+    updateCurrentChatMessages((prev) => [
+      ...prev,
+      { sender: 'bot', text, spend, timestamp: Date.now() },
+    ])
+    if (voiceSend.current) {
+      pendingVoiceSpend.current = spend
+      setVoiceSpend(spend)
+      voicePhaseRef.current = 'confirm'
+      setVoicePhase('confirm')
+      const spoken = spend.canAfford
+        ? `That's ${spend.priceCoins} Coinz. Want me to run it?`
+        : `You need ${spend.priceCoins} Coinz. Open Coin Wallet to top up.`
+      setVoiceAnswer(spoken)
+      if (!muted) await speak(spoken)
+      void listenForConfirmReply()
+    }
+  }
+
+  const quoteVideoSpend = async (brief: string, scenes?: string[]) => {
+    try {
+      const scenesN = scenes && scenes.length >= 2 ? scenes.length : 1
+      const qRes = await fetch(`/api/video/quote?scenes=${scenesN}`)
+      if (qRes.status === 401) {
+        updateCurrentChatMessages((prev) => [
+          ...prev,
+          { sender: 'bot', text: 'Sign in to generate video.', timestamp: Date.now() },
+        ])
+        voiceSend.current = false
+        return
+      }
+      const quote = await qRes.json()
+      if (!qRes.ok) throw new Error(quote.error || 'Quote failed')
+      const price = Number(quote.totalPriceCoins || quote.priceCoins || 0)
+      const spend: NonNullable<Message['spend']> = {
+        kind: 'video',
+        priceCoins: price,
+        canAfford: Boolean(quote.canAfford),
+        brief,
+        scenes,
+      }
+      await presentSpend(
+        spend,
+        quote.canAfford
+          ? `Video is ${price} Coinz. Confirm to generate.`
+          : `Need ${price} Coinz (you have ${quote.balance ?? 0}). Open Coin Wallet to top up.`
+      )
+    } catch (err) {
+      updateCurrentChatMessages((prev) => [
+        ...prev,
+        {
+          sender: 'bot',
+          text: err instanceof Error ? err.message : 'Could not quote video.',
+          timestamp: Date.now(),
+        },
+      ])
+      voiceSend.current = false
+    }
+  }
+
+  const quoteImageSpend = async (prompt: string, tier: 'fast' | 'smart' = 'fast') => {
+    try {
+      const qRes = await fetch(`/api/images/quote?tier=${tier === 'smart' ? 'smart' : 'fast'}`)
+      if (qRes.status === 401) {
+        updateCurrentChatMessages((prev) => [
+          ...prev,
+          { sender: 'bot', text: 'Sign in to generate images.', timestamp: Date.now() },
+        ])
+        voiceSend.current = false
+        return
+      }
+      const quote = await qRes.json()
+      if (!qRes.ok) throw new Error(quote.error || 'Quote failed')
+      const spend: NonNullable<Message['spend']> = {
+        kind: 'image',
+        priceCoins: Number(quote.priceCoins || 0),
+        canAfford: Boolean(quote.canAfford),
+        quoteId: quote.quoteId,
+        prompt,
+        tier,
+      }
+      await presentSpend(
+        spend,
+        quote.canAfford
+          ? `Still is ${quote.priceCoins} Coinz. Confirm to generate.`
+          : `Need ${quote.priceCoins} Coinz (you have ${quote.balance ?? 0}). Open Coin Wallet to top up.`
+      )
+    } catch (err) {
+      updateCurrentChatMessages((prev) => [
+        ...prev,
+        {
+          sender: 'bot',
+          text: err instanceof Error ? err.message : 'Could not quote image.',
+          timestamp: Date.now(),
+        },
+      ])
+      voiceSend.current = false
+    }
+  }
+
+  const declineVoiceSpend = () => {
+    confirmListening.current = false
+    pendingVoiceSpend.current = null
+    setVoiceSpend(null)
+    voiceSend.current = false
+    voicePhaseRef.current = 'done'
+    setVoicePhase('done')
+    recognitionRef.current?.stop()
+  }
+
+  const confirmVoiceSpend = async () => {
+    const spend = pendingVoiceSpend.current
+    if (!spend) return
+    confirmListening.current = false
+    pendingVoiceSpend.current = null
+    setVoiceSpend(null)
+    recognitionRef.current?.stop()
+    updateCurrentChatMessages((prev) =>
+      prev.map((m) =>
+        m.spend && !m.spend.done && m.spend.kind === spend.kind
+          ? { ...m, spend: { ...m.spend, done: true } }
+          : m
+      )
+    )
+    voicePhaseRef.current = 'thinking'
+    setVoicePhase('thinking')
+    voiceSend.current = false
+    if (spend.kind === 'video') {
+      if (spend.brief) {
+        const { applyStudioBrief } = await import('@/lib/assistant-actions')
+        applyStudioBrief(spend.brief, spend.scenes)
+      }
+      window.setTimeout(() => startStudioGenerate({ brief: spend.brief }), 120)
+      setVoiceAnswer('Starting your video in Ad Studio.')
+      voicePhaseRef.current = 'done'
+      setVoicePhase('done')
+      return
+    }
+    if (spend.prompt) {
+      await runChatImageGen(spend.prompt, spend.tier, spend.quoteId)
+      voicePhaseRef.current = 'done'
+      setVoicePhase('done')
+    }
+  }
+
+  const listenForConfirmReply = async () => {
+    confirmListening.current = true
+    transcriptRef.current = ''
+    try {
+      await startRecognition()
+    } catch {
+      return
+    }
+    window.setTimeout(() => {
+      if (!confirmListening.current) return
+      recognitionRef.current?.stop()
+      const said = transcriptRef.current.trim().toLowerCase()
+      confirmListening.current = false
+      if (!said) return
+      if (/\b(yes|yeah|yep|ok|okay|sure|do it|generate|go|confirm|run it)\b/.test(said)) {
+        void confirmVoiceSpend()
+      } else if (/\b(no|nope|cancel|stop|not now|never)\b/.test(said)) {
+        declineVoiceSpend()
+      }
+    }, 3500)
+  }
+
+  const confirmSpend = async (msg: Message) => {
+    if (!msg.spend || msg.spend.done) return
+    const stamp = msg.timestamp
+    updateCurrentChatMessages((prev) =>
+      prev.map((m) =>
+        m.timestamp === stamp && m.spend ? { ...m, spend: { ...m.spend, done: true } } : m
+      )
+    )
+    if (pendingVoiceSpend.current) {
+      pendingVoiceSpend.current = null
+      setVoiceSpend(null)
+    }
+    if (msg.spend.kind === 'video') {
+      if (msg.spend.brief) {
+        const { applyStudioBrief } = await import('@/lib/assistant-actions')
+        applyStudioBrief(msg.spend.brief, msg.spend.scenes)
+      }
+      window.setTimeout(() => startStudioGenerate({ brief: msg.spend?.brief }), 120)
+      return
+    }
+    if (msg.spend.prompt) {
+      await runChatImageGen(msg.spend.prompt, msg.spend.tier, msg.spend.quoteId)
+    }
+  }
+
+  const useAssetInStudio = (asset: { url?: string; title: string; kind: string }) => {
+    if (!asset.url) return
+    window.dispatchEvent(
+      new CustomEvent('dmf-studio-apply', {
+        detail: { refUrl: asset.url, asFirstFrame: asset.kind === 'image' },
+      })
+    )
+    if (!window.location.pathname.startsWith('/ad-studio')) {
+      window.location.href = '/ad-studio'
+    }
+  }
+
+  const runChatImageGen = async (
+    prompt: string,
+    tier: 'fast' | 'smart' = 'fast',
+    quoteId?: string
+  ) => {
     updateCurrentChatMessages((prev) => [
       ...prev,
       { sender: 'bot', text: 'Generating still…', timestamp: Date.now() },
     ])
     try {
-      const qRes = await fetch(`/api/images/quote?tier=${tier === 'smart' ? 'smart' : 'fast'}`)
-      if (qRes.status === 401) {
-        updateCurrentChatMessages((prev) => [
-          ...prev.slice(0, -1),
-          { sender: 'bot', text: 'Sign in to generate images.', timestamp: Date.now() },
-        ])
-        return
-      }
-      const quote = await qRes.json()
-      if (!qRes.ok) throw new Error(quote.error || 'Quote failed')
-      if (!quote.canAfford) {
-        updateCurrentChatMessages((prev) => [
-          ...prev.slice(0, -1),
-          {
-            sender: 'bot',
-            text: 'Need more Coinz. Open /coin-wallet to top up, then ask again.',
-            timestamp: Date.now(),
-          },
-        ])
-        return
+      let activeQuoteId = quoteId || ''
+      let activeTier = tier
+      if (!activeQuoteId) {
+        const qRes = await fetch(`/api/images/quote?tier=${tier === 'smart' ? 'smart' : 'fast'}`)
+        if (qRes.status === 401) {
+          updateCurrentChatMessages((prev) => [
+            ...prev.slice(0, -1),
+            { sender: 'bot', text: 'Sign in to generate images.', timestamp: Date.now() },
+          ])
+          return
+        }
+        const quote = await qRes.json()
+        if (!qRes.ok) throw new Error(quote.error || 'Quote failed')
+        if (!quote.canAfford) {
+          updateCurrentChatMessages((prev) => [
+            ...prev.slice(0, -1),
+            {
+              sender: 'bot',
+              text: 'Need more Coinz. Open /coin-wallet to top up, then ask again.',
+              timestamp: Date.now(),
+            },
+          ])
+          return
+        }
+        activeQuoteId = quote.quoteId
+        activeTier = quote.tier || tier
       }
       const gRes = await fetch('/api/images/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          quoteId: quote.quoteId,
+          quoteId: activeQuoteId,
           prompt,
-          tier: quote.tier,
+          tier: activeTier,
           mode: 'generate',
           aspect_ratio: '1:1',
         }),
@@ -598,50 +978,81 @@ export default function PremiumChat() {
   }
 
   const closeVoice = () => {
+    voiceHoldEnding.current = false
+    voiceSend.current = false
+    confirmListening.current = false
+    pendingVoiceSpend.current = null
+    setVoiceSpend(null)
+    voicePhaseRef.current = null
     recognitionRef.current?.stop()
     stopSpeaking()
     setVoicePhase(null)
-    voiceSend.current = false
+  }
+
+  const releaseFabCapture = () => {
+    const el = fabEl.current
+    const id = capturedPointerId.current
+    if (el && id != null) {
+      try {
+        el.releasePointerCapture(id)
+      } catch {
+        /* ignore */
+      }
+    }
+    capturedPointerId.current = null
   }
 
   const onFabPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
-    pointerHandled.current = false
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    holdTimer.current = window.setTimeout(() => {
-      holding.current = true
-      voiceSend.current = true
-      setVoiceTranscript('')
-      setVoiceAnswer('')
-      setVoicePhase('listening')
-      setIsOpen(false)
-      setAskBarOpen(false)
-      void startRecognition()
-    }, 220)
+    try {
+      pointerHandled.current = false
+      fabEl.current = e.currentTarget as HTMLElement
+      capturedPointerId.current = e.pointerId
+      try {
+        fabEl.current.setPointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
+      unlockAssistantAudio()
+      if (!isIosSafariLike()) warmupAssistantVoice()
+      void fetchAssistantContext()
+      holdTimer.current = window.setTimeout(() => {
+        holding.current = true
+        voiceSend.current = true
+        transcriptRef.current = ''
+        setVoiceTranscript('')
+        setVoiceAnswer('')
+        setVoiceSpend(null)
+        pendingVoiceSpend.current = null
+        voicePhaseRef.current = 'listening'
+        setVoicePhase('listening')
+        setIsOpen(false)
+        setAskBarOpen(false)
+        void startRecognition()
+      }, 220)
+    } catch (err) {
+      console.warn('FAB pointerdown', err)
+    }
   }
 
   const finishPointer = (asCancel: boolean) => {
     if (pointerHandled.current) return
     pointerHandled.current = true
+    releaseFabCapture()
     if (holdTimer.current) {
       window.clearTimeout(holdTimer.current)
       holdTimer.current = null
     }
     if (holding.current) {
       holding.current = false
-      recognitionRef.current?.stop()
+      voiceHoldEnding.current = true
       unlockAssistantAudio()
-      const text = transcriptRef.current.trim()
-      if (text) {
-        setVoicePhase('thinking')
-        void handleSend(text)
-      } else {
-        setVoicePhase(null)
-        voiceSend.current = false
-      }
+      recognitionRef.current?.stop()
+      window.setTimeout(() => completeVoiceHold(), 1400)
       return
     }
     if (asCancel) return
+    if (voicePhaseRef.current || voiceSend.current || voiceHoldEnding.current) return
     if (pathname.startsWith('/ad-studio')) {
       setAskBarOpen((bar) => !bar)
       setIsOpen(false)
@@ -653,6 +1064,9 @@ export default function PremiumChat() {
 
   const onFabPointerUp = () => finishPointer(false)
   const onFabPointerCancel = () => finishPointer(true)
+  const onFabLostPointerCapture = () => {
+    if (holding.current || holdTimer.current) finishPointer(true)
+  }
 
   if (!fabVisible && !isOpen && !voicePhase && !askBarOpen) return null
 
@@ -664,6 +1078,7 @@ export default function PremiumChat() {
         onPointerDown={onFabPointerDown}
         onPointerUp={onFabPointerUp}
         onPointerCancel={onFabPointerCancel}
+        onLostPointerCapture={onFabLostPointerCapture}
         onContextMenu={(e) => e.preventDefault()}
         className="fixed bottom-[20px] left-[20px] md:bottom-[30px] md:left-[30px] w-[60px] h-[60px] md:w-[70px] md:h-[70px] rounded-full z-[1000] flex items-center justify-center cursor-pointer shadow-[0_8px_24px_rgba(255,215,0,0.25)] border border-gold/30 touch-none"
         style={{ background: 'linear-gradient(135deg, #FFD700, #B8860B)' }}
@@ -1008,8 +1423,72 @@ export default function PremiumChat() {
                                   className="w-full max-h-64 object-contain rounded-lg border border-gold/20"
                                 />
                               )}
+                              {msg.assets && msg.assets.length > 0 && (
+                                <div className="grid grid-cols-2 gap-2">
+                                  {msg.assets.map((asset) => (
+                                    <button
+                                      key={asset.id}
+                                      type="button"
+                                      onClick={() => useAssetInStudio(asset)}
+                                      className="overflow-hidden rounded-lg border border-gold/20 text-left"
+                                    >
+                                      {asset.thumb || asset.url ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                          src={asset.thumb || asset.url}
+                                          alt=""
+                                          className="h-24 w-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="h-24 bg-white/5" />
+                                      )}
+                                      <p className="p-1.5 text-[10px] text-white/70 line-clamp-2">
+                                        {asset.title}
+                                      </p>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                               <MarkdownText text={msg.text} onPreview={(code) => setPreviewCode(code)} />
+                              {msg.spend && !msg.spend.done && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {msg.spend.canAfford ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => void confirmSpend(msg)}
+                                      className="rounded-full bg-gold px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-black"
+                                    >
+                                      Generate · {msg.spend.priceCoins}c
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        window.location.href = '/coin-wallet'
+                                      }}
+                                      className="rounded-full border border-gold/40 px-3 py-1.5 text-[10px] uppercase tracking-widest text-gold"
+                                    >
+                                      Get Coinz
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                               <div className="flex justify-end gap-2">
+                                {msg.imageUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      useAssetInStudio({
+                                        url: msg.imageUrl,
+                                        title: msg.text,
+                                        kind: 'image',
+                                      })
+                                    }
+                                    className="text-[9px] uppercase tracking-widest text-gold/70 hover:text-gold"
+                                  >
+                                    Use in studio
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => speak(msg.text)}
                                   className="opacity-20 hover:opacity-100 transition-opacity p-1"
@@ -1174,6 +1653,16 @@ export default function PremiumChat() {
         answer={voiceAnswer}
         muted={muted}
         showStudioActions={pathname.startsWith('/ad-studio')}
+        spendLabel={
+          voiceSpend
+            ? voiceSpend.canAfford
+              ? `Generate · ${voiceSpend.priceCoins}c`
+              : null
+            : null
+        }
+        spendCanAfford={voiceSpend?.canAfford}
+        onConfirmSpend={() => void confirmVoiceSpend()}
+        onDeclineSpend={declineVoiceSpend}
         onUseInPrompt={() => {
           if (!voiceAnswer.trim()) return
           window.dispatchEvent(

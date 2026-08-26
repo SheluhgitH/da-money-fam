@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSystemPrompt } from '@/lib/chat-prompts'
-import { streamChatWithFallback } from '@/lib/chat-completion'
+import { streamChatWithTools } from '@/lib/chat-completion'
 import { getDefaultChatModel, getPickerModels } from '@/lib/chat-models'
 
 export async function GET() {
@@ -14,9 +14,9 @@ export async function POST(req: Request) {
   const { messages, model, pageContext } = await req.json()
 
   const systemPrompt = getSystemPrompt(
-    typeof pageContext === 'string' ? pageContext.slice(0, 4000) : undefined
+    typeof pageContext === 'string' ? pageContext.slice(0, 8000) : undefined
   )
   const conversationHistory = [{ role: 'system' as const, content: systemPrompt }, ...messages]
 
-  return streamChatWithFallback(conversationHistory, model)
+  return streamChatWithTools(conversationHistory, model)
 }
