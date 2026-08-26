@@ -94,7 +94,7 @@ Rules:
 - Keep continuity across scenes (same subject/look unless a scene says otherwise).
 - Preserve creative choices: ${fragments.join('; ')}
 - DMF brand: luxury hip-hop, gold and black, premium commercial polish.
-${referenceUrls.length ? '- Preserve identity from reference images.' : ''}`
+${referenceUrls.length ? '- Preserve identity and wardrobe from reference images. Do not treat a reference as a literal opening still; put the subject in the scene action.' : ''}`
 
   const raw = await completeAdPromptChat(
     [
@@ -143,7 +143,12 @@ export async function resolveAdPrompt(input: {
     return enhancedPrompt.trim()
   }
   if (enhance) {
-    return enhanceAdPrompt(brief, creative, referenceUrls || [])
+    try {
+      return await enhanceAdPrompt(brief, creative, referenceUrls || [])
+    } catch (err) {
+      console.error('enhanceAdPrompt failed, using base prompt', err)
+      return buildBaseAdPrompt(brief, creative)
+    }
   }
   return buildBaseAdPrompt(brief, creative)
 }

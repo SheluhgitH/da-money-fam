@@ -4,10 +4,12 @@ import { getAdVideoCoinPrice } from '@/lib/ad-studio-pricing'
 import { debitUserCoins, creditUserCoins } from '@/lib/user-store'
 import { isActiveFanClubMember } from '@/lib/fan-club'
 import type { CreativeSelections } from '@/lib/ad-creative-presets'
-import { normalizeDuration, submitSeedanceJob } from '@/lib/seedance-submit'
+import { normalizeDuration, submitSeedanceJob, toFirstFrameImage, toLastFrameImage } from '@/lib/seedance-submit'
 import { createAdStudioGeneration } from '@/lib/ad-studio-jobs'
 import type { StoryboardScene } from '@/lib/ad-studio-types'
 import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
+
+export const maxDuration = 60
 
 /**
  * Starts a storyboard: debits for all scenes, generates scene 0.
@@ -76,6 +78,8 @@ export async function POST(req: Request) {
     debited = true
 
     const continuityBrief = `${sceneBriefs[0]}. Scene 1 of ${sceneCount} in a continuous ad storyboard.`
+    const lockedFirst = toFirstFrameImage(reference_images)
+    const lockedLast = toLastFrameImage(reference_images)
     const result = await submitSeedanceJob({
       brief: continuityBrief,
       creative: creative as Partial<CreativeSelections> | undefined,
@@ -83,9 +87,12 @@ export async function POST(req: Request) {
       duration,
       aspect_ratio,
       reference_images,
+      first_frame_image: lockedFirst?.image_url.url,
+      last_frame_image: lockedLast?.image_url.url,
       generate_audio: wantsAudio,
       model: model.key,
       resolution,
+      storyboardMode: true,
     })
 
     const scenes: StoryboardScene[] = sceneBriefs.map((brief, i) => ({

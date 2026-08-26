@@ -5,6 +5,8 @@ import type { CreativeSelections } from '@/lib/ad-creative-presets'
 import { submitSeedanceJob } from '@/lib/seedance-submit'
 import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
 
+export const maxDuration = 60
+
 /**
  * Continue storyboard: generate next pending scene with optional first_frame from previous.
  * Coinz already debited at storyboard create.
@@ -38,7 +40,7 @@ export async function POST(
     )
   }
 
-  const nextIndex = gen.scenes.findIndex((s) => !s.jobId || s.status === 'pending')
+  const nextIndex = gen.scenes.findIndex((s) => s.status === 'pending')
   if (nextIndex < 0) {
     return NextResponse.json({ error: 'All scenes already started' }, { status: 400 })
   }
@@ -60,6 +62,7 @@ export async function POST(
       generate_audio: generate_audio === true,
       model: model.key,
       ignoreRefFrames: true,
+      storyboardMode: true,
       resolution: resolveSubmitResolution(model, resolution),
     })
 

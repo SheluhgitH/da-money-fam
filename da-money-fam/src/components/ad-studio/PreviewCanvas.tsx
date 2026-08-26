@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ASPECT_CLASS } from '@/lib/ad-studio-types'
 import type { AdStudioController } from '@/hooks/useAdStudio'
 
-const STEPS = ['Enhancing…', 'Rendering…', 'Almost there…', 'Finishing…']
+const STEPS = ['Submitting…', 'Rendering…', 'Almost there…', 'Finishing…']
 
 export default function PreviewCanvas({ studio }: { studio: AdStudioController }) {
   const aspectClass = ASPECT_CLASS[studio.aspectRatio] || ASPECT_CLASS['9:16']

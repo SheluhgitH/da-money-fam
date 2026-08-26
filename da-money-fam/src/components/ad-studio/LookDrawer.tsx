@@ -7,7 +7,7 @@ export default function LookDrawer({ studio }: { studio: AdStudioController }) {
   if (!studio.lookOpen) return null
 
   return (
-    <div className="border-t border-gold/15 bg-black/80 p-4 max-h-[40vh] overflow-y-auto">
+    <div className="border-t border-gold/15 pt-3">
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs text-gold uppercase tracking-[0.2em] font-bold">Look</p>
         <button

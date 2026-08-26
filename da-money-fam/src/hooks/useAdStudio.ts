@@ -62,25 +62,35 @@ async function uploadDataUrlAsRef(dataUrl: string): Promise<string | null> {
   }
 }
 
+function toAbsoluteMediaUrl(videoUrl: string): string {
+  if (videoUrl.startsWith('http://') || videoUrl.startsWith('https://')) return videoUrl
+  try {
+    return new URL(videoUrl, window.location.origin).href
+  } catch {
+    return videoUrl
+  }
+}
+
 async function captureLastFrameHttps(
   videoUrl: string,
   storyboardId: string
 ): Promise<string | null> {
-  const dataUrl = await extractLastFrame(videoUrl)
-  if (dataUrl?.startsWith('data:')) {
-    const uploaded = await uploadDataUrlAsRef(dataUrl)
-    if (uploaded) return uploaded
-  }
+  const absoluteUrl = toAbsoluteMediaUrl(videoUrl)
   try {
     const res = await fetch(`/api/video/storyboard/${storyboardId}/last-frame`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ videoUrl }),
+      body: JSON.stringify({ videoUrl: absoluteUrl }),
     })
     const data = await res.json()
     if (res.ok && typeof data.url === 'string') return data.url
   } catch {
-    /* fall through */
+    /* fall through to client canvas */
+  }
+  const dataUrl = await extractLastFrame(absoluteUrl)
+  if (dataUrl?.startsWith('data:')) {
+    const uploaded = await uploadDataUrlAsRef(dataUrl)
+    if (uploaded) return uploaded
   }
   return null
 }
@@ -611,12 +621,12 @@ export function useAdStudio(initialBrief = '') {
   }
 
   const startStoryboardFromStill = (url: string, hint?: string) => {
-    addReferenceFromUrl(url, true)
+    addReferenceFromUrl(url, false)
     setMode('storyboard')
     setSceneCount(3)
     const subject = (hint || brief).trim() || 'this look'
     setSceneBriefs([
-      `Hook: open on this still as the first frame. ${subject}. Camera eases in.`,
+      `Hook: cinematic open with this talent in the scene. ${subject}. Camera eases in.`,
       `Product: same talent and wardrobe, show the product clearly.`,
       `End card: same look, hold for a closer, no readable text.`,
     ])
@@ -767,7 +777,7 @@ export function useAdStudio(initialBrief = '') {
 
     try {
       if (mode === 'storyboard') {
-        setStatusText('Starting storyboard…')
+        setStatusText(enhance ? 'Polishing prompt…' : 'Submitting to Seedance…')
         setProgressStep(1)
         const startRes = await fetch('/api/video/storyboard', {
           method: 'POST',
@@ -778,7 +788,13 @@ export function useAdStudio(initialBrief = '') {
             enhance,
             duration_seconds: duration,
             aspect_ratio: aspectRatio,
-            reference_images: references,
+            reference_images: references.map((r) => ({
+              url: r.url,
+              kind: r.kind,
+              name: r.name,
+              useAsFirstFrame: r.useAsFirstFrame === true,
+              useAsLastFrame: r.useAsLastFrame === true,
+            })),
             model: modelKey,
             generate_audio: generateAudio || references.some((r) => r.kind === 'audio'),
             resolution,
@@ -906,8 +922,14 @@ export function useAdStudio(initialBrief = '') {
         await fetchLibrary()
         await fetchPricing()
       } else {
-        setStatusText(variations > 1 ? `Generating ${variations} variants…` : 'Rendering…')
-        setProgressStep(enhance ? 2 : 1)
+        setStatusText(
+          enhance
+            ? 'Polishing prompt…'
+            : variations > 1
+              ? `Submitting ${variations} variants…`
+              : 'Submitting to Seedance…'
+        )
+        setProgressStep(1)
         const res = await fetch('/api/video', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

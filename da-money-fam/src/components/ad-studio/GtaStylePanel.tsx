@@ -261,7 +261,7 @@ export default function GtaStylePanel({
                 <button
                   type="button"
                   onClick={() => onUseForVideo(resultUrl)}
-                  className="mt-3 text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold/30 text-gold hover:bg-gold hover:text-black transition-colors"
+                  className="mt-3 w-full text-[10px] uppercase tracking-wider px-3 py-3 rounded-full bg-gold text-black font-bold"
                 >
                   Use for video ad
                 </button>
@@ -271,7 +271,7 @@ export default function GtaStylePanel({
         </AnimatePresence>
       </div>
 
-      <div className="shrink-0 border-t border-gold/15 bg-black/85 px-4 py-3 flex items-center justify-between gap-3">
+      <div className="shrink-0 border-t border-gold/15 bg-black/85 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center justify-between gap-3">
         <div className="min-w-0">
           {images.error ? (
             <p className="text-xs text-red-300 truncate">{images.error}</p>

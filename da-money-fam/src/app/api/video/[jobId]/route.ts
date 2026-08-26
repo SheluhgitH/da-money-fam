@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth/user'
-import { completeGenerationByJobId } from '@/lib/ad-studio-jobs'
+import { completeGenerationByJobId, getAdStudioGeneration } from '@/lib/ad-studio-jobs'
 import { ensureDurableVideoWithPoster } from '@/lib/ad-studio-video-storage'
 
 export const dynamic = 'force-dynamic'
@@ -52,17 +52,32 @@ export async function GET(
       videoUrl = proxyUrl
 
       if (generationId) {
+        let deferPersist = false
         try {
-          const persisted = await ensureDurableVideoWithPoster({
-            videoUrl: proxyUrl,
-            userId: user.id,
-            generationId,
-          })
-          videoUrl = persisted.videoUrl
-          posterUrl = persisted.posterUrl
+          const gen = await getAdStudioGeneration(user.id, generationId)
+          if (gen?.mode === 'storyboard') {
+            const remaining = gen.scenes.filter(
+              (s) => s.jobId !== jobId && s.status !== 'completed'
+            )
+            deferPersist = remaining.length > 0
+          }
         } catch (e) {
-          console.error('Failed to persist video to storage:', e)
-          videoUrl = proxyUrl
+          console.error('Failed to load generation for persist decision:', e)
+        }
+
+        if (!deferPersist) {
+          try {
+            const persisted = await ensureDurableVideoWithPoster({
+              videoUrl: proxyUrl,
+              userId: user.id,
+              generationId,
+            })
+            videoUrl = persisted.videoUrl
+            posterUrl = persisted.posterUrl
+          } catch (e) {
+            console.error('Failed to persist video to storage:', e)
+            videoUrl = proxyUrl
+          }
         }
       }
 

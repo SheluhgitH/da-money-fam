@@ -68,19 +68,15 @@ export default function ImageStudioPanel({
           </div>
       </div>
 
-      <div className="shrink-0 border-t border-gold/15 bg-black/80 p-4 space-y-3">
-        <div className="flex flex-wrap gap-2">
+      <div className="shrink-0 border-t border-gold/15 bg-black/80 p-3 space-y-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="flex items-center gap-2 overflow-x-auto studio-scroll flex-nowrap">
           <button
             type="button"
             onClick={() => images.resetJob()}
-            className="text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border border-white/15 text-white/60"
+            className="shrink-0 text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border border-white/15 text-white/60"
           >
             New
           </button>
-        </div>
-        {images.error && <p className="text-xs text-red-300">{images.error}</p>}
-
-        <div className="flex flex-wrap gap-2">
           {IMAGE_TIERS.map((t) => {
             const tp = images.quote?.tierPrices?.[t]
             const current = tp?.priceCoins ?? IMAGE_MODELS[t].baseCoins
@@ -93,7 +89,7 @@ export default function ImageStudioPanel({
                   if (t === 'edit' || t === 'smart') images.setMode('edit')
                   else images.setMode('generate')
                 }}
-                className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
+                className={`shrink-0 text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
                   images.tier === t
                     ? 'bg-gold text-black border-gold'
                     : 'border-white/15 text-white/60'
@@ -107,13 +103,14 @@ export default function ImageStudioPanel({
           <select
             value={images.aspectRatio}
             onChange={(e) => images.setAspectRatio(e.target.value)}
-            className="bg-black border border-white/15 rounded-md px-2 py-1 text-[10px] text-white outline-none"
+            className="shrink-0 bg-black border border-white/15 rounded-md px-2 py-1.5 min-h-[28px] text-[10px] text-white outline-none"
           >
             <option value="9:16">9:16</option>
             <option value="1:1">1:1</option>
             <option value="16:9">16:9</option>
           </select>
         </div>
+        {images.error && <p className="text-xs text-red-300">{images.error}</p>}
 
         <StudioTemplateChips onPick={(t) => images.setPrompt(t.still)} />
 
@@ -131,13 +128,13 @@ export default function ImageStudioPanel({
         />
 
         {canEdit && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2 overflow-x-auto studio-scroll flex-nowrap">
             {(['subtle', 'medium', 'heavy'] as const).map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => images.setEditStrength(s)}
-                className={`text-[9px] uppercase tracking-wider px-2 py-1 rounded-full border ${
+                className={`shrink-0 text-[9px] uppercase tracking-wider px-2 py-1.5 min-h-[28px] rounded-full border ${
                   images.editStrength === s
                     ? 'border-gold text-gold'
                     : 'border-white/15 text-white/50'
@@ -150,18 +147,13 @@ export default function ImageStudioPanel({
               <button
                 type="button"
                 onClick={() => images.setPaintOpen(!images.paintOpen)}
-                className={`text-[9px] uppercase tracking-wider px-2 py-1 rounded-full border ${
+                className={`shrink-0 text-[9px] uppercase tracking-wider px-2 py-1.5 min-h-[28px] rounded-full border ${
                   images.paintOpen ? 'border-gold text-gold' : 'border-white/15 text-white/50'
                 }`}
               >
                 Paint
               </button>
             )}
-          </div>
-        )}
-
-        {canEdit && (
-          <div className="flex flex-wrap gap-2">
             {EDIT_LOCK_CHIPS.map((chip) => (
               <button
                 key={chip.id}
@@ -171,7 +163,7 @@ export default function ImageStudioPanel({
                     images.prompt.trim() ? `${chip.extra} ${images.prompt.trim()}` : chip.extra
                   )
                 }
-                className="text-[9px] uppercase tracking-wider px-2 py-1 rounded-full border border-white/15 text-white/60 hover:border-gold/50"
+                className="shrink-0 text-[9px] uppercase tracking-wider px-2 py-1.5 min-h-[28px] rounded-full border border-white/15 text-white/60"
               >
                 {chip.label}
               </button>
@@ -180,7 +172,7 @@ export default function ImageStudioPanel({
               type="button"
               disabled={images.generating}
               onClick={() => runPreset('remix')}
-              className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold text-gold disabled:opacity-40"
+              className="shrink-0 text-[10px] uppercase tracking-wider px-3 py-1.5 min-h-[28px] rounded-full border border-gold text-gold disabled:opacity-40"
             >
               Remix look
             </button>
@@ -188,14 +180,14 @@ export default function ImageStudioPanel({
               type="button"
               disabled={images.generating}
               onClick={() => runPreset('face')}
-              className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold/40 text-gold/90 disabled:opacity-40"
+              className="shrink-0 text-[10px] uppercase tracking-wider px-3 py-1.5 min-h-[28px] rounded-full border border-gold/40 text-gold/90 disabled:opacity-40"
             >
               Randomize face
             </button>
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto studio-scroll flex-nowrap">
           <input
             ref={images.fileRef}
             type="file"
@@ -210,21 +202,21 @@ export default function ImageStudioPanel({
           <button
             type="button"
             onClick={() => images.fileRef.current?.click()}
-            className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold/25 text-gold/80"
+            className="shrink-0 text-[10px] uppercase tracking-wider px-3 py-1.5 min-h-[28px] rounded-full border border-gold/25 text-gold/80"
           >
             + Refs
           </button>
           {images.references.map((url, i) => (
             <div
               key={url}
-              className="relative w-10 h-10 rounded overflow-hidden border border-gold/30"
+              className="relative w-10 h-10 shrink-0 rounded overflow-hidden border border-gold/30"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={url} alt="" className="w-full h-full object-cover" />
               <button
                 type="button"
                 onClick={() => images.removeReference(i)}
-                className="absolute top-0 right-0 w-4 h-4 bg-black/80 text-white text-[9px]"
+                className="absolute top-0 right-0 w-5 h-5 bg-black/80 text-white text-[9px]"
               >
                 ×
               </button>
@@ -235,9 +227,9 @@ export default function ImageStudioPanel({
               type="button"
               disabled={images.optimizing || !images.prompt.trim()}
               onClick={() => images.enhancePrompt()}
-              className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold/40 text-gold/90 disabled:opacity-40"
+              className="shrink-0 text-[10px] uppercase tracking-wider px-3 py-1.5 min-h-[28px] rounded-full border border-gold/40 text-gold/90 disabled:opacity-40"
             >
-              Enhance prompt
+              Enhance
             </button>
           )}
           {([1, 2, 4] as const).map((n) => (
@@ -245,7 +237,7 @@ export default function ImageStudioPanel({
               key={n}
               type="button"
               onClick={() => images.setStillCount(n)}
-              className={`text-[10px] px-2.5 py-1 rounded-md border ${
+              className={`shrink-0 text-[10px] px-2.5 py-1.5 min-h-[28px] rounded-md border ${
                 images.stillCount === n
                   ? 'bg-gold text-black border-gold'
                   : 'border-white/15 text-white/60'
@@ -254,39 +246,6 @@ export default function ImageStudioPanel({
               {n}×
             </button>
           ))}
-          <button
-            type="button"
-            disabled={images.generating || (!images.prompt.trim() && !canEdit)}
-            onClick={() =>
-              images.generate(undefined, {
-                inpaint: images.paintOpen,
-                count: images.stillCount,
-              })
-            }
-            className="ml-auto px-5 py-2 rounded-full bg-gold text-black text-xs font-bold uppercase tracking-wider disabled:opacity-40"
-          >
-            {images.generating ? (
-              'Working…'
-            ) : editMode ? (
-              <>
-                Apply edit ·{' '}
-                <CoinzPriceCut
-                  current={price * images.stillCount}
-                  legacy={legacyPrice * images.stillCount}
-                  suffix="c"
-                />
-              </>
-            ) : (
-              <>
-                Generate ·{' '}
-                <CoinzPriceCut
-                  current={price * images.stillCount}
-                  legacy={legacyPrice * images.stillCount}
-                  suffix="c"
-                />
-              </>
-            )}
-          </button>
         </div>
 
         {(images.previewUrl && onUseForVideo) || (images.previewUrl && onMakeStoryboard) ? (
@@ -318,6 +277,40 @@ export default function ImageStudioPanel({
             {images.quote.tierOrFanClub ? ` · ${images.quote.tierOrFanClub}` : ''}
           </p>
         )}
+
+        <button
+          type="button"
+          disabled={images.generating || (!images.prompt.trim() && !canEdit)}
+          onClick={() =>
+            images.generate(undefined, {
+              inpaint: images.paintOpen,
+              count: images.stillCount,
+            })
+          }
+          className="w-full py-3 rounded-full bg-gold text-black text-xs font-bold uppercase tracking-wider disabled:opacity-40"
+        >
+          {images.generating ? (
+            'Working…'
+          ) : editMode ? (
+            <>
+              Apply edit ·{' '}
+              <CoinzPriceCut
+                current={price * images.stillCount}
+                legacy={legacyPrice * images.stillCount}
+                suffix="c"
+              />
+            </>
+          ) : (
+            <>
+              Generate ·{' '}
+              <CoinzPriceCut
+                current={price * images.stillCount}
+                legacy={legacyPrice * images.stillCount}
+                suffix="c"
+              />
+            </>
+          )}
+        </button>
       </div>
 
       {images.paintOpen && images.previewUrl ? (

@@ -5,6 +5,19 @@ import type { CreativeSelections } from '@/lib/ad-creative-presets'
 import { buildBaseAdPrompt, enhanceAdPrompt, enhanceStoryboardScenes } from '@/lib/ad-prompt-enhance'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 20
+
+async function withEnhanceTimeout<T>(work: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('ENHANCE_TIMEOUT')), 18000)
+  })
+  try {
+    return await Promise.race([work, timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 export async function POST(req: Request) {
   const user = await getCurrentUser()
@@ -43,7 +56,9 @@ export async function POST(req: Request) {
       }
 
       const basePrompts = sceneBriefs.map((b) => buildBaseAdPrompt(b, creative))
-      const enhancedPrompts = await enhanceStoryboardScenes(sceneBriefs, creative, referenceUrls)
+      const enhancedPrompts = await withEnhanceTimeout(
+        enhanceStoryboardScenes(sceneBriefs, creative, referenceUrls)
+      )
       return NextResponse.json({
         mode: 'storyboard',
         basePrompts,
@@ -64,7 +79,9 @@ export async function POST(req: Request) {
     }
 
     const basePrompt = buildBaseAdPrompt(brief, creative)
-    const enhancedPrompt = await enhanceAdPrompt(brief, creative, referenceUrls)
+    const enhancedPrompt = await withEnhanceTimeout(
+      enhanceAdPrompt(brief, creative, referenceUrls)
+    )
 
     return NextResponse.json({
       mode: 'single',
@@ -74,6 +91,9 @@ export async function POST(req: Request) {
     })
   } catch (error) {
     console.error('enhance-preview:', error)
+    if (error instanceof Error && error.message === 'ENHANCE_TIMEOUT') {
+      return NextResponse.json({ error: 'Enhance timed out. Try again or generate without it.' }, { status: 504 })
+    }
     return NextResponse.json({ error: 'Failed to enhance prompt' }, { status: 500 })
   }
 }

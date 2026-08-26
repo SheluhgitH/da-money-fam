@@ -38,6 +38,7 @@ export default function AdStudioShell({
   const [toast, setToast] = useState<string | null>(null)
   const [showImageTip, setShowImageTip] = useState(false)
   const [showGtaTip, setShowGtaTip] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
     fetch('/api/site-settings')
@@ -139,78 +140,109 @@ export default function AdStudioShell({
   return (
     <div className="h-[100dvh] flex flex-col bg-[#050505] text-white overflow-hidden">
       <div className="pointer-events-none fixed inset-0 opacity-40 bg-[radial-gradient(ellipse_at_top,_rgba(255,215,0,0.08),_transparent_50%)]" />
-      <header className="shrink-0 flex items-center justify-between gap-3 px-4 py-3 border-b border-gold/15 bg-black/70 backdrop-blur-md relative z-10">
-        <div className="flex items-center gap-3 min-w-0">
-          <Link href="/" className="text-gold font-serif text-sm tracking-[0.15em] uppercase shrink-0">
-            DMF
-          </Link>
-          <span className="text-white/20">/</span>
-          <h1 className="text-sm font-serif text-gold truncate">Ad Studio</h1>
-          <div className="flex gap-1 ml-1">
-            <button
-              type="button"
-              onClick={() => setStudioTab('video')}
-              className={`text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border ${
-                studioTab === 'video'
-                  ? 'bg-gold text-black border-gold'
-                  : 'border-gold/25 text-gold/70'
-              }`}
-            >
-              Video
-            </button>
+      <header className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gold/15 bg-black/70 backdrop-blur-md relative z-30 flex-nowrap">
+        <Link href="/" className="text-gold font-serif text-sm tracking-[0.15em] uppercase shrink-0">
+          DMF
+        </Link>
+        <h1 className="hidden sm:block text-sm font-serif text-gold shrink-0">Ad Studio</h1>
+        <div className="flex rounded-full border border-gold/25 p-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => setStudioTab('video')}
+            className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 rounded-full ${
+              studioTab === 'video' ? 'bg-gold text-black' : 'text-gold/70'
+            }`}
+          >
+            Video
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setStudioTab('images')
+              dismissImageTip()
+            }}
+            className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 rounded-full ${
+              studioTab === 'images' ? 'bg-gold text-black' : 'text-gold/70'
+            }`}
+          >
+            Images
+          </button>
+        </div>
+        {studioTab === 'video' && studio.statusText && (
+          <span className="hidden lg:inline min-w-0 truncate text-[10px] uppercase tracking-widest text-gold/60">
+            {studio.statusText}
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          {(studio.pricing?.isAuthenticated || images.quote || images.gtaQuotes.fast) && (
+            <span className="text-[10px] font-mono text-gold/80 border border-gold/20 px-2 py-1 rounded-md">
+              {balance ?? '—'}c
+            </span>
+          )}
+          {(studio.pricing?.isAuthenticated || images.quote || images.gtaQuotes.fast) && (
             <button
               type="button"
               onClick={() => {
-                setStudioTab('images')
-                dismissImageTip()
+                setMenuOpen(false)
+                setBuyOpen((o) => !o)
               }}
-              className={`text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border ${
-                studioTab === 'images'
-                  ? 'bg-gold text-black border-gold'
-                  : 'border-gold/25 text-gold/70'
-              }`}
+              className="hidden md:inline-flex text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full bg-gold text-black font-bold"
             >
-              Image Studio
+              Buy Coinz
             </button>
+          )}
+          <div className="relative">
+            <button
+              type="button"
+              aria-label="More"
+              onClick={() => setMenuOpen((o) => !o)}
+              className="w-8 h-8 rounded-full border border-gold/25 text-gold text-lg leading-none"
+            >
+              ···
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-1 z-40 min-w-[10rem] rounded-xl border border-gold/25 bg-black/95 py-1 shadow-xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLibraryOpen(true)
+                    setMenuOpen(false)
+                  }}
+                  className="md:hidden w-full text-left px-3 py-2 text-[11px] uppercase tracking-wider text-gold"
+                >
+                  Library
+                </button>
+                {(studio.pricing?.isAuthenticated || images.quote || images.gtaQuotes.fast) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBuyOpen(true)
+                      setMenuOpen(false)
+                    }}
+                    className="md:hidden w-full text-left px-3 py-2 text-[11px] uppercase tracking-wider text-gold"
+                  >
+                    Buy Coinz
+                  </button>
+                )}
+                <Link
+                  href="/account"
+                  className="block px-3 py-2 text-[11px] uppercase tracking-wider text-white/70 hover:text-gold"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Account
+                </Link>
+              </div>
+            )}
           </div>
-          {studioTab === 'video' && studio.statusText && (
-            <span className="hidden sm:inline text-[10px] uppercase tracking-widest text-gold/60 border border-gold/20 px-2 py-1 rounded-full truncate animate-pulse">
-              {studio.statusText}
-            </span>
-          )}
-          {toast && (
-            <span className="text-[10px] uppercase tracking-widest text-black bg-gold px-2 py-1 rounded-full">
-              {toast}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setLibraryOpen(true)}
-            className="md:hidden text-[10px] uppercase tracking-widest px-2 py-1 border border-gold/25 text-gold rounded-full"
-          >
-            Library
-          </button>
-          {(studio.pricing?.isAuthenticated || images.quote || images.gtaQuotes.fast) && (
-            <>
-              <span className="text-[10px] font-mono text-gold/80 border border-gold/20 px-2 py-1 rounded-md">
-                {balance ?? '—'} Coinz
-              </span>
-              <button
-                type="button"
-                onClick={() => setBuyOpen((o) => !o)}
-                className="text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full bg-gold text-black font-bold hover:bg-white transition-colors"
-              >
-                Buy Coinz
-              </button>
-            </>
-          )}
-          <Link href="/account" className="text-[10px] uppercase tracking-widest text-white/40 hover:text-gold">
-            Account
-          </Link>
         </div>
       </header>
+      {toast && (
+        <div className="pointer-events-none fixed top-14 left-1/2 z-[70] -translate-x-1/2 px-3">
+          <span className="block max-w-[90vw] text-center text-[10px] uppercase tracking-widest text-black bg-gold px-3 py-1.5 rounded-full shadow-lg">
+            {toast}
+          </span>
+        </div>
+      )}
 
       {showImageTip && !showGtaTip && studioTab === 'video' && (
         <div className="shrink-0 border-b border-gold/20 bg-gold/10 px-4 py-2 flex items-center justify-between gap-3 relative z-10">
@@ -299,11 +331,11 @@ export default function AdStudioShell({
             />
           </aside>
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
-            <div className="shrink-0 flex gap-1 px-4 pt-3 pb-1">
+            <div className="shrink-0 flex gap-1 px-3 pt-2 pb-1 overflow-x-auto studio-scroll flex-nowrap">
               <button
                 type="button"
                 onClick={() => setImageMode('stills')}
-                className={`text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border ${
+                className={`shrink-0 text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border ${
                   imageMode === 'stills'
                     ? 'bg-gold text-black border-gold'
                     : 'border-gold/25 text-gold/70'
@@ -314,7 +346,7 @@ export default function AdStudioShell({
               <button
                 type="button"
                 onClick={() => setImageMode('gta')}
-                className={`text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border ${
+                className={`shrink-0 text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border ${
                   imageMode === 'gta'
                     ? 'bg-gold text-black border-gold'
                     : 'border-gold/25 text-gold/70'
@@ -325,7 +357,7 @@ export default function AdStudioShell({
               <button
                 type="button"
                 onClick={() => setImageMode('characters')}
-                className={`text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border ${
+                className={`shrink-0 text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border ${
                   imageMode === 'characters'
                     ? 'bg-gold text-black border-gold'
                     : 'border-gold/25 text-gold/70'
@@ -339,9 +371,15 @@ export default function AdStudioShell({
             ) : imageMode === 'characters' ? (
               <CharacterStudioPanel
                 images={images}
-                onUseForVideo={(url, characterId) => {
+                onUseForVideo={(url, characterId, styleId) => {
                   applyImageForVideo(url)
                   if (characterId) studio.setLookCharacterId(characterId)
+                  if (styleId === 'photoreal') {
+                    setToast(
+                      'Mini/Fast auto-prepare this photoreal sheet. Lite works unmarked at lower cost.'
+                    )
+                    window.setTimeout(() => setToast(null), 5000)
+                  }
                 }}
                 onMakeStoryboard={(url) => {
                   studio.startStoryboardFromStill(url)
@@ -380,9 +418,19 @@ export default function AdStudioShell({
       {libraryOpen && (
         <div className="md:hidden fixed inset-0 z-50 bg-black/80" onClick={() => setLibraryOpen(false)}>
           <div
-            className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-matte-black border-r border-gold/20 flex flex-col h-full min-h-0 overflow-hidden"
+            className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-matte-black border-r border-gold/20 flex flex-col h-full min-h-0 overflow-hidden pt-[env(safe-area-inset-top)]"
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="shrink-0 flex items-center justify-between px-3 py-3 border-b border-gold/15">
+              <p className="text-[10px] uppercase tracking-widest text-gold/60">Library</p>
+              <button
+                type="button"
+                onClick={() => setLibraryOpen(false)}
+                className="text-[11px] uppercase tracking-wider text-white/50 hover:text-gold"
+              >
+                Close
+              </button>
+            </div>
             {studioTab === 'images' ? (
               <ImageLibrary
                 items={images.library}

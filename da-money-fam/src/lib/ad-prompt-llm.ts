@@ -44,6 +44,7 @@ async function callChat(
         max_tokens: maxTokens,
         temperature: 0.6,
       }),
+      signal: AbortSignal.timeout(8000),
     })
     if (!response.ok) return null
     const data = await response.json()
@@ -64,6 +65,7 @@ async function callChat(
       max_tokens: maxTokens,
       temperature: 0.6,
     }),
+    signal: AbortSignal.timeout(8000),
   })
   if (!response.ok) return null
   const data = await response.json()

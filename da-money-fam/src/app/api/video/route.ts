@@ -9,6 +9,8 @@ import { createAdStudioGeneration } from '@/lib/ad-studio-jobs'
 import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
 import { FROM_STILL_VIDEO } from '@/lib/studio-templates'
 
+export const maxDuration = 60
+
 export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) {

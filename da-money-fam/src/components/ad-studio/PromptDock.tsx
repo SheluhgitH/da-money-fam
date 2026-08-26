@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useRef, useState } from 'react'
 import type { AdStudioController } from '@/hooks/useAdStudio'
@@ -15,12 +15,21 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [buyingId, setBuyingId] = useState<string | null>(null)
   const [packs, setPacks] = useState<CoinPackage[]>(COIN_PACKAGES)
+  const [optionsOpen, setOptionsOpen] = useState(false)
 
   useEffect(() => {
     fetch('/api/site-settings')
       .then((r) => r.json())
       .then((data) => setPacks(packsFromSettings(data.settings?.['ad_studio.packs'])))
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const sync = () => setOptionsOpen(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
   }, [])
   const price =
     studio.pricing?.totalPriceCoins ??
@@ -67,38 +76,35 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
   }
 
   return (
-    <div className="bg-transparent">
+    <div className="bg-transparent pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       {studio.error && (
-        <div className="px-4 pt-3">
+        <div className="px-3 pt-3">
           <div className="flex items-start justify-between gap-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2">
             <p className="text-xs text-red-300">{studio.error}</p>
             <button
               type="button"
               onClick={() => studio.setError(null)}
-              className="text-red-300/70 hover:text-white text-sm"
+              className="text-red-300/70 hover:text-white text-sm shrink-0"
             >
-              ×
+              Ã—
             </button>
           </div>
         </div>
       )}
 
-      <StoryboardTimeline studio={studio} />
-      <LookDrawer studio={studio} />
-
-      <div className="p-4 space-y-3">
-        <div className="flex gap-2">
+      <div className="p-3 space-y-2.5">
+        <div className="flex gap-2 overflow-x-auto studio-scroll flex-nowrap">
           <button
             type="button"
             onClick={() => studio.resetJob()}
-            className="text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full border border-white/15 text-white/60"
+            className="shrink-0 text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full border border-white/15 text-white/60"
           >
             New
           </button>
           <button
             type="button"
             onClick={() => studio.setMode('single')}
-            className={`text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full border transition-colors ${
+            className={`shrink-0 text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full border ${
               studio.mode === 'single'
                 ? 'bg-gold text-black border-gold'
                 : 'border-gold/25 text-gold/70'
@@ -109,7 +115,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
           <button
             type="button"
             onClick={() => studio.setMode('storyboard')}
-            className={`text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full border transition-colors ${
+            className={`shrink-0 text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full border ${
               studio.mode === 'storyboard'
                 ? 'bg-gold text-black border-gold'
                 : 'border-gold/25 text-gold/70'
@@ -117,97 +123,290 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
           >
             Storyboard
           </button>
+          <button
+            type="button"
+            onClick={() => setOptionsOpen((o) => !o)}
+            className={`shrink-0 text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full border ${
+              optionsOpen ? 'border-gold text-gold' : 'border-white/15 text-white/60'
+            }`}
+          >
+            Options
+          </button>
         </div>
 
-        <div className="flex gap-1.5 overflow-x-auto pb-0.5 studio-scroll">
-          {(
-            [
-              ['hook', '15s hook'],
-              ['hero', 'Product hero'],
-              ['end', 'End card'],
-              ['storyboard', 'Storyboard 3-shot'],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => studio.applyJobChip(id)}
-              className="shrink-0 text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-gold/25 text-gold/80"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {studio.mode === 'storyboard' && <StoryboardTimeline studio={studio} />}
 
-        {studio.mode === 'single' && (
-          <StudioTemplateChips
-            onPick={(t) => studio.applyTemplate(t.video, t.creative)}
-          />
+        {optionsOpen && (
+          <div className="space-y-2.5 max-h-[36vh] md:max-h-[42vh] overflow-y-auto studio-scroll pr-0.5">
+            <div className="flex gap-1.5 overflow-x-auto studio-scroll flex-nowrap">
+              {(
+                [
+                  ['hook', '15s hook'],
+                  ['hero', 'Product hero'],
+                  ['end', 'End card'],
+                  ['storyboard', 'Storyboard 3-shot'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => studio.applyJobChip(id)}
+                  className="shrink-0 text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-gold/25 text-gold/80"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {studio.mode === 'single' && (
+              <StudioTemplateChips onPick={(t) => studio.applyTemplate(t.video, t.creative)} />
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => studio.setModelKey('lite')}
+                className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
+                  studio.modelKey === 'lite'
+                    ? 'bg-gold text-black border-gold'
+                    : 'border-white/15 text-white/60'
+                }`}
+                title="Seedance 1.5 Pro"
+              >
+                Lite ·{' '}
+                <CoinzPriceCut
+                  current={lite?.priceCoins ?? SEEDANCE_MODELS.lite.baseCoins}
+                  legacy={legacyLite}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => studio.setModelKey('mini')}
+                className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
+                  studio.modelKey === 'mini'
+                    ? 'bg-gold text-black border-gold'
+                    : 'border-white/15 text-white/60'
+                }`}
+                title="Seedance 2.0 Mini"
+              >
+                Mini · {mini?.priceCoins ?? SEEDANCE_MODELS.mini.baseCoins}
+              </button>
+              <button
+                type="button"
+                onClick={() => studio.setModelKey('fast')}
+                className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
+                  studio.modelKey === 'fast'
+                    ? 'bg-gold text-black border-gold'
+                    : 'border-white/15 text-white/60'
+                }`}
+                title="Seedance 2.0 Fast"
+              >
+                Fast ·{' '}
+                <CoinzPriceCut
+                  current={fast?.priceCoins ?? SEEDANCE_MODELS.fast.baseCoins}
+                  legacy={legacyFast}
+                />
+              </button>
+              {modelCfg.durations.map((d) => {
+                const dp = durationPrices?.[d]
+                const current = dp?.priceCoins
+                const legacy = legacyVideoPrice(studio.modelKey, d)
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => studio.setDuration(d)}
+                    className={`text-[10px] font-mono px-2.5 py-1.5 min-h-[28px] rounded-md border ${
+                      studio.duration === d
+                        ? 'bg-gold text-black border-gold'
+                        : 'border-white/15 text-white/60'
+                    }`}
+                  >
+                    {d}s ·{' '}
+                    {current != null ? (
+                      <CoinzPriceCut current={current} legacy={legacy} />
+                    ) : (
+                      'â€”'
+                    )}
+                  </button>
+                )
+              })}
+              {modelCfg.supportsAudio && (
+                <button
+                  type="button"
+                  onClick={() => studio.setGenerateAudio(!studio.generateAudio)}
+                  className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
+                    studio.generateAudio
+                      ? 'bg-gold text-black border-gold'
+                      : 'border-white/15 text-white/60'
+                  }`}
+                >
+                  Sound {studio.generateAudio ? 'on' : 'off'}
+                  {!studio.generateAudio && audioAddon > 0 ? ` · +${audioAddon}` : ''}
+                </button>
+              )}
+              {modelCfg.resolutions.includes('720p') && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => studio.setResolution('480p')}
+                    className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
+                      studio.resolution === '480p'
+                        ? 'bg-gold text-black border-gold'
+                        : 'border-white/15 text-white/60'
+                    }`}
+                  >
+                    480
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => studio.setResolution('720p')}
+                    className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
+                      studio.resolution === '720p'
+                        ? 'bg-gold text-black border-gold'
+                        : 'border-white/15 text-white/60'
+                    }`}
+                  >
+                    720
+                  </button>
+                </>
+              )}
+              <select
+                value={studio.aspectRatio}
+                onChange={(e) => studio.setAspectRatio(e.target.value)}
+                className="bg-black border border-white/15 rounded-md px-2 py-1.5 min-h-[28px] text-[10px] text-white outline-none"
+              >
+                <option value="9:16">9:16</option>
+                <option value="1:1">1:1</option>
+                <option value="16:9">16:9</option>
+              </select>
+              {studio.mode === 'single' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => studio.setVariations(1)}
+                    className={`text-[10px] px-2.5 py-1.5 min-h-[28px] rounded-md border ${
+                      studio.variations === 1
+                        ? 'bg-gold text-black border-gold'
+                        : 'border-white/15 text-white/60'
+                    }`}
+                  >
+                    1Ã—
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => studio.setVariations(2)}
+                    className={`text-[10px] px-2.5 py-1.5 min-h-[28px] rounded-md border ${
+                      studio.variations === 2
+                        ? 'bg-gold text-black border-gold'
+                        : 'border-white/15 text-white/60'
+                    }`}
+                  >
+                    2Ã—
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => studio.setLookOpen(!studio.lookOpen)}
+                className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
+                  studio.lookOpen ? 'border-gold text-gold' : 'border-white/15 text-white/60'
+                }`}
+              >
+                Look
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await studio.savePreset()
+                  } catch (err) {
+                    studio.setError(err instanceof Error ? err.message : 'Failed to save look')
+                  }
+                }}
+                className="text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border border-gold/30 text-gold/80"
+              >
+                Save look
+              </button>
+            </div>
+
+            {studio.presets.length > 0 && (
+              <div className="flex gap-1.5 overflow-x-auto studio-scroll flex-nowrap">
+                {studio.presets.slice(0, 8).map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => studio.applyPreset(p)}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      studio.deletePreset(p.id)
+                    }}
+                    className="shrink-0 text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-gold/20 text-gold/70"
+                    title="Click to apply · right-click to delete"
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <LookDrawer studio={studio} />
+          </div>
         )}
 
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*,audio/mpeg,audio/mp3,audio/wav,.mp3,.wav"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            studio.addReferenceFiles(e.target.files)
+            e.target.value = ''
+          }}
+        />
+
         {studio.mode === 'single' && (
-          <div className="relative">
+          <div className="flex gap-2 items-end">
             <textarea
               rows={2}
               value={studio.brief}
               onChange={(e) => studio.setBrief(e.target.value)}
-              placeholder="Optional — add a still and Generate, or pick a shot…"
-              className="w-full bg-white/5 border border-white/10 rounded-2xl p-3 pr-12 text-white text-sm outline-none focus:border-gold resize-none"
-            />
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*,audio/mpeg,audio/mp3,audio/wav,.mp3,.wav"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                studio.addReferenceFiles(e.target.files)
-                e.target.value = ''
-              }}
+              placeholder="Optional â€” add a still and Generate, or pick a shotâ€¦"
+              className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-2xl p-3 text-white text-sm outline-none focus:border-gold resize-none"
             />
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              className="absolute right-3 bottom-3 w-8 h-8 rounded-full border border-gold/30 text-gold hover:bg-gold hover:text-black transition-colors text-lg leading-none"
+              className="shrink-0 h-11 px-3 rounded-2xl border border-gold/30 text-gold text-[10px] uppercase tracking-wider"
               title="Add stills or MP3/WAV"
             >
-              +
+              Attach
             </button>
           </div>
         )}
 
         {studio.mode === 'storyboard' && (
           <div className="flex items-center gap-2">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*,audio/mpeg,audio/mp3,audio/wav,.mp3,.wav"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                studio.addReferenceFiles(e.target.files)
-                e.target.value = ''
-              }}
-            />
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold/25 text-gold/80 hover:border-gold"
+              className="shrink-0 text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold/25 text-gold/80"
             >
-              + Refs / audio
+              Attach refs
             </button>
-            <span className="text-[10px] text-white/35">
-              Scenes use shared stills and one MP3/WAV; last frame chains between shots
+            <span className="text-[10px] text-white/35 hidden sm:inline">
+              Scenes share stills and one MP3/WAV
             </span>
           </div>
         )}
 
         {studio.references.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 overflow-x-auto studio-scroll flex-nowrap pb-0.5">
             {studio.references.map((ref, index) => (
-              <div key={`${index}-${ref.url.slice(0, 24)}`} className="w-16 flex flex-col gap-1">
+              <div key={`${index}-${ref.url.slice(0, 24)}`} className="w-[4.5rem] shrink-0 flex flex-col gap-1">
                 <div
-                  className={`relative w-16 h-14 rounded-lg overflow-hidden border ${
+                  className={`relative w-full h-14 rounded-lg overflow-hidden border ${
                     ref.kind === 'audio'
                       ? 'border-gold/40 bg-black/60'
                       : ref.useAsFirstFrame || ref.useAsLastFrame
@@ -229,9 +428,9 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                   <button
                     type="button"
                     onClick={() => studio.removeReference(index)}
-                    className="absolute top-0 right-0 w-5 h-5 bg-black/80 text-white text-xs"
+                    className="absolute top-0.5 right-0.5 w-6 h-6 rounded bg-black/80 text-white text-xs"
                   >
-                    ×
+                    Ã—
                   </button>
                 </div>
                 {ref.kind !== 'audio' && (
@@ -239,7 +438,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                     <button
                       type="button"
                       onClick={() => studio.toggleFirstFrame(index)}
-                      className={`text-[7px] uppercase tracking-wide px-1 py-0.5 rounded border ${
+                      className={`text-[9px] uppercase tracking-wide px-1 min-h-[28px] rounded border ${
                         ref.useAsFirstFrame
                           ? 'bg-gold/20 border-gold text-gold'
                           : 'border-white/15 text-white/40'
@@ -251,7 +450,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                       <button
                         type="button"
                         onClick={() => studio.toggleLastFrame(index)}
-                        className={`text-[7px] uppercase tracking-wide px-1 py-0.5 rounded border ${
+                        className={`text-[9px] uppercase tracking-wide px-1 min-h-[28px] rounded border ${
                           ref.useAsLastFrame
                             ? 'bg-gold/20 border-gold text-gold'
                             : 'border-white/15 text-white/40'
@@ -269,204 +468,21 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
 
         {studio.references.length > 0 && (
           <p className="text-[10px] text-white/40">
-            As first locks the opening shot. Off = identity/style only (new first frame from your
-            prompt).
-            {(studio.modelKey === 'mini' || studio.modelKey === 'fast') &&
-              ' Mini/Fast also block photoreal faces, including AI.'}
+            As first locks the opening shot.
+            <span className="hidden sm:inline">
+              {' '}
+              Off = identity/style only.
+              {(studio.modelKey === 'mini' || studio.modelKey === 'fast') &&
+              studio.references.some((r) => r.kind !== 'audio')
+                ? ' Mini/Fast auto-mark photoreal stills. Lite accepts unmarked photoreal.'
+                : ''}
+            </span>
           </p>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => studio.setModelKey('lite')}
-            className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
-              studio.modelKey === 'lite'
-                ? 'bg-gold text-black border-gold'
-                : 'border-white/15 text-white/60'
-            }`}
-            title="Seedance 1.5 Pro"
-          >
-            Lite ·{' '}
-            <CoinzPriceCut
-              current={lite?.priceCoins ?? SEEDANCE_MODELS.lite.baseCoins}
-              legacy={legacyLite}
-            />
-          </button>
-          <button
-            type="button"
-            onClick={() => studio.setModelKey('mini')}
-            className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
-              studio.modelKey === 'mini'
-                ? 'bg-gold text-black border-gold'
-                : 'border-white/15 text-white/60'
-            }`}
-            title="Seedance 2.0 Mini"
-          >
-            Mini · {mini?.priceCoins ?? SEEDANCE_MODELS.mini.baseCoins}
-          </button>
-          <button
-            type="button"
-            onClick={() => studio.setModelKey('fast')}
-            className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
-              studio.modelKey === 'fast'
-                ? 'bg-gold text-black border-gold'
-                : 'border-white/15 text-white/60'
-            }`}
-            title="Seedance 2.0 Fast"
-          >
-            Fast ·{' '}
-            <CoinzPriceCut
-              current={fast?.priceCoins ?? SEEDANCE_MODELS.fast.baseCoins}
-              legacy={legacyFast}
-            />
-          </button>
-          {modelCfg.durations.map((d) => {
-            const dp = durationPrices?.[d]
-            const current = dp?.priceCoins
-            const legacy = legacyVideoPrice(studio.modelKey, d)
-            return (
-              <button
-                key={d}
-                type="button"
-                onClick={() => studio.setDuration(d)}
-                className={`text-[10px] font-mono px-2.5 py-1 rounded-md border ${
-                  studio.duration === d
-                    ? 'bg-gold text-black border-gold'
-                    : 'border-white/15 text-white/60'
-                }`}
-              >
-                {d}s ·{' '}
-                {current != null ? (
-                  <CoinzPriceCut current={current} legacy={legacy} />
-                ) : (
-                  '—'
-                )}
-              </button>
-            )
-          })}
-          {modelCfg.supportsAudio && (
-            <button
-              type="button"
-              onClick={() => studio.setGenerateAudio(!studio.generateAudio)}
-              className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
-                studio.generateAudio
-                  ? 'bg-gold text-black border-gold'
-                  : 'border-white/15 text-white/60'
-              }`}
-            >
-              Sound {studio.generateAudio ? 'on' : 'off'}
-              {!studio.generateAudio && audioAddon > 0 ? ` · +${audioAddon}` : ''}
-            </button>
-          )}
-          {modelCfg.resolutions.includes('720p') && (
-            <>
-              <button
-                type="button"
-                onClick={() => studio.setResolution('480p')}
-                className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
-                  studio.resolution === '480p'
-                    ? 'bg-gold text-black border-gold'
-                    : 'border-white/15 text-white/60'
-                }`}
-              >
-                480
-              </button>
-              <button
-                type="button"
-                onClick={() => studio.setResolution('720p')}
-                className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
-                  studio.resolution === '720p'
-                    ? 'bg-gold text-black border-gold'
-                    : 'border-white/15 text-white/60'
-                }`}
-              >
-                720
-              </button>
-            </>
-          )}
-          <select
-            value={studio.aspectRatio}
-            onChange={(e) => studio.setAspectRatio(e.target.value)}
-            className="bg-black border border-white/15 rounded-md px-2 py-1 text-[10px] text-white outline-none"
-          >
-            <option value="9:16">9:16</option>
-            <option value="1:1">1:1</option>
-            <option value="16:9">16:9</option>
-          </select>
-          {studio.mode === 'single' && (
-            <>
-              <button
-                type="button"
-                onClick={() => studio.setVariations(1)}
-                className={`text-[10px] px-2.5 py-1 rounded-md border ${
-                  studio.variations === 1
-                    ? 'bg-gold text-black border-gold'
-                    : 'border-white/15 text-white/60'
-                }`}
-              >
-                1×
-              </button>
-              <button
-                type="button"
-                onClick={() => studio.setVariations(2)}
-                className={`text-[10px] px-2.5 py-1 rounded-md border ${
-                  studio.variations === 2
-                    ? 'bg-gold text-black border-gold'
-                    : 'border-white/15 text-white/60'
-                }`}
-              >
-                2×
-              </button>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() => studio.setLookOpen(!studio.lookOpen)}
-            className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border ${
-              studio.lookOpen ? 'border-gold text-gold' : 'border-white/15 text-white/60'
-            }`}
-          >
-            Look
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                await studio.savePreset()
-              } catch (err) {
-                studio.setError(err instanceof Error ? err.message : 'Failed to save look')
-              }
-            }}
-            className="text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md border border-gold/30 text-gold/80 hover:bg-gold hover:text-black transition-colors"
-          >
-            Save look
-          </button>
-        </div>
-
-        {studio.presets.length > 0 && (
-          <div className="flex gap-1.5 overflow-x-auto pb-1 studio-scroll">
-            {studio.presets.slice(0, 8).map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => studio.applyPreset(p)}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  studio.deletePreset(p.id)
-                }}
-                className="shrink-0 text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-gold/20 text-gold/70 hover:border-gold/50"
-                title="Click to apply · right-click to delete"
-              >
-                {p.name}
-              </button>
-            ))}
-          </div>
         )}
 
         {showBreakdown && (
           <p className="text-[10px] text-white/40 font-mono">
-            {units} × {perClip} = {price} Coinz
+            {units} Ã— {perClip} = {price} Coinz
             {studio.pricing?.tierOrFanClub ? ` · ${studio.pricing.tierOrFanClub} discount` : ''}
           </p>
         )}
@@ -486,7 +502,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                   className="flex-1 text-left px-3 py-2 rounded-lg border border-gold/30 hover:bg-gold hover:text-black transition-colors disabled:opacity-50"
                 >
                   <span className="block text-[10px] font-bold uppercase tracking-wider">
-                    {buyingId === pkg.id ? 'Redirecting…' : packAdCopy(pkg)}
+                    {buyingId === pkg.id ? 'Redirectingâ€¦' : packAdCopy(pkg)}
                   </span>
                   <span className="block text-[9px] opacity-70 mt-0.5">
                     {pkg.amount} Coinz · ${pkg.price}
@@ -497,27 +513,25 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
           </div>
         )}
 
-        <div className="flex gap-2">
-          {studio.generating ? (
-            <button
-              type="button"
-              onClick={studio.cancelGenerate}
-              className="flex-1 py-3 rounded-full border border-red-400/50 text-red-300 text-xs font-bold uppercase tracking-widest hover:bg-red-500/10"
-            >
-              Cancel
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={studio.generate}
-              disabled={!studio.canGenerate || !canAfford}
-              className="flex-1 py-3 rounded-full bg-gold text-black text-xs font-bold uppercase tracking-widest hover:bg-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Generate ·{' '}
-              <CoinzPriceCut current={price} legacy={legacyTotal} suffix=" Coinz" />
-            </button>
-          )}
-        </div>
+        {studio.generating ? (
+          <button
+            type="button"
+            onClick={studio.cancelGenerate}
+            className="w-full py-3 rounded-full border border-red-400/50 text-red-300 text-xs font-bold uppercase tracking-widest"
+          >
+            Cancel
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={studio.generate}
+            disabled={!studio.canGenerate || !canAfford}
+            className="w-full py-3 rounded-full bg-gold text-black text-xs font-bold uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Generate ·{' '}
+            <CoinzPriceCut current={price} legacy={legacyTotal} suffix=" Coinz" />
+          </button>
+        )}
       </div>
     </div>
   )

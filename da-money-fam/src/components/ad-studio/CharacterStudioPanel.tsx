@@ -26,7 +26,7 @@ export default function CharacterStudioPanel({
   onMakeStoryboard,
 }: {
   images: ImageStudioController
-  onUseForVideo?: (url: string, characterId?: string) => void
+  onUseForVideo?: (url: string, characterId?: string, styleId?: string) => void
   onMakeStoryboard?: (url: string) => void
 }) {
   const fileRef = useRef<HTMLInputElement>(null)
@@ -284,7 +284,7 @@ export default function CharacterStudioPanel({
           <button
             type="button"
             onClick={() => setCreateTier('draft')}
-            className={`text-[10px] uppercase px-2.5 py-1 rounded-md border ${
+            className={`text-[10px] uppercase px-2.5 py-1.5 min-h-[28px] rounded-md border ${
               createTier === 'draft' ? 'bg-gold text-black border-gold' : 'border-white/15 text-white/60'
             }`}
           >
@@ -293,21 +293,21 @@ export default function CharacterStudioPanel({
           <button
             type="button"
             onClick={() => setCreateTier('smart')}
-            className={`text-[10px] uppercase px-2.5 py-1 rounded-md border ${
+            className={`text-[10px] uppercase px-2.5 py-1.5 min-h-[28px] rounded-md border ${
               createTier === 'smart' ? 'bg-gold text-black border-gold' : 'border-white/15 text-white/60'
             }`}
           >
             Smart · <CoinzPriceCut current={smartPrice} legacy={LEGACY_IMAGE_BASE.smart} />
           </button>
-          <button
-            type="button"
-            disabled={busy || !name.trim()}
-            onClick={() => void createCharacter()}
-            className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full bg-gold text-black font-bold disabled:opacity-40"
-          >
-            {busy ? 'Working…' : 'Create sheet'}
-          </button>
         </div>
+        <button
+          type="button"
+          disabled={busy || !name.trim()}
+          onClick={() => void createCharacter()}
+          className="w-full text-[10px] uppercase tracking-wider px-3 py-3 rounded-full bg-gold text-black font-bold disabled:opacity-40"
+        >
+          {busy ? 'Working…' : 'Create sheet'}
+        </button>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
@@ -333,8 +333,8 @@ export default function CharacterStudioPanel({
             />
             {selected.style_id === 'photoreal' && (
               <p className="text-[10px] text-white/40">
-                Photoreal sheets often fail Mini/Fast video refs (AI faces still count). Use anime /
-                comic / clay, or randomize toward a more stylized face.
+                Mini/Fast auto-prepare photoreal sheets for Seedance. Lite works unmarked. Anime /
+                comic / clay still pass Mini/Fast without extra processing.
               </p>
             )}
             {!selected.primary_url && (
@@ -346,7 +346,7 @@ export default function CharacterStudioPanel({
               <button
                 type="button"
                 onClick={() => setEditTier('edit')}
-                className={`text-[10px] uppercase px-2.5 py-1 rounded-md border ${
+                className={`text-[10px] uppercase px-2.5 py-1.5 min-h-[28px] rounded-md border ${
                   editTier === 'edit' ? 'bg-gold text-black border-gold' : 'border-white/15 text-white/60'
                 }`}
               >
@@ -355,7 +355,7 @@ export default function CharacterStudioPanel({
               <button
                 type="button"
                 onClick={() => setEditTier('smart')}
-                className={`text-[10px] uppercase px-2.5 py-1 rounded-md border ${
+                className={`text-[10px] uppercase px-2.5 py-1.5 min-h-[28px] rounded-md border ${
                   editTier === 'smart' ? 'bg-gold text-black border-gold' : 'border-white/15 text-white/60'
                 }`}
               >
@@ -365,7 +365,7 @@ export default function CharacterStudioPanel({
                 type="button"
                 disabled={busy || !selected.primary_url}
                 onClick={() => void editSelected()}
-                className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold text-gold disabled:opacity-40"
+                className="text-[10px] uppercase tracking-wider px-3 py-1.5 min-h-[28px] rounded-full border border-gold text-gold disabled:opacity-40"
               >
                 Remix look
               </button>
@@ -373,7 +373,7 @@ export default function CharacterStudioPanel({
                 type="button"
                 disabled={busy || !selected.primary_url}
                 onClick={() => void randomizeFace()}
-                className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold/40 text-gold/90 disabled:opacity-40"
+                className="text-[10px] uppercase tracking-wider px-3 py-1.5 min-h-[28px] rounded-full border border-gold/40 text-gold/90 disabled:opacity-40"
               >
                 Randomize face
               </button>
@@ -381,21 +381,23 @@ export default function CharacterStudioPanel({
                 <button
                   type="button"
                   onClick={() => onMakeStoryboard(selected.primary_url!)}
-                  className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold text-gold"
+                  className="text-[10px] uppercase tracking-wider px-3 py-1.5 min-h-[28px] rounded-full border border-gold text-gold"
                 >
                   Make storyboard
                 </button>
               )}
-              {selected.primary_url && onUseForVideo && (
-                <button
-                  type="button"
-                  onClick={() => onUseForVideo(selected.primary_url!, selected.id)}
-                  className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full bg-gold text-black font-bold"
-                >
-                  Use for video
-                </button>
-              )}
             </div>
+            {selected.primary_url && onUseForVideo && (
+              <button
+                type="button"
+                onClick={() =>
+                  onUseForVideo(selected.primary_url!, selected.id, selected.style_id)
+                }
+                className="w-full text-[10px] uppercase tracking-wider px-3 py-3 rounded-full bg-gold text-black font-bold"
+              >
+                Use for video
+              </button>
+            )}
           </div>
         )}
 

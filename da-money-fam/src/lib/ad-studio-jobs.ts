@@ -335,8 +335,12 @@ export async function completeGenerationByJobId(input: {
     s.jobId === jobId ? { ...s, videoUrl, status: 'completed' as const } : s
   )
 
+  const storyboardInProgress =
+    target.mode === 'storyboard' &&
+    scenes.some((s) => s.status !== 'completed')
+
   return updateAdStudioGeneration(userId, target.id, {
-    status: 'completed',
+    status: storyboardInProgress ? 'processing' : 'completed',
     video_urls: urls,
     thumbnail_url: thumbnailUrl || urls[0] || target.thumbnail_url,
     scenes,

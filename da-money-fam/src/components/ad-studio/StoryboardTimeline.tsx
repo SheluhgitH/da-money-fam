@@ -12,7 +12,7 @@ export default function StoryboardTimeline({ studio }: { studio: AdStudioControl
   )
 
   return (
-    <div className="px-4 pb-2">
+    <div className="px-0 pb-1">
       <div className="flex items-center justify-between mb-2">
         <p className="text-[10px] uppercase tracking-[0.2em] text-gold/50">Scenes</p>
         <div className="flex gap-1">
@@ -32,11 +32,11 @@ export default function StoryboardTimeline({ studio }: { studio: AdStudioControl
           ))}
         </div>
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="flex gap-2 overflow-x-auto pb-1 studio-scroll flex-nowrap">
         {studio.sceneBriefs.map((brief, i) => (
           <div
             key={i}
-            className="min-w-[160px] flex-1 rounded-xl border border-gold/20 bg-black/40 p-2.5"
+            className="min-w-[130px] w-[42vw] max-w-[180px] shrink-0 rounded-xl border border-gold/20 bg-black/40 p-2.5"
           >
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[9px] uppercase tracking-wider text-gold">Scene {i + 1}</span>

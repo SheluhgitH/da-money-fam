@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
-    serverComponentsExternalPackages: ['ffmpeg-static', 'fluent-ffmpeg'],
+    serverComponentsExternalPackages: ['ffmpeg-static', 'fluent-ffmpeg', '@resvg/resvg-js'],
   },
   images: {
     remotePatterns: [

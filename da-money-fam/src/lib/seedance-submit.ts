@@ -1,5 +1,6 @@
 import { resolveAdPrompt } from '@/lib/ad-prompt-enhance'
 import type { CreativeSelections } from '@/lib/ad-creative-presets'
+import { markImageUrlsForSeedance } from '@/lib/character-sheet-markup'
 import { mapSeedanceUserError } from '@/lib/seedance-errors'
 import {
   DEFAULT_SEEDANCE_MODEL,
@@ -120,6 +121,8 @@ export async function submitSeedanceJob(input: {
   model?: SeedanceModelKey | string | null
   /** When chaining storyboard shots, only explicit first_frame_image is used. */
   ignoreRefFrames?: boolean
+  /** Storyboard scenes: refs are identity/style unless user locked a first/last frame. */
+  storyboardMode?: boolean
 }): Promise<{ jobId: string; pollingUrl?: string; modelId: string }> {
   const openRouterApiKey = process.env.OPENROUTER_API_KEY
   if (!openRouterApiKey || openRouterApiKey === 'your_openrouter_key_here') {
@@ -127,11 +130,12 @@ export async function submitSeedanceJob(input: {
   }
 
   const model = resolveSeedanceModel(input.model ?? DEFAULT_SEEDANCE_MODEL)
-  const firstFrameFromRefs = input.ignoreRefFrames
+  const skipRefFrames = Boolean(input.ignoreRefFrames || input.storyboardMode)
+  const firstFrameFromRefs = skipRefFrames
     ? null
     : toFirstFrameImage(input.reference_images)
   const lastFrameFromRefs =
-    input.ignoreRefFrames || !model.supportsLastFrame
+    skipRefFrames || !model.supportsLastFrame
       ? null
       : toLastFrameImage(input.reference_images)
   const explicitFirstFrame =
@@ -180,7 +184,9 @@ export async function submitSeedanceJob(input: {
     enhancedPrompt: input.enhancedPrompt,
   })
   if (inputReferences.length > 0 && frame_images.length === 0) {
-    finalPrompt = `${finalPrompt} Do not use the reference image as the first frame or opening still. Start on a new shot that matches this prompt. Use references only for identity, wardrobe, and style.`
+    finalPrompt = input.storyboardMode
+      ? `${finalPrompt} Place the people and wardrobe from the reference images inside this scene as living subjects. Do not open on a frozen still of a reference photo. Start on a new cinematic shot that matches this prompt. Use references only for identity, wardrobe, and style.`
+      : `${finalPrompt} Do not use the reference image as the first frame or opening still. Start on a new shot that matches this prompt. Use references only for identity, wardrobe, and style.`
   }
 
   if (audioReferences.length > 0) {
@@ -190,6 +196,20 @@ export async function submitSeedanceJob(input: {
   const generateAudio =
     (model.supportsAudio && input.generate_audio === true) || audioReferences.length > 0
   const duration = normalizeDuration(input.duration, model.key)
+
+  if (model.key === 'mini' || model.key === 'fast') {
+    const urlsToMark = [
+      ...frame_images.map((f) => f.image_url.url),
+      ...inputReferences.map((r) => r.image_url.url),
+    ]
+    const marked = await markImageUrlsForSeedance(urlsToMark)
+    for (const frame of frame_images) {
+      frame.image_url.url = marked.get(frame.image_url.url) || frame.image_url.url
+    }
+    for (const ref of inputReferences) {
+      ref.image_url.url = marked.get(ref.image_url.url) || ref.image_url.url
+    }
+  }
 
   const mixedReferences = [...inputReferences, ...audioReferences]
 
