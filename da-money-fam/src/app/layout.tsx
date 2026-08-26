@@ -1,3 +1,5 @@
+import { Suspense } from 'react'
+import dynamic from 'next/dynamic'
 import type { Metadata, Viewport } from 'next'
 import { Playfair_Display, Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/react'
@@ -8,6 +10,8 @@ import CosmeticGiftReveal from '@/components/profile/CosmeticGiftReveal'
 import FallingObjects from '@/components/FallingObjects'
 import GoogleAnalytics from '@/components/GoogleAnalytics'
 import './globals.css'
+
+const PremiumChat = dynamic(() => import('@/components/PremiumChat'), { ssr: false })
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
@@ -46,6 +50,9 @@ export default function RootLayout({
             <CheckoutReturnHandler />
             <CosmeticGiftReveal />
             {children}
+            <Suspense fallback={null}>
+              <PremiumChat />
+            </Suspense>
           </AuthProvider>
           <FallingObjects />
         </SiteSettingsProvider>

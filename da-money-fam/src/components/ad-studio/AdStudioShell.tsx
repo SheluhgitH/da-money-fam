@@ -128,7 +128,7 @@ export default function AdStudioShell({
   const applyImageForVideo = (url: string, asFirstFrame = false) => {
     studio.addReferenceFromUrl(url, asFirstFrame)
     setStudioTab('video')
-    setToast(asFirstFrame ? 'Added as opening frame' : 'Added as style ref — tap As first to lock the opening shot')
+    setToast('Added as character still — Gemini will place them in the opening frame')
     window.setTimeout(() => setToast(null), 4000)
   }
 

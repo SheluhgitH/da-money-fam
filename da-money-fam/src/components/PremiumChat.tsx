@@ -2,6 +2,18 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { usePathname, useSearchParams } from 'next/navigation'
+import AssistantVoiceOverlay, { type VoicePhase } from './AssistantVoiceOverlay'
+import { parseAssistantActions, runAssistantActions } from '@/lib/assistant-actions'
+import { speakAssistantText, stopAssistantSpeech } from '@/lib/assistant-tts'
+import {
+  ASSISTANT_MUTE_KEY,
+  ASSISTANT_OPEN_EVENT,
+  isAssistantFabVisible,
+  readAssistantVisibility,
+  writeAssistantVisibility,
+  type AssistantVisibility,
+} from '@/lib/assistant-visibility'
 
 interface Message {
   sender: 'user' | 'bot'
@@ -29,6 +41,16 @@ interface AdVideoPricingResponse {
 }
 
 type ChatMode = 'chat' | 'ads'
+
+type Recog = {
+  continuous: boolean
+  interimResults: boolean
+  onstart: (() => void) | null
+  onend: (() => void) | null
+  onresult: ((event: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => void) | null
+  start: () => void
+  stop: () => void
+}
 
 const MarkdownText = ({ text, onPreview }: { text: string; onPreview: (code: string) => void }) => {
   const lines = text.split('\n')
@@ -100,10 +122,13 @@ const MarkdownText = ({ text, onPreview }: { text: string; onPreview: (code: str
 }
 
 export default function PremiumChat() {
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [isOpen, setIsOpen] = useState(false)
-  const [isUnlocked, setIsUnlocked] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+  const [visibility, setVisibility] = useState<AssistantVisibility>('all')
+  const [muted, setMuted] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
-  const [keyInput, setKeyInput] = useState('')
   const [messageInput, setMessageInput] = useState('')
   const [selectedModel, setSelectedModel] = useState('google/gemma-4-31b-it')
   const [availableModels, setAvailableModels] = useState<{ id: string; name: string }[]>([])
@@ -119,8 +144,17 @@ export default function PremiumChat() {
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== 'undefined' ? window.innerWidth : 1200
   )
+  const [voicePhase, setVoicePhase] = useState<VoicePhase>(null)
+  const [voiceTranscript, setVoiceTranscript] = useState('')
+  const [voiceAnswer, setVoiceAnswer] = useState('')
+  const [askBarOpen, setAskBarOpen] = useState(false)
 
   const chatAreaRef = useRef<HTMLDivElement>(null)
+  const holdTimer = useRef<number | null>(null)
+  const holding = useRef(false)
+  const recognitionRef = useRef<{ stop: () => void } | null>(null)
+  const voiceSend = useRef(false)
+  const transcriptRef = useRef('')
 
   const [chatMode, setChatMode] = useState<ChatMode>('chat')
   const [adPrompt, setAdPrompt] = useState('')
@@ -151,15 +185,15 @@ export default function PremiumChat() {
   }, [])
 
   useEffect(() => {
-    if (!isOpen || !isUnlocked) return
-    fetch('/api/chat/models')
+    if (!isOpen) return
+    fetch('/api/chat')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.models?.length) setAvailableModels(data.models)
         if (data?.defaultModel) setSelectedModel(data.defaultModel)
       })
       .catch(() => {})
-  }, [isOpen, isUnlocked])
+  }, [isOpen])
 
   useEffect(() => {
     if (isOpen && chatMode === 'ads') {
@@ -167,53 +201,54 @@ export default function PremiumChat() {
     }
   }, [isOpen, chatMode, fetchAdPricing])
 
-  const speak = (text: string) => {
-    window.speechSynthesis.cancel()
-
-    const cleanedText = text.replace(/```[\s\S]*?```/g, 'Code block omitted.')
-    const utterance = new SpeechSynthesisUtterance(cleanedText)
-
-    const voices = window.speechSynthesis.getVoices()
-    const preferredVoices = [
-      'Google US English',
-      'Microsoft Zira',
-      'Samantha',
-      'Victoria',
-      'Fiona',
-      'Google UK English Female',
-    ]
-    const femaleVoice =
-      voices.find((v) => preferredVoices.some((p) => v.name.includes(p))) ||
-      voices.find((v) => v.name.includes('female') || v.name.includes('Female'))
-
-    if (femaleVoice) utterance.voice = femaleVoice
-    utterance.rate = 1.0
-    utterance.pitch = 1.1
-
-    utterance.onstart = () => setIsSpeaking(true)
-    utterance.onend = () => setIsSpeaking(false)
-    utterance.onerror = () => setIsSpeaking(false)
-
-    window.speechSynthesis.speak(utterance)
+  const speak = async (text: string) => {
+    stopAssistantSpeech()
+    setIsSpeaking(true)
+    try {
+      await speakAssistantText(text, {
+        muted,
+        onWarmup: (warming) => {
+          if (voiceSend.current) setVoicePhase(warming ? 'warmup' : 'speaking')
+        },
+      })
+    } finally {
+      setIsSpeaking(false)
+    }
   }
 
   const stopSpeaking = () => {
-    window.speechSynthesis.cancel()
+    stopAssistantSpeech()
     setIsSpeaking(false)
   }
 
-  const startRecording = () => {
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRecognition) return alert('Speech recognition not supported in this browser.')
-
-    const recognition = new SpeechRecognition()
+  const startRecognition = () => {
+    const Ctor =
+      (window as unknown as { SpeechRecognition?: new () => Recog; webkitSpeechRecognition?: new () => Recog })
+        .SpeechRecognition ||
+      (window as unknown as { webkitSpeechRecognition?: new () => Recog }).webkitSpeechRecognition
+    if (!Ctor) {
+      alert('Voice needs Chrome or Safari with mic permission.')
+      return
+    }
+    const recognition = new Ctor()
+    recognition.continuous = true
+    recognition.interimResults = true
     recognition.onstart = () => setIsRecording(true)
     recognition.onend = () => setIsRecording(false)
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript
-      setMessageInput(transcript)
+    recognition.onresult = (event: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => {
+      let final = ''
+      let interim = ''
+      for (let i = 0; i < event.results.length; i++) {
+        const piece = event.results[i][0].transcript
+        if (event.results[i].isFinal) final += piece
+        else interim += piece
+      }
+      const shown = (final || interim).trim()
+      transcriptRef.current = shown
+      setVoiceTranscript(shown)
+      setMessageInput(shown)
     }
+    recognitionRef.current = recognition
     recognition.start()
   }
 
@@ -241,9 +276,8 @@ export default function PremiumChat() {
     window.addEventListener('resize', handleResize)
 
     const savedChats = localStorage.getItem('dmf_multi_chats')
-    const savedAuth = localStorage.getItem('dmf_chat_unlocked')
-
-    if (savedAuth === 'true') setIsUnlocked(true)
+    setVisibility(readAssistantVisibility())
+    setMuted(localStorage.getItem(ASSISTANT_MUTE_KEY) === '1')
 
     if (savedChats) {
       const parsed = JSON.parse(savedChats) as ChatSession[]
@@ -292,15 +326,6 @@ export default function PremiumChat() {
     )
   }
 
-  const handleUnlock = () => {
-    if (keyInput.trim() === 'DMF2026' || keyInput.trim() === 'admin') {
-      setIsUnlocked(true)
-      localStorage.setItem('dmf_chat_unlocked', 'true')
-    } else {
-      alert('Invalid Key. Please try again.')
-    }
-  }
-
   const deleteChat = (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
     setChats((prev) => {
@@ -336,6 +361,16 @@ export default function PremiumChat() {
         body: JSON.stringify({
           messages: [...prior, { role: 'user', content: textToSend }],
           model: selectedModel,
+          pageContext: (() => {
+            const path = `${pathname}${searchParams.toString() ? `?${searchParams.toString()}` : ''}`
+            let snap = ''
+            try {
+              snap = sessionStorage.getItem('dmf-studio-snapshot') || ''
+            } catch {
+              /* ignore */
+            }
+            return snap ? `${path}\nStudio snapshot: ${snap}` : path
+          })(),
         }),
       })
 
@@ -429,6 +464,19 @@ export default function PremiumChat() {
 
       setIsTyping(false)
       if (botMsgStarted) patchBotMsg()
+      const parsed = parseAssistantActions(botResponseText)
+      if (parsed.clean !== botResponseText) {
+        botResponseText = parsed.clean
+        patchBotMsg()
+      }
+      setVoiceAnswer(parsed.clean)
+      if (voiceSend.current) {
+        setVoicePhase(muted ? 'done' : 'speaking')
+        await speak(parsed.clean)
+        setVoicePhase('done')
+        voiceSend.current = false
+      }
+      runAssistantActions(parsed.actions)
     } catch (error) {
       console.error('Chat API Error:', error)
       setIsTyping(false)
@@ -447,14 +495,112 @@ export default function PremiumChat() {
     window.location.href = `/ad-studio?brief=${encodeURIComponent(text.slice(0, 2000))}`
   }
 
+  const homepageTab = searchParams.get('tab')
+  const fabVisible = isAssistantFabVisible(visibility, pathname, homepageTab)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeVoice()
+    }
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ askBar?: boolean; seed?: string }>).detail
+      setVisibility('all')
+      writeAssistantVisibility('all')
+      if (detail?.seed) setMessageInput(detail.seed)
+      if (detail?.askBar && pathname.startsWith('/ad-studio')) {
+        setAskBarOpen(true)
+        setIsOpen(false)
+      } else {
+        setIsOpen(true)
+        setAskBarOpen(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener(ASSISTANT_OPEN_EVENT, onOpen)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener(ASSISTANT_OPEN_EVENT, onOpen)
+    }
+  }, [pathname])
+
+  const applyVisibility = (next: AssistantVisibility) => {
+    setVisibility(next)
+    writeAssistantVisibility(next)
+    setShowSettings(false)
+    if (next === 'off') setIsOpen(false)
+  }
+
+  const toggleMute = () => {
+    const next = !muted
+    setMuted(next)
+    localStorage.setItem(ASSISTANT_MUTE_KEY, next ? '1' : '0')
+    if (next) stopSpeaking()
+  }
+
+  const closeVoice = () => {
+    recognitionRef.current?.stop()
+    stopSpeaking()
+    setVoicePhase(null)
+    voiceSend.current = false
+  }
+
+  const onFabPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    holdTimer.current = window.setTimeout(() => {
+      holding.current = true
+      voiceSend.current = true
+      setVoiceTranscript('')
+      setVoiceAnswer('')
+      setVoicePhase('listening')
+      setIsOpen(false)
+      startRecognition()
+    }, 220)
+  }
+
+  const onFabPointerUp = () => {
+    if (holdTimer.current) {
+      window.clearTimeout(holdTimer.current)
+      holdTimer.current = null
+    }
+    if (holding.current) {
+      holding.current = false
+      recognitionRef.current?.stop()
+      const text = transcriptRef.current.trim()
+      if (text) {
+        setVoicePhase('thinking')
+        void handleSend(text)
+      } else {
+        setVoicePhase(null)
+        voiceSend.current = false
+      }
+      return
+    }
+    setIsOpen((open) => {
+      if (pathname.startsWith('/ad-studio')) {
+        setAskBarOpen((bar) => !bar)
+        return false
+      }
+      setAskBarOpen(false)
+      return !open
+    })
+  }
+
+  if (!fabVisible && !isOpen && !voicePhase && !askBarOpen) return null
+
   return (
     <>
       <motion.button
         id="chat-trigger"
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-[20px] left-[20px] md:bottom-[30px] md:left-[30px] w-[60px] h-[60px] md:w-[70px] md:h-[70px] rounded-full z-[1000] flex items-center justify-center cursor-pointer shadow-[0_8px_24px_rgba(255,215,0,0.25)] border border-gold/30"
+        type="button"
+        onPointerDown={onFabPointerDown}
+        onPointerUp={onFabPointerUp}
+        onPointerCancel={onFabPointerUp}
+        onContextMenu={(e) => e.preventDefault()}
+        className="fixed bottom-[20px] left-[20px] md:bottom-[30px] md:left-[30px] w-[60px] h-[60px] md:w-[70px] md:h-[70px] rounded-full z-[1000] flex items-center justify-center cursor-pointer shadow-[0_8px_24px_rgba(255,215,0,0.25)] border border-gold/30 touch-none"
         style={{ background: 'linear-gradient(135deg, #FFD700, #B8860B)' }}
         animate={{
+          scale: holding.current || isRecording ? 1.08 : 1,
           boxShadow: [
             '0 0 0 0px rgba(255, 215, 0, 0.35)',
             '0 0 0 12px rgba(255, 215, 0, 0)',
@@ -478,6 +624,92 @@ export default function PremiumChat() {
           <path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z" />
         </svg>
       </motion.button>
+
+      <AnimatePresence>
+        {askBarOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 12 }}
+            className="fixed z-[999] left-[88px] right-3 bottom-[22px] md:left-[110px] md:right-auto md:w-[min(420px,calc(100vw-140px))] rounded-2xl border border-gold/35 bg-black/80 backdrop-blur-xl p-2.5 shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
+          >
+            {(() => {
+              const lastBot = [...(currentChat?.messages || [])]
+                .reverse()
+                .find((m) => m.sender === 'bot' && m.text && !m.text.startsWith('Welcome to DMF'))
+              if (!lastBot) return null
+              return (
+                <div className="mb-2 px-1">
+                  <p className="text-[11px] text-white/70 line-clamp-3">{lastBot.text}</p>
+                  {pathname.startsWith('/ad-studio') && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        window.dispatchEvent(
+                          new CustomEvent('dmf-studio-apply', { detail: { brief: lastBot.text } })
+                        )
+                      }
+                      className="mt-1 text-[9px] uppercase tracking-wider text-gold"
+                    >
+                      Use in prompt
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
+            <div className="flex items-end gap-2">
+              <textarea
+                rows={2}
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    void handleSend()
+                  }
+                }}
+                placeholder="Ask about this look, character, or scenes…"
+                className="flex-1 min-w-0 bg-white/5 border border-gold/20 rounded-xl px-3 py-2 text-sm text-white outline-none resize-none"
+              />
+              <button
+                type="button"
+                onClick={() => startRecognition()}
+                className="shrink-0 h-10 w-10 rounded-xl border border-gold/30 text-gold"
+                title="Mic"
+              >
+                Mic
+              </button>
+              <button
+                type="button"
+                disabled={isTyping || !messageInput.trim()}
+                onClick={() => void handleSend()}
+                className="shrink-0 h-10 px-3 rounded-xl bg-gold text-black text-[10px] uppercase tracking-wider font-bold disabled:opacity-40"
+              >
+                Send
+              </button>
+            </div>
+            <div className="mt-2 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setAskBarOpen(false)
+                  setIsOpen(true)
+                }}
+                className="text-[9px] uppercase tracking-wider text-gold/70"
+              >
+                Full chat
+              </button>
+              <button
+                type="button"
+                onClick={() => setAskBarOpen(false)}
+                className="text-[9px] uppercase tracking-wider text-white/40"
+              >
+                Close
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {isOpen && (
@@ -574,12 +806,38 @@ export default function PremiumChat() {
                       DMF
                     </h1>
                   </div>
+                  {showSettings && (
+                    <div className="flex gap-2 pt-2">
+                      {(['all', 'home', 'off'] as const).map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => applyVisibility(opt)}
+                          className={`text-[9px] uppercase tracking-widest px-2 py-1 rounded-full border ${
+                            visibility === opt
+                              ? 'bg-gold text-black border-gold'
+                              : 'border-gold/25 text-gold/70'
+                          }`}
+                        >
+                          {opt === 'all' ? 'Everywhere' : opt === 'home' ? 'Home only' : 'Off'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     {adPricing?.isAuthenticated && (
                       <span className="hidden sm:inline text-[10px] font-mono text-gold/80 border border-gold/20 px-2 py-1 rounded-md">
                         {adPricing.balance} Coinz
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setShowSettings((s) => !s)}
+                      className="bg-none border-none text-white/40 hover:text-gold transition-all p-1 text-[10px] uppercase tracking-widest"
+                      title="Assistant settings"
+                    >
+                      Show
+                    </button>
                     <button
                       onClick={() => setIsFullscreen(!isFullscreen)}
                       className="bg-none border-none text-white/40 hover:text-gold transition-all p-1"
@@ -618,7 +876,7 @@ export default function PremiumChat() {
                   </div>
                 </div>
 
-                {isUnlocked && chatMode === 'chat' && (
+                { chatMode === 'chat' && (
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
                       <span className="text-[9px] text-gold/50 font-bold uppercase tracking-widest shrink-0">
@@ -646,50 +904,7 @@ export default function PremiumChat() {
                 )}
               </div>
 
-              {!isUnlocked && (
-                <div className="p-3 bg-gold/5 flex gap-2 border-b border-gold/10 z-20">
-                  <input
-                    type="password"
-                    placeholder="PREMIUM ACCESS KEY"
-                    className="grow bg-black/50 border border-gold/20 rounded-[10px] p-2 py-2 text-white text-[10px] outline-none focus:border-gold tracking-widest"
-                    value={keyInput}
-                    onChange={(e) => setKeyInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
-                  />
-                  <button
-                    onClick={handleUnlock}
-                    className="bg-gold text-black border-none px-4 py-2 rounded-[10px] font-bold text-[10px] cursor-pointer hover:bg-white transition-all whitespace-nowrap uppercase tracking-widest"
-                  >
-                    Unlock
-                  </button>
-                </div>
-              )}
-
-              {!isUnlocked && (
-                <div className="absolute inset-0 bg-black/90 backdrop-blur-[8px] z-10 flex flex-col items-center justify-center text-gold text-center p-8">
-                  <div className="w-20 h-20 rounded-full border border-gold/20 flex items-center justify-center mb-6 animate-pulse">
-                    <svg
-                      className="w-8 h-8"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                    >
-                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                    </svg>
-                  </div>
-                  <h3 className="text-sm font-bold tracking-[4px] uppercase mb-4">Secured Access</h3>
-                  <p className="text-[10px] text-white/40 uppercase tracking-[2px] leading-relaxed">
-                    Please enter your verified DMF Premium Credential to initialize the Senior
-                    Engineer session.
-                  </p>
-                </div>
-              )}
-
-              {isUnlocked && (
-                <div className="flex border-b border-gold/15 bg-black/30 px-4">
+              <div className="flex border-b border-gold/15 bg-black/30 px-4">
                   <button
                     onClick={() => setChatMode('chat')}
                     className={`flex-1 py-2.5 text-[11px] font-semibold uppercase tracking-[0.2em] transition-colors border-b ${
@@ -711,7 +926,6 @@ export default function PremiumChat() {
                     Ads
                   </button>
                 </div>
-              )}
 
               {chatMode === 'chat' && (
                 <>
@@ -803,7 +1017,7 @@ export default function PremiumChat() {
                   </div>
 
                   <div className="flex flex-col border-t border-gold/10 bg-black/40">
-                    {isUnlocked && currentChat?.messages.length === 1 && (
+                    { currentChat?.messages.length === 1 && (
                       <div className="p-4 pb-0 flex gap-2 overflow-x-auto no-scrollbar pb-2">
                         {suggestedQuestions.map((q, idx) => (
                           <button
@@ -820,10 +1034,9 @@ export default function PremiumChat() {
                     <div className="p-4 md:p-6 flex gap-3 items-end">
                       <div className="grow relative bg-white/5 border border-white/10 rounded-[18px] transition-all focus-within:border-gold">
                         <textarea
-                          placeholder="Consult DMF Premium..."
+                          placeholder="Ask DMF anything…"
                           rows={1}
-                          className="w-full bg-transparent p-4 pr-12 text-white text-[13px] outline-none resize-none no-scrollbar disabled:opacity-30"
-                          disabled={!isUnlocked}
+                          className="w-full bg-transparent p-4 pr-12 text-white text-[13px] outline-none resize-none no-scrollbar"
                           value={messageInput}
                           onChange={(e) => setMessageInput(e.target.value)}
                           onKeyDown={(e) => {
@@ -834,7 +1047,7 @@ export default function PremiumChat() {
                           }}
                         />
                         <button
-                          onClick={startRecording}
+                          onClick={() => startRecognition()}
                           className={`absolute right-4 top-1/2 -translate-y-1/2 p-2 transition-all ${
                             isRecording
                               ? 'text-red-500 animate-pulse'
@@ -856,7 +1069,7 @@ export default function PremiumChat() {
                       </div>
                       <button
                         onClick={() => handleSend()}
-                        disabled={!isUnlocked || !messageInput.trim()}
+                        disabled={!messageInput.trim()}
                         className="bg-gold border-none w-[52px] h-[52px] rounded-[18px] flex items-center justify-center cursor-pointer hover:scale-105 hover:bg-white transition-all disabled:opacity-10 shadow-xl shadow-gold/10 group"
                       >
                         <svg
@@ -1037,6 +1250,24 @@ export default function PremiumChat() {
           </motion.div>
         )}
       </AnimatePresence>
+      <AssistantVoiceOverlay
+        phase={voicePhase}
+        transcript={voiceTranscript}
+        answer={voiceAnswer}
+        muted={muted}
+        showStudioActions={pathname.startsWith('/ad-studio')}
+        onUseInPrompt={() => {
+          if (!voiceAnswer.trim()) return
+          window.dispatchEvent(
+            new CustomEvent('dmf-studio-apply', { detail: { brief: voiceAnswer } })
+          )
+        }}
+        onCopy={() => {
+          void navigator.clipboard.writeText(voiceAnswer).catch(() => {})
+        }}
+        onMuteToggle={toggleMute}
+        onClose={closeVoice}
+      />
     </>
   )
 }

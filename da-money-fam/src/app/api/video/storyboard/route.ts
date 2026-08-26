@@ -4,12 +4,13 @@ import { getAdVideoCoinPrice } from '@/lib/ad-studio-pricing'
 import { debitUserCoins, creditUserCoins } from '@/lib/user-store'
 import { isActiveFanClubMember } from '@/lib/fan-club'
 import type { CreativeSelections } from '@/lib/ad-creative-presets'
-import { normalizeDuration, submitSeedanceJob, toFirstFrameImage, toLastFrameImage } from '@/lib/seedance-submit'
+import { normalizeDuration, submitSeedanceJob, toInputReferences } from '@/lib/seedance-submit'
 import { createAdStudioGeneration } from '@/lib/ad-studio-jobs'
 import type { StoryboardScene } from '@/lib/ad-studio-types'
 import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
+import { composeVideoFirstFrame } from '@/lib/compose-video-first-frame'
 
-export const maxDuration = 60
+export const maxDuration = 120
 
 /**
  * Starts a storyboard: debits for all scenes, generates scene 0.
@@ -78,8 +79,15 @@ export async function POST(req: Request) {
     debited = true
 
     const continuityBrief = `${sceneBriefs[0]}. Scene 1 of ${sceneCount} in a continuous ad storyboard.`
-    const lockedFirst = toFirstFrameImage(reference_images)
-    const lockedLast = toLastFrameImage(reference_images)
+    const hasStills = toInputReferences(reference_images).length > 0
+    const composedFirst = hasStills
+      ? await composeVideoFirstFrame({
+          userId: user.id,
+          brief: continuityBrief,
+          aspectRatio: typeof aspect_ratio === 'string' ? aspect_ratio : '9:16',
+          referenceImages: reference_images,
+        })
+      : null
     const result = await submitSeedanceJob({
       brief: continuityBrief,
       creative: creative as Partial<CreativeSelections> | undefined,
@@ -87,12 +95,13 @@ export async function POST(req: Request) {
       duration,
       aspect_ratio,
       reference_images,
-      first_frame_image: lockedFirst?.image_url.url,
-      last_frame_image: lockedLast?.image_url.url,
+      first_frame_image: composedFirst,
+      last_frame_image: null,
       generate_audio: wantsAudio,
       model: model.key,
       resolution,
       storyboardMode: true,
+      ignoreRefFrames: true,
     })
 
     const scenes: StoryboardScene[] = sceneBriefs.map((brief, i) => ({

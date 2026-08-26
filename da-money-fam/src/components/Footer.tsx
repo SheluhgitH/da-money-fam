@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { CONFIG } from '../config'
 import { navigateHomepageSection } from '@/lib/homepage-tabs'
-import PremiumChat from './PremiumChat'
+import { openAssistant } from '@/lib/assistant-visibility'
 
 const socialLinks = [
   {
@@ -300,10 +300,16 @@ export default function Footer() {
             >
               Contact
             </button>
+            <button
+              type="button"
+              onClick={() => openAssistant({ setAll: true })}
+              className="hover:text-gold transition-colors"
+            >
+              Assistant
+            </button>
           </div>
         </div>
       </motion.div>
-      <PremiumChat />
     </footer>
   )
 }

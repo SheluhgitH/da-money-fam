@@ -4,6 +4,17 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['ffmpeg-static', 'fluent-ffmpeg', '@resvg/resvg-js'],
   },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...(config.resolve.fallback || {}),
+        fs: false,
+        path: false,
+        crypto: false,
+      }
+    }
+    return config
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'images.kick.com' },

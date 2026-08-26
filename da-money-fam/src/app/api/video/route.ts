@@ -8,8 +8,9 @@ import { normalizeDuration, submitSeedanceJob } from '@/lib/seedance-submit'
 import { createAdStudioGeneration } from '@/lib/ad-studio-jobs'
 import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
 import { FROM_STILL_VIDEO } from '@/lib/studio-templates'
+import { composeVideoFirstFrame } from '@/lib/compose-video-first-frame'
 
-export const maxDuration = 60
+export const maxDuration = 120
 
 export async function POST(req: Request) {
   const user = await getCurrentUser()
@@ -27,8 +28,6 @@ export async function POST(req: Request) {
     aspect_ratio,
     reference_images,
     reference_image_urls,
-    first_frame_image,
-    last_frame_image,
     generate_audio,
     variations,
     saveToLibrary,
@@ -92,6 +91,15 @@ export async function POST(req: Request) {
 
     const jobs: Array<{ jobId: string; variationIndex: number }> = []
 
+    const composedFirst = hasRefs
+      ? await composeVideoFirstFrame({
+          userId: user.id,
+          brief: userBrief,
+          aspectRatio: typeof aspect_ratio === 'string' ? aspect_ratio : '9:16',
+          referenceImages: refSource,
+        })
+      : null
+
     for (let i = 0; i < variationCount; i++) {
       try {
         const result = await submitSeedanceJob({
@@ -105,11 +113,12 @@ export async function POST(req: Request) {
           duration,
           aspect_ratio,
           reference_images: refSource,
-          first_frame_image,
-          last_frame_image,
+          first_frame_image: composedFirst,
+          last_frame_image: null,
           generate_audio: wantsAudio,
           model: model.key,
           resolution,
+          ignoreRefFrames: true,
         })
         jobs.push({ jobId: result.jobId, variationIndex: i })
       } catch (err) {

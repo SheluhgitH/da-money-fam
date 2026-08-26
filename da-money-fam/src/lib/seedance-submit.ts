@@ -130,14 +130,6 @@ export async function submitSeedanceJob(input: {
   }
 
   const model = resolveSeedanceModel(input.model ?? DEFAULT_SEEDANCE_MODEL)
-  const skipRefFrames = Boolean(input.ignoreRefFrames || input.storyboardMode)
-  const firstFrameFromRefs = skipRefFrames
-    ? null
-    : toFirstFrameImage(input.reference_images)
-  const lastFrameFromRefs =
-    skipRefFrames || !model.supportsLastFrame
-      ? null
-      : toLastFrameImage(input.reference_images)
   const explicitFirstFrame =
     typeof input.first_frame_image === 'string' && input.first_frame_image.length > 0
       ? ({
@@ -146,6 +138,16 @@ export async function submitSeedanceJob(input: {
           frame_type: 'first_frame' as const,
         } satisfies FrameImage)
       : null
+  const skipRefFrames = Boolean(
+    input.ignoreRefFrames || input.storyboardMode || explicitFirstFrame
+  )
+  const firstFrameFromRefs = skipRefFrames
+    ? null
+    : toFirstFrameImage(input.reference_images)
+  const lastFrameFromRefs =
+    skipRefFrames || !model.supportsLastFrame
+      ? null
+      : toLastFrameImage(input.reference_images)
   const explicitLastFrame =
     model.supportsLastFrame &&
     typeof input.last_frame_image === 'string' &&
@@ -198,14 +200,8 @@ export async function submitSeedanceJob(input: {
   const duration = normalizeDuration(input.duration, model.key)
 
   if (model.key === 'mini' || model.key === 'fast') {
-    const urlsToMark = [
-      ...frame_images.map((f) => f.image_url.url),
-      ...inputReferences.map((r) => r.image_url.url),
-    ]
+    const urlsToMark = inputReferences.map((r) => r.image_url.url)
     const marked = await markImageUrlsForSeedance(urlsToMark)
-    for (const frame of frame_images) {
-      frame.image_url.url = marked.get(frame.image_url.url) || frame.image_url.url
-    }
     for (const ref of inputReferences) {
       ref.image_url.url = marked.get(ref.image_url.url) || ref.image_url.url
     }

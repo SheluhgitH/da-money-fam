@@ -192,6 +192,7 @@ export function useAdStudio(initialBrief = '') {
   const [generateAudio, setGenerateAudio] = useState(false)
   const [resolution, setResolutionState] = useState<SeedanceResolution>('480p')
   const [lookCharacterId, setLookCharacterId] = useState<string | null>(null)
+  const [lookCharacterName, setLookCharacterName] = useState<string | null>(null)
   const [references, setReferences] = useState<AdReferenceImage[]>([])
   const [lookOpen, setLookOpen] = useState(false)
 
@@ -267,6 +268,86 @@ export function useAdStudio(initialBrief = '') {
   useEffect(() => {
     fetchPresets()
   }, [fetchPresets])
+
+  useEffect(() => {
+    if (!lookCharacterId) {
+      setLookCharacterName(null)
+      return
+    }
+    let cancelled = false
+    void fetch('/api/images/characters')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return
+        const items = Array.isArray(data.items) ? data.items : []
+        const found = items.find((c: { id?: string; name?: string }) => c.id === lookCharacterId)
+        setLookCharacterName(typeof found?.name === 'string' ? found.name : null)
+      })
+      .catch(() => {
+        if (!cancelled) setLookCharacterName(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [lookCharacterId])
+
+  useEffect(() => {
+    try {
+      const snap = {
+        mode,
+        brief: brief.slice(0, 800),
+        scenes: sceneBriefs.map((s) => s.slice(0, 400)),
+        look: creative,
+        characterId: lookCharacterId,
+        characterName: lookCharacterName,
+        refCount: references.length,
+        model: modelKey,
+      }
+      sessionStorage.setItem('dmf-studio-snapshot', JSON.stringify(snap))
+    } catch {
+      /* ignore */
+    }
+  }, [
+    mode,
+    brief,
+    sceneBriefs,
+    creative,
+    lookCharacterId,
+    lookCharacterName,
+    references.length,
+    modelKey,
+  ])
+
+  useEffect(() => {
+    const onApply = (e: Event) => {
+      const detail = (e as CustomEvent).detail as {
+        brief?: string
+        scenes?: string[]
+        append?: string
+      } | null
+      if (!detail) return
+      if (typeof detail.brief === 'string' && detail.brief.trim()) {
+        setBrief(detail.brief)
+        setMode('single')
+      }
+      if (Array.isArray(detail.scenes) && detail.scenes.length >= 2) {
+        const scenes = detail.scenes
+          .map((s) => String(s).trim())
+          .filter(Boolean)
+          .slice(0, MAX_STORYBOARD_SCENES)
+        if (scenes.length >= MIN_STORYBOARD_SCENES) {
+          setMode('storyboard')
+          setSceneCount(scenes.length)
+          setSceneBriefs(scenes)
+        }
+      }
+      if (typeof detail.append === 'string' && detail.append.trim()) {
+        setBrief((prev) => (prev ? `${prev} ${detail.append}` : detail.append!))
+      }
+    }
+    window.addEventListener('dmf-studio-apply', onApply)
+    return () => window.removeEventListener('dmf-studio-apply', onApply)
+  }, [])
 
   useEffect(() => {
     try {
@@ -562,6 +643,32 @@ export function useAdStudio(initialBrief = '') {
     setSceneBriefs((prev) => prev.map((b, i) => (i === index ? value : b)))
   }
 
+  const applyEnhancedAsBrief = () => {
+    const src = (enhancedPreview || '').trim()
+    if (!src) return
+    setBrief(src)
+    setMode('single')
+  }
+
+  const splitEnhancedToScenes = () => {
+    const src = (enhancedPreview || '').trim() || brief.trim()
+    if (!src) return
+    const parts = src
+      .split(/\n+| — |(?=\d[\.\):]\s)/)
+      .map((s) => s.replace(/^\d[\.\):]\s*/, '').trim())
+      .filter(Boolean)
+    const scenes = parts.slice(0, MAX_STORYBOARD_SCENES)
+    if (scenes.length < MIN_STORYBOARD_SCENES) {
+      setMode('storyboard')
+      setSceneCount(MIN_STORYBOARD_SCENES)
+      setSceneBriefs((prev) => prev.map((b, i) => (i === 0 ? src : b)))
+      return
+    }
+    setMode('storyboard')
+    setSceneCount(scenes.length)
+    setSceneBriefs(scenes)
+  }
+
   const cancelGenerate = () => {
     abortRef.current?.abort()
     abortRef.current = null
@@ -777,7 +884,13 @@ export function useAdStudio(initialBrief = '') {
 
     try {
       if (mode === 'storyboard') {
-        setStatusText(enhance ? 'Polishing prompt…' : 'Submitting to Seedance…')
+        setStatusText(
+          references.some((r) => r.kind !== 'audio')
+            ? 'Composing first frame…'
+            : enhance
+              ? 'Polishing prompt…'
+              : 'Submitting to Seedance…'
+        )
         setProgressStep(1)
         const startRes = await fetch('/api/video/storyboard', {
           method: 'POST',
@@ -828,6 +941,7 @@ export function useAdStudio(initialBrief = '') {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 first_frame_image: lastFrame,
+                previous_video_url: completedUrls[i - 1] || null,
                 reference_images: references.map((r) => ({
                   url: r.url,
                   useAsFirstFrame: false,
@@ -846,7 +960,8 @@ export function useAdStudio(initialBrief = '') {
             jobId = contData.jobId
           }
 
-          const polled = await pollJob(jobId, controller.signal, storyboardId)
+          const polled = await pollJob(jobId, controller.signal)
+
           if (!polled.videoUrl) throw new Error('No video URL returned')
 
           completedUrls.push(polled.videoUrl)
@@ -859,12 +974,23 @@ export function useAdStudio(initialBrief = '') {
           setPreviewUrls([...completedUrls])
           setActivePreviewIndex(i)
 
+          await fetch('/api/video/library', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: storyboardId,
+              patch: {
+                scenes: scenesState,
+                video_urls: completedUrls,
+                thumbnail_url: completedUrls[0] || null,
+                status: 'processing',
+              },
+            }),
+          })
+
           if (i < sceneBriefs.length - 1) {
-            setStatusText(`Scene ${i + 1} done · Capturing last frame…`)
+            setStatusText(`Scene ${i + 1} done · Starting scene ${i + 2}…`)
             lastFrame = await captureLastFrameHttps(polled.videoUrl, storyboardId)
-            if (!lastFrame) {
-              throw new Error('Could not capture last frame to continue the storyboard.')
-            }
           }
         }
 
@@ -923,11 +1049,13 @@ export function useAdStudio(initialBrief = '') {
         await fetchPricing()
       } else {
         setStatusText(
-          enhance
-            ? 'Polishing prompt…'
-            : variations > 1
-              ? `Submitting ${variations} variants…`
-              : 'Submitting to Seedance…'
+          references.some((r) => r.kind !== 'audio')
+            ? 'Composing first frame…'
+            : enhance
+              ? 'Polishing prompt…'
+              : variations > 1
+                ? `Submitting ${variations} variants…`
+                : 'Submitting to Seedance…'
         )
         setProgressStep(1)
         const res = await fetch('/api/video', {
@@ -1039,6 +1167,9 @@ export function useAdStudio(initialBrief = '') {
     enhancePreviewLoading,
     enhancePreviewOpen,
     setEnhancePreviewOpen,
+    setEnhancedPreview,
+    applyEnhancedAsBrief,
+    splitEnhancedToScenes,
     previewEnhance,
     applyTemplate,
     addReferenceFromUrl,
@@ -1055,6 +1186,7 @@ export function useAdStudio(initialBrief = '') {
     resolution,
     setResolution,
     lookCharacterId,
+    lookCharacterName,
     setLookCharacterId,
     references,
     addReferenceFiles,

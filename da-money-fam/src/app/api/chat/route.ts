@@ -11,9 +11,11 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { messages, model } = await req.json()
+  const { messages, model, pageContext } = await req.json()
 
-  const systemPrompt = getSystemPrompt()
+  const systemPrompt = getSystemPrompt(
+    typeof pageContext === 'string' ? pageContext.slice(0, 4000) : undefined
+  )
   const conversationHistory = [{ role: 'system' as const, content: systemPrompt }, ...messages]
 
   return streamChatWithFallback(conversationHistory, model)

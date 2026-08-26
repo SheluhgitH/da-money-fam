@@ -11,6 +11,8 @@ import { packsFromSettings } from '@/lib/site-settings'
 import { SEEDANCE_MODELS, audioAddonCoins } from '@/lib/seedance-models'
 import { legacyVideoPrice } from '@/lib/ad-studio-legacy-prices'
 
+import { ASSISTANT_OPEN_EVENT } from '@/lib/assistant-visibility'
+
 export default function PromptDock({ studio }: { studio: AdStudioController }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [buyingId, setBuyingId] = useState<string | null>(null)
@@ -86,7 +88,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
               onClick={() => studio.setError(null)}
               className="text-red-300/70 hover:text-white text-sm shrink-0"
             >
-              Ã—
+              x
             </button>
           </div>
         </div>
@@ -135,6 +137,29 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
         </div>
 
         {studio.mode === 'storyboard' && <StoryboardTimeline studio={studio} />}
+
+        <div className="flex flex-wrap gap-1.5">
+          {(
+            [
+              ['Write my prompt', 'Write a video prompt for this look. Give 2 options then wait.'],
+              ['Make it 3 scenes', 'Split this into 3 scenes. Keep wardrobe and character consistent.'],
+              ['Keep this character', 'Keep this character in every scene. Use their name if I have one.'],
+            ] as const
+          ).map(([label, seed]) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent(ASSISTANT_OPEN_EVENT, { detail: { askBar: true, seed } })
+                )
+              }
+              className="text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-gold/30 text-gold/80"
+            >
+              Help · {label}
+            </button>
+          ))}
+        </div>
 
         {optionsOpen && (
           <div className="space-y-2.5 max-h-[36vh] md:max-h-[42vh] overflow-y-auto studio-scroll pr-0.5">
@@ -291,7 +316,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                         : 'border-white/15 text-white/60'
                     }`}
                   >
-                    1Ã—
+                    1x
                   </button>
                   <button
                     type="button"
@@ -302,7 +327,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                         : 'border-white/15 text-white/60'
                     }`}
                   >
-                    2Ã—
+                    2x
                   </button>
                 </>
               )}
@@ -372,17 +397,41 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
               rows={2}
               value={studio.brief}
               onChange={(e) => studio.setBrief(e.target.value)}
-              placeholder="Optional â€” add a still and Generate, or pick a shotâ€¦"
+              placeholder="Optional — add a still and Generate, or pick a shot…"
               className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-2xl p-3 text-white text-sm outline-none focus:border-gold resize-none"
             />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="shrink-0 h-11 px-3 rounded-2xl border border-gold/30 text-gold text-[10px] uppercase tracking-wider"
-              title="Add stills or MP3/WAV"
-            >
-              Attach
-            </button>
+            <div className="flex flex-col gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard.writeText(studio.brief).catch(() => {})
+                }}
+                className="h-8 px-3 rounded-xl border border-gold/30 text-gold text-[10px] uppercase tracking-wider"
+              >
+                Copy
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  window.dispatchEvent(
+                    new CustomEvent(ASSISTANT_OPEN_EVENT, {
+                      detail: { askBar: true, seed: 'Help write this video prompt.' },
+                    })
+                  )
+                }
+                className="h-8 px-3 rounded-xl border border-gold/30 text-gold text-[10px] uppercase tracking-wider"
+              >
+                Help write
+              </button>
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="h-11 px-3 rounded-2xl border border-gold/30 text-gold text-[10px] uppercase tracking-wider"
+                title="Add stills or MP3/WAV"
+              >
+                Attach
+              </button>
+            </div>
           </div>
         )}
 
@@ -407,11 +456,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
               <div key={`${index}-${ref.url.slice(0, 24)}`} className="w-[4.5rem] shrink-0 flex flex-col gap-1">
                 <div
                   className={`relative w-full h-14 rounded-lg overflow-hidden border ${
-                    ref.kind === 'audio'
-                      ? 'border-gold/40 bg-black/60'
-                      : ref.useAsFirstFrame || ref.useAsLastFrame
-                        ? 'border-gold'
-                        : 'border-gold/25'
+                    ref.kind === 'audio' ? 'border-gold/40 bg-black/60' : 'border-gold/25'
                   }`}
                 >
                   {ref.kind === 'audio' ? (
@@ -430,59 +475,23 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                     onClick={() => studio.removeReference(index)}
                     className="absolute top-0.5 right-0.5 w-6 h-6 rounded bg-black/80 text-white text-xs"
                   >
-                    Ã—
+                    x
                   </button>
                 </div>
-                {ref.kind !== 'audio' && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => studio.toggleFirstFrame(index)}
-                      className={`text-[9px] uppercase tracking-wide px-1 min-h-[28px] rounded border ${
-                        ref.useAsFirstFrame
-                          ? 'bg-gold/20 border-gold text-gold'
-                          : 'border-white/15 text-white/40'
-                      }`}
-                    >
-                      {ref.useAsFirstFrame ? 'First' : 'As first'}
-                    </button>
-                    {modelCfg.supportsLastFrame && (
-                      <button
-                        type="button"
-                        onClick={() => studio.toggleLastFrame(index)}
-                        className={`text-[9px] uppercase tracking-wide px-1 min-h-[28px] rounded border ${
-                          ref.useAsLastFrame
-                            ? 'bg-gold/20 border-gold text-gold'
-                            : 'border-white/15 text-white/40'
-                        }`}
-                      >
-                        {ref.useAsLastFrame ? 'Last' : 'As last'}
-                      </button>
-                    )}
-                  </>
-                )}
               </div>
             ))}
           </div>
         )}
 
-        {studio.references.length > 0 && (
+        {studio.references.some((r) => r.kind !== 'audio') && (
           <p className="text-[10px] text-white/40">
-            As first locks the opening shot.
-            <span className="hidden sm:inline">
-              {' '}
-              Off = identity/style only.
-              {(studio.modelKey === 'mini' || studio.modelKey === 'fast') &&
-              studio.references.some((r) => r.kind !== 'audio')
-                ? ' Mini/Fast auto-mark photoreal stills. Lite accepts unmarked photoreal.'
-                : ''}
-            </span>
+            Stills are used for identity. Gemini composes the opening frame from your prompt.
           </p>
         )}
 
         {showBreakdown && (
           <p className="text-[10px] text-white/40 font-mono">
-            {units} Ã— {perClip} = {price} Coinz
+            {units} x {perClip} = {price} Coinz
             {studio.pricing?.tierOrFanClub ? ` · ${studio.pricing.tierOrFanClub} discount` : ''}
           </p>
         )}
@@ -502,7 +511,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
                   className="flex-1 text-left px-3 py-2 rounded-lg border border-gold/30 hover:bg-gold hover:text-black transition-colors disabled:opacity-50"
                 >
                   <span className="block text-[10px] font-bold uppercase tracking-wider">
-                    {buyingId === pkg.id ? 'Redirectingâ€¦' : packAdCopy(pkg)}
+                    {buyingId === pkg.id ? 'Redirecting...' : packAdCopy(pkg)}
                   </span>
                   <span className="block text-[9px] opacity-70 mt-0.5">
                     {pkg.amount} Coinz · ${pkg.price}

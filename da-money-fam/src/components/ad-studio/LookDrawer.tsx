@@ -2,6 +2,15 @@
 
 import { CREATIVE_ROWS } from '@/lib/ad-creative-presets'
 import type { AdStudioController } from '@/hooks/useAdStudio'
+import { ASSISTANT_OPEN_EVENT } from '@/lib/assistant-visibility'
+
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    /* ignore */
+  }
+}
 
 export default function LookDrawer({ studio }: { studio: AdStudioController }) {
   if (!studio.lookOpen) return null
@@ -90,12 +99,56 @@ export default function LookDrawer({ studio }: { studio: AdStudioController }) {
             {studio.enhancePreviewOpen && (studio.basePreview || studio.enhancedPreview) && (
               <div className="grid sm:grid-cols-2 gap-2 text-[10px]">
                 <div className="rounded-lg border border-white/10 bg-black/40 p-2">
-                  <p className="uppercase tracking-wider text-white/40 mb-1">Your brief</p>
-                  <p className="text-white/70 whitespace-pre-wrap">{studio.basePreview}</p>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="uppercase tracking-wider text-white/40">Your brief</p>
+                    <button
+                      type="button"
+                      onClick={() => copyText(studio.basePreview || '')}
+                      className="text-[8px] uppercase tracking-wider text-gold/70"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <textarea
+                    rows={5}
+                    value={studio.basePreview || ''}
+                    onChange={(e) => studio.setBrief(e.target.value)}
+                    className="w-full bg-transparent text-white/80 whitespace-pre-wrap outline-none resize-none"
+                  />
                 </div>
                 <div className="rounded-lg border border-gold/25 bg-gold/5 p-2">
-                  <p className="uppercase tracking-wider text-gold/60 mb-1">AI prompt</p>
-                  <p className="text-gold/90 whitespace-pre-wrap">{studio.enhancedPreview}</p>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="uppercase tracking-wider text-gold/60">AI prompt</p>
+                    <button
+                      type="button"
+                      onClick={() => copyText(studio.enhancedPreview || '')}
+                      className="text-[8px] uppercase tracking-wider text-gold/70"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <textarea
+                    rows={5}
+                    value={studio.enhancedPreview || ''}
+                    onChange={(e) => studio.setEnhancedPreview(e.target.value)}
+                    className="w-full bg-transparent text-gold/90 whitespace-pre-wrap outline-none resize-none"
+                  />
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => studio.applyEnhancedAsBrief()}
+                      className="text-[8px] uppercase tracking-wider px-2 py-1 rounded-full border border-gold/40 text-gold"
+                    >
+                      Use as brief
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => studio.splitEnhancedToScenes()}
+                      className="text-[8px] uppercase tracking-wider px-2 py-1 rounded-full border border-gold/40 text-gold"
+                    >
+                      Split into scenes
+                    </button>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -108,6 +161,29 @@ export default function LookDrawer({ studio }: { studio: AdStudioController }) {
             )}
           </div>
         )}
+
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {(
+            [
+              ['Write my prompt', 'Write a video prompt for this look and character. Give 2 options.'],
+              ['Make it 3 scenes', 'Turn this into a 3-scene storyboard. Keep the same character.'],
+              ['Keep this character', 'Keep this character consistent. Name them if I have one saved.'],
+            ] as const
+          ).map(([label, seed]) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent(ASSISTANT_OPEN_EVENT, { detail: { askBar: true, seed } })
+                )
+              }
+              className="text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-gold/30 text-gold/80"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   )

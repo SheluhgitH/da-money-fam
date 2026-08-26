@@ -4,13 +4,11 @@ import { getAdStudioGeneration, updateAdStudioGeneration } from '@/lib/ad-studio
 import type { CreativeSelections } from '@/lib/ad-creative-presets'
 import { submitSeedanceJob } from '@/lib/seedance-submit'
 import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
+import { extractAndUploadLastFrame } from '@/lib/storyboard-last-frame'
+import { composeVideoFirstFrame } from '@/lib/compose-video-first-frame'
 
-export const maxDuration = 60
+export const maxDuration = 120
 
-/**
- * Continue storyboard: generate next pending scene with optional first_frame from previous.
- * Coinz already debited at storyboard create.
- */
 export async function POST(
   req: Request,
   { params }: { params: { id: string } }
@@ -25,30 +23,52 @@ export async function POST(
     return NextResponse.json({ error: 'Storyboard not found' }, { status: 404 })
   }
 
-  const body = await req.json()
-  const { first_frame_image, reference_images, enhance, generate_audio, resolution } = body
+  const body = await req.json().catch(() => ({}))
+  const { previous_video_url, reference_images, enhance, generate_audio, resolution } =
+    body
 
-  const firstFrame =
-    typeof first_frame_image === 'string' &&
-    (first_frame_image.startsWith('http://') || first_frame_image.startsWith('https://'))
-      ? first_frame_image
-      : ''
-  if (!firstFrame) {
-    return NextResponse.json(
-      { error: 'Previous scene last frame is required to continue' },
-      { status: 400 }
-    )
-  }
-
-  const nextIndex = gen.scenes.findIndex((s) => s.status === 'pending')
+  const nextIndex = gen.scenes.findIndex(
+    (s) =>
+      s.status !== 'completed' &&
+      s.status !== 'processing' &&
+      (!s.jobId || s.status === 'pending')
+  )
   if (nextIndex < 0) {
     return NextResponse.json({ error: 'All scenes already started' }, { status: 400 })
+  }
+
+  let extractedFrame = ''
+  const fromBody =
+    typeof previous_video_url === 'string' ? previous_video_url : ''
+  const prev =
+    fromBody ||
+    [...gen.scenes]
+      .slice(0, nextIndex)
+      .reverse()
+      .find((s) => s.videoUrl)?.videoUrl
+  if (prev) {
+    extractedFrame =
+      (await extractAndUploadLastFrame({
+        userId: user.id,
+        videoUrl: prev,
+        requestOrigin: new URL(req.url).origin,
+      })) || ''
   }
 
   const scene = gen.scenes[nextIndex]
   const sceneCount = gen.scenes.length
   const continuityBrief = `${scene.brief}. Scene ${nextIndex + 1} of ${sceneCount} in a continuous ad storyboard. Continue seamlessly from the previous shot.`
   const model = resolveSeedanceModel(gen.model)
+
+  const composedFirst = await composeVideoFirstFrame({
+    userId: user.id,
+    brief: continuityBrief,
+    aspectRatio: gen.aspect_ratio || '9:16',
+    referenceImages: reference_images,
+    extraRefUrls: extractedFrame ? [extractedFrame] : [],
+  })
+
+  const firstFrame = composedFirst || extractedFrame || null
 
   try {
     const result = await submitSeedanceJob({
@@ -67,9 +87,7 @@ export async function POST(
     })
 
     const scenes = gen.scenes.map((s, i) =>
-      i === nextIndex
-        ? { ...s, jobId: result.jobId, status: 'processing' }
-        : s
+      i === nextIndex ? { ...s, jobId: result.jobId, status: 'processing' } : s
     )
 
     await updateAdStudioGeneration(user.id, gen.id, {

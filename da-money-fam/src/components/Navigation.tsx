@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { navigateHomepageSection } from '@/lib/homepage-tabs'
+import { openAssistant } from '@/lib/assistant-visibility'
 import { useAuth } from '@/contexts/AuthProvider'
 import { useSiteSettings } from '@/contexts/SiteSettingsProvider'
 import UserAvatar from '@/components/UserAvatar'
@@ -186,6 +187,13 @@ export default function Navigation() {
                     <Link href="/ad-studio" className="text-xs uppercase tracking-widest text-gold hover:text-white transition-colors">
                       Ad Studio
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => openAssistant({ setAll: true })}
+                      className="text-xs uppercase tracking-widest text-gold hover:text-white transition-colors"
+                    >
+                      Assistant
+                    </button>
                     <Link href="/library" className="text-xs uppercase tracking-widest text-gold hover:text-white transition-colors">
                       Library
                     </Link>
@@ -218,6 +226,13 @@ export default function Navigation() {
                     >
                       Ad Studio
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => openAssistant({ setAll: true })}
+                      className="text-xs uppercase tracking-widest text-gold hover:text-white transition-colors"
+                    >
+                      Assistant
+                    </button>
                     <Link
                       href="/login"
                       className="px-4 py-2 bg-gold text-black text-xs font-bold uppercase tracking-widest rounded-full hover:bg-white transition-colors"
@@ -279,6 +294,16 @@ export default function Navigation() {
                     <Link href="/ad-studio" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
                       Ad Studio
                     </Link>
+                    <button
+                      type="button"
+                      className="text-lg uppercase tracking-widest text-gold text-left"
+                      onClick={() => {
+                        openAssistant({ setAll: true })
+                        setIsMenuOpen(false)
+                      }}
+                    >
+                      Assistant
+                    </button>
                     <Link href="/library" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
                       Library
                     </Link>
@@ -325,6 +350,16 @@ export default function Navigation() {
                     >
                       Ad Studio
                     </Link>
+                    <button
+                      type="button"
+                      className="text-lg uppercase tracking-widest text-gold text-left"
+                      onClick={() => {
+                        openAssistant({ setAll: true })
+                        setIsMenuOpen(false)
+                      }}
+                    >
+                      Assistant
+                    </button>
                     <Link href="/login" className="text-lg uppercase tracking-widest text-gold" onClick={() => setIsMenuOpen(false)}>
                       Sign In
                     </Link>
