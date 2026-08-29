@@ -11,6 +11,7 @@ import {
   xpProgressToNextLevel,
   type PerkStatus,
 } from '@/lib/fan-perks'
+import { trackFanClubCta } from '@/lib/analytics'
 
 function StatusBadge({ status }: { status: PerkStatus }) {
   if (status === 'live') {
@@ -110,7 +111,9 @@ export default function FanPerksLadder() {
                     </span>
                   </div>
                   <ul className="space-y-1.5">
-                    {tier.perks.map((perk, idx) => (
+                    {tier.perks
+                      .filter((perk) => perk.status === 'live')
+                      .map((perk, idx) => (
                       <li key={idx} className="flex items-center justify-between gap-2 text-sm">
                         <span className={isUnlocked ? 'text-zinc-300' : 'text-zinc-500'}>{perk.label}</span>
                         <StatusBadge status={perk.status} />
@@ -176,7 +179,7 @@ export default function FanPerksLadder() {
                 Skip the grind. Unlock every XP level perk now, plus member-only extras.
               </p>
               <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {FAN_CLUB_PERKS.map((perk, idx) => (
+                {FAN_CLUB_PERKS.filter((perk) => perk.status === 'live').map((perk, idx) => (
                   <li key={idx} className="flex items-center justify-between gap-2 text-sm">
                     <span className={fanClubActive ? 'text-zinc-200' : 'text-zinc-300'}>{perk.label}</span>
                     <StatusBadge status={perk.status} />
@@ -189,7 +192,10 @@ export default function FanPerksLadder() {
                 <span className="text-green-400 text-xs font-bold uppercase tracking-wider">Membership active</span>
               ) : (
                 <Link
-                  href="/account"
+                  href="/#membership"
+                  onClick={() => {
+                    trackFanClubCta('fan_perks_ladder')
+                  }}
                   className="inline-block px-6 py-2.5 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold uppercase tracking-wider rounded-full transition-colors text-center"
                 >
                   Join Fan Club

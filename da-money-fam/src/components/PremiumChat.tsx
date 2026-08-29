@@ -927,13 +927,22 @@ export default function PremiumChat() {
 
   const attachAssetToStudio = (asset: { url?: string; title: string; kind: string }) => {
     if (!asset.url) return
+    try {
+      const pending = JSON.parse(sessionStorage.getItem('dmf-studio-pending-refs') || '[]') as string[]
+      if (!pending.includes(asset.url)) pending.push(asset.url)
+      sessionStorage.setItem('dmf-studio-pending-refs', JSON.stringify(pending.slice(-6)))
+    } catch {
+      /* ignore */
+    }
     window.dispatchEvent(
       new CustomEvent('dmf-studio-apply', {
-        detail: { refUrl: asset.url, asFirstFrame: asset.kind === 'image' },
+        detail: { refUrl: asset.url, asFirstFrame: false },
       })
     )
     if (!window.location.pathname.startsWith('/ad-studio')) {
-      window.location.href = '/ad-studio'
+      const q = new URLSearchParams()
+      q.set('brief', `Use attached stills with smart timing for: ${asset.title || 'this look'}`)
+      window.location.href = `/ad-studio?${q.toString()}`
     }
   }
 
@@ -1171,8 +1180,13 @@ export default function PremiumChat() {
         onPointerCancel={onFabPointerCancel}
         onLostPointerCapture={onFabLostPointerCapture}
         onContextMenu={(e) => e.preventDefault()}
-        className="fixed bottom-[20px] left-[20px] md:bottom-[30px] md:left-[30px] w-[60px] h-[60px] md:w-[70px] md:h-[70px] rounded-full z-[1000] flex items-center justify-center cursor-pointer shadow-[0_8px_24px_rgba(255,215,0,0.25)] border border-gold/30 touch-none"
-        style={{ background: 'linear-gradient(135deg, #FFD700, #B8860B)' }}
+        className={`fixed left-[20px] md:bottom-[30px] md:left-[30px] w-[60px] h-[60px] md:w-[70px] md:h-[70px] rounded-full flex items-center justify-center cursor-pointer shadow-[0_8px_24px_rgba(255,215,0,0.25)] border border-gold/30 touch-none ${
+          pathname.startsWith('/ad-studio') ? 'z-[50]' : 'z-[1000]'
+        }`}
+        style={{
+          background: 'linear-gradient(135deg, #FFD700, #B8860B)',
+          bottom: 'calc(var(--dmf-safe-bottom) + 1.25rem)',
+        }}
         animate={{
           scale: holding.current || isRecording ? 1.08 : 1,
           boxShadow: [
@@ -1205,7 +1219,10 @@ export default function PremiumChat() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 12 }}
-            className="fixed z-[999] left-[88px] right-3 bottom-[22px] md:left-[110px] md:right-auto md:w-[min(420px,calc(100vw-140px))] rounded-2xl border border-gold/35 bg-black/80 backdrop-blur-xl p-2.5 shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
+            className="fixed z-[999] left-[88px] right-3 md:left-[110px] md:right-auto md:w-[min(420px,calc(100vw-140px))] max-w-[calc(100vw-5.75rem)] rounded-2xl border border-gold/35 bg-black/80 backdrop-blur-xl p-2.5 shadow-[0_16px_40px_rgba(0,0,0,0.45)]"
+            style={{
+              bottom: 'calc(var(--dmf-safe-bottom) + 1.25rem)',
+            }}
           >
             {(() => {
               const lastBot = [...(currentChat?.messages || [])]
@@ -1325,13 +1342,20 @@ export default function PremiumChat() {
             transition={{ type: 'spring', stiffness: 320, damping: 28 }}
             className={`fixed z-[999] overflow-hidden flex flex-row shadow-[0_30px_60px_rgba(0,0,0,0.55)] transition-all duration-300 ${
               isFullscreen
-                ? 'inset-0 w-full h-full rounded-none'
-                : 'bottom-[90px] md:bottom-[110px] right-4 left-4 md:right-auto md:left-[30px] md:w-[520px] md:h-[700px] w-auto h-[calc(100dvh-110px)] rounded-[24px] border border-gold/25'
+                ? 'inset-0 w-full h-full rounded-none pt-[var(--dmf-safe-top)] pb-[var(--dmf-safe-bottom)]'
+                : 'right-4 left-4 md:right-auto md:left-[30px] md:w-[520px] w-auto rounded-[24px] border border-gold/25'
             }`}
             style={{
               background: 'rgba(8, 8, 10, 0.97)',
               backdropFilter: 'blur(24px)',
               WebkitBackdropFilter: 'blur(24px)',
+                  ...(isFullscreen
+                ? {}
+                : {
+                    bottom: 'calc(5.75rem + var(--dmf-safe-bottom))',
+                    height: 'min(700px, calc(100svh - 8rem - var(--dmf-safe-bottom)))',
+                    maxHeight: 'calc(100svh - 8rem - var(--dmf-safe-bottom))',
+                  }),
             }}
           >
             <AnimatePresence>

@@ -53,7 +53,12 @@ export default function StickyPreviewBar() {
   const endedHint = previewEnded && !activePreview.owned
 
   return (
-    <div className="fixed bottom-20 md:bottom-6 left-4 right-4 md:left-auto md:right-6 md:max-w-md z-[900] glass-gold rounded-2xl border border-gold/30 p-3 shadow-2xl">
+    <div
+      className="fixed left-4 right-4 md:left-auto md:right-6 md:max-w-md z-[900] glass-gold rounded-2xl border border-gold/30 p-3 shadow-2xl"
+      style={{
+        bottom: 'calc(var(--dmf-safe-bottom) + var(--dmf-shop-bar) + 1rem)',
+      }}
+    >
       <div className="flex items-center gap-3">
         {activePreview.cover ? (
           <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0">

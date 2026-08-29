@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import SongAiFields from '@/components/admin/SongAiFields'
 import PreviewRegionPicker from '@/components/admin/PreviewRegionPicker'
+import ArtistShareUrlHint from '@/components/admin/ArtistShareUrlHint'
 
 const inputClass =
   'w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500'
@@ -98,6 +99,7 @@ export default function NewSongForm({ onCreated }: { onCreated: () => void }) {
         placeholder="Artist"
         className={inputClass}
       />
+      <ArtistShareUrlHint artistName={artist} />
       <input
         name="price"
         type="number"

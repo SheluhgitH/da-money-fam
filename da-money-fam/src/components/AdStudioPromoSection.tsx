@@ -163,7 +163,10 @@ export default function AdStudioPromoSection() {
     }
   }, [items])
 
-  const ctaHref = !loading && !user ? '/login?redirect=/ad-studio' : '/ad-studio'
+  const ctaHref =
+    !loading && !user
+      ? '/login?redirect=/ad-studio'
+      : '/ad-studio?brief=Luxury%20hip-hop%20promo%20clip'
 
   return (
     <section id="ad-studio-promo" className="max-w-7xl mx-auto">

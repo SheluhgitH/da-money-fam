@@ -93,10 +93,9 @@ export default function GenerationLibrary({
                 <button type="button" onClick={() => select(item)} className="w-full text-left">
                   <div className="relative aspect-square overflow-hidden bg-black">
                     {poster && !thumb ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={poster}
-                        alt=""
+                        alt={item.brief?.slice(0, 80) || 'Ad preview'}
                         className="absolute inset-0 h-full w-full object-cover"
                       />
                     ) : thumb ? (
@@ -165,6 +164,21 @@ export default function GenerationLibrary({
                       >
                         Link
                       </button>
+                      {(poster || item.thumbnail_url) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = poster || item.thumbnail_url
+                            if (!url || !isImagePosterUrl(url)) return
+                            studio.addReferenceFromUrl(url, false)
+                            onCloseMobile?.()
+                          }}
+                          className="flex-1 text-[9px] uppercase tracking-wider py-1 rounded border border-gold/25 text-gold/80"
+                          title="Use last/poster frame as reference still"
+                        >
+                          Use as ref
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={Boolean(item.admin_hidden)}

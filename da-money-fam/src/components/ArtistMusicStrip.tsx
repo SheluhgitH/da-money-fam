@@ -4,7 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion, type PanInfo } from 'framer-motion'
 import PreviewPlayer from '@/components/store/PreviewPlayer'
 import { useAuth } from '@/contexts/AuthProvider'
-import { groupCatalogArtists, type CatalogArtist } from '@/lib/artist-catalog'
+import {
+  artistSharePath,
+  groupCatalogArtists,
+  slugifyArtistName,
+  type CatalogArtist,
+} from '@/lib/artist-catalog'
 import { FAN_CLUB_PREVIEW_DURATION_SEC, PREVIEW_DURATION_SEC } from '@/lib/audio-constants'
 import { canPurchaseSong } from '@/lib/fan-perks'
 import { navigateHomepageSection } from '@/lib/homepage-tabs'
@@ -72,7 +77,9 @@ export default function ArtistMusicStrip() {
   const [fanClubActive, setFanClubActive] = useState(false)
   const [fanLevel, setFanLevel] = useState(1)
   const [purchasingId, setPurchasingId] = useState<string | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
   const nudged = useRef(false)
+  const deepLinkHandled = useRef(false)
   const stageRef = useRef<HTMLDivElement>(null)
 
   const previewDurationSec = fanClubActive ? FAN_CLUB_PREVIEW_DURATION_SEC : PREVIEW_DURATION_SEC
@@ -99,6 +106,23 @@ export default function ArtistMusicStrip() {
     const next = artists.find((a) => a.key === open.key)
     if (next) setOpen(next)
   }, [artists, open?.key])
+
+  // Deep link: /?artist=jackpot (or #artist-music with ?artist=)
+  useEffect(() => {
+    if (!loaded || artists.length === 0 || deepLinkHandled.current) return
+    const params = new URLSearchParams(window.location.search)
+    const raw = params.get('artist')
+    if (!raw) return
+    deepLinkHandled.current = true
+    const slug = slugifyArtistName(raw)
+    const matchIndex = artists.findIndex((a) => slugifyArtistName(a.name) === slug)
+    if (matchIndex < 0) return
+    setActiveIndex(matchIndex)
+    setOpen(artists[matchIndex])
+    window.requestAnimationFrame(() => {
+      document.getElementById('artist-music')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }, [loaded, artists])
 
   useEffect(() => {
     if (!user) {
@@ -222,6 +246,17 @@ export default function ArtistMusicStrip() {
     window.setTimeout(() => {
       document.getElementById(`song-${songId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }, 400)
+  }
+
+  const copyArtistLink = async (name: string) => {
+    const url = `${window.location.origin}${artistSharePath(name)}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setLinkCopied(true)
+      window.setTimeout(() => setLinkCopied(false), 2000)
+    } catch {
+      /* ignore */
+    }
   }
 
   if (!loaded || artists.length === 0) return null
@@ -430,6 +465,21 @@ export default function ArtistMusicStrip() {
               </div>
 
               <div className="p-4 space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => copyArtistLink(open.name)}
+                    className="text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full bg-gold text-black font-bold"
+                  >
+                    {linkCopied ? 'Copied' : 'Copy link'}
+                  </button>
+                  <a
+                    href={artistSharePath(open.name)}
+                    className="text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full border border-gold/30 text-gold hover:bg-gold/10"
+                  >
+                    Open page
+                  </a>
+                </div>
                 <div className="rounded-xl border border-gold/25 overflow-hidden bg-black/40">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={featured.album_cover_path} alt="" className="w-full h-44 object-cover" />

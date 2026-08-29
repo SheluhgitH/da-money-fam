@@ -33,6 +33,24 @@ import { resolvePlayableVideoUrls } from '@/lib/ad-studio-video-urls'
 import { compressImageForUpload } from '@/lib/compress-image'
 import { FROM_STILL_VIDEO } from '@/lib/studio-templates'
 import { classifyReferenceRolesHeuristic } from '@/lib/classify-reference-roles'
+import {
+  appendStoryboardContinuity,
+  STORYBOARD_PHYSICS_SUFFIX,
+} from '@/lib/storyboard-prompts'
+import {
+  trackAdStudioGenerate,
+  trackStoryboardSceneComplete,
+} from '@/lib/analytics'
+import {
+  parseIdentityStrength,
+  parseMotionMode,
+  type IdentityStrength,
+  type MotionMode,
+} from '@/lib/ad-studio-motion'
+
+export type SceneGenStatus = 'idle' | 'queued' | 'generating' | 'continuity' | 'completed' | 'failed'
+export type PhysicsPreset = 'default' | 'walking' | 'product'
+export type { MotionMode, IdentityStrength }
 
 const DRAFT_KEY = 'dmf-ad-studio-draft-v1'
 const POLL_TIMEOUT_MS = 8 * 60 * 1000
@@ -242,6 +260,13 @@ export function useAdStudio(initialBrief = '') {
   const [presets, setPresets] = useState<AdStudioPreset[]>([])
   const [queue, setQueue] = useState<QueuedGenerationJob[]>([])
   const [progressStep, setProgressStep] = useState(0)
+  const [sceneStatuses, setSceneStatuses] = useState<SceneGenStatus[]>([])
+  const [currentSceneIndex, setCurrentSceneIndex] = useState(0)
+  const [physicsPreset, setPhysicsPreset] = useState<PhysicsPreset>('default')
+  const [motionMode, setMotionModeState] = useState<MotionMode>('guide')
+  const [identityStrength, setIdentityStrength] = useState<IdentityStrength>('balanced')
+  const [lastStoryboardId, setLastStoryboardId] = useState<string | null>(null)
+  const [extractingLastFrame, setExtractingLastFrame] = useState(false)
   const [enhancedPreview, setEnhancedPreview] = useState<string | null>(null)
   const [basePreview, setBasePreview] = useState<string | null>(null)
   const [enhancePreviewLoading, setEnhancePreviewLoading] = useState(false)
@@ -437,6 +462,26 @@ export function useAdStudio(initialBrief = '') {
   }, [])
 
   useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('dmf-studio-pending-refs')
+      if (!raw) return
+      const urls = JSON.parse(raw) as string[]
+      sessionStorage.removeItem('dmf-studio-pending-refs')
+      if (!Array.isArray(urls)) return
+      window.setTimeout(() => {
+        for (const url of urls.slice(0, 4)) {
+          if (typeof url === 'string' && url.startsWith('http')) {
+            addReferenceFromUrl(url, false)
+          }
+        }
+      }, 50)
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
     const t = window.setTimeout(() => {
       try {
         localStorage.setItem(
@@ -476,6 +521,18 @@ export function useAdStudio(initialBrief = '') {
 
   const applyTemplate = (briefText: string, creativePatch?: Partial<CreativeSelections>) => {
     setBrief(briefText)
+    if (creativePatch) {
+      setCreative((prev) => ({ ...prev, ...creativePatch }))
+    }
+    setEnhancedPreview(null)
+    setBasePreview(null)
+  }
+
+  const applyStoryboardTemplate = (scenes: string[], creativePatch?: Partial<CreativeSelections>) => {
+    const cleaned = scenes.map((s) => s.trim()).filter(Boolean).slice(0, MAX_STORYBOARD_SCENES)
+    if (cleaned.length < MIN_STORYBOARD_SCENES) return
+    setMode('storyboard')
+    setSceneBriefs(cleaned)
     if (creativePatch) {
       setCreative((prev) => ({ ...prev, ...creativePatch }))
     }
@@ -687,6 +744,187 @@ export function useAdStudio(initialBrief = '') {
     })
   }
 
+  const setMotionMode = (mode: MotionMode) => {
+    setMotionModeState(mode)
+    if (mode === 'guide') {
+      setReferences((prev) =>
+        prev.map((r) => ({ ...r, useAsFirstFrame: false, useAsLastFrame: false }))
+      )
+      return
+    }
+    if (mode === 'animate_ab') {
+      setReferences((prev) => {
+        const images = prev.filter((r) => r.kind !== 'audio')
+        const hasStart = prev.some((r) => r.useAsFirstFrame)
+        const hasEnd = prev.some((r) => r.useAsLastFrame)
+        if (hasStart && hasEnd) return prev
+        if (images.length < 2) return prev
+        let firstSet = hasStart
+        let lastSet = hasEnd
+        return prev.map((r) => {
+          if (r.kind === 'audio') return r
+          if (!firstSet && !r.useAsLastFrame) {
+            firstSet = true
+            return {
+              ...r,
+              useAsFirstFrame: true,
+              useAsLastFrame: false,
+              refRole: 'opening_subject' as const,
+            }
+          }
+          if (!lastSet && !r.useAsFirstFrame) {
+            lastSet = true
+            return {
+              ...r,
+              useAsFirstFrame: false,
+              useAsLastFrame: true,
+              refRole: 'appears_later' as const,
+            }
+          }
+          return r
+        })
+      })
+      return
+    }
+    if (mode === 'lock_start') {
+      setReferences((prev) => {
+        if (prev.some((r) => r.useAsFirstFrame)) return prev
+        const firstImg = prev.findIndex((r) => r.kind !== 'audio')
+        if (firstImg < 0) return prev
+        return prev.map((r, i) =>
+          i === firstImg
+            ? {
+                ...r,
+                useAsFirstFrame: true,
+                useAsLastFrame: false,
+                refRole: 'opening_subject' as const,
+              }
+            : { ...r, useAsFirstFrame: false }
+        )
+      })
+    }
+  }
+
+  const setRefRole = (
+    index: number,
+    role: 'opening_subject' | 'appears_later' | 'identity' | 'start' | 'end'
+  ) => {
+    setReferences((prev) => {
+      if (prev[index]?.kind === 'audio') return prev
+      return prev.map((img, i) => {
+        if (i !== index) {
+          if (role === 'start' && img.useAsFirstFrame) {
+            return { ...img, useAsFirstFrame: false }
+          }
+          if (role === 'end' && img.useAsLastFrame) {
+            return { ...img, useAsLastFrame: false }
+          }
+          return img
+        }
+        if (role === 'start') {
+          return {
+            ...img,
+            refRole: 'opening_subject',
+            useAsFirstFrame: true,
+            useAsLastFrame: false,
+          }
+        }
+        if (role === 'end') {
+          return {
+            ...img,
+            refRole: 'appears_later',
+            useAsFirstFrame: false,
+            useAsLastFrame: true,
+          }
+        }
+        return {
+          ...img,
+          refRole: role,
+          useAsFirstFrame: false,
+          useAsLastFrame: false,
+        }
+      })
+    })
+    if (role === 'start' || role === 'end') {
+      setMotionModeState((m) => (m === 'guide' ? (role === 'end' ? 'animate_ab' : 'lock_start') : m))
+    }
+  }
+
+  const useLastFrameAsStart = async () => {
+    const videoUrl = previewUrls[activePreviewIndex]
+    if (!videoUrl) {
+      setError('Generate a clip first, then tap Use last frame.')
+      return
+    }
+    setExtractingLastFrame(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/video/extract-last-frame', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoUrl }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.url) throw new Error(data.error || 'Could not extract last frame')
+      setReferences((prev) => {
+        const next = prev
+          .filter((r) => r.kind === 'audio')
+          .concat([
+            {
+              url: data.url as string,
+              useAsFirstFrame: true,
+              useAsLastFrame: false,
+              kind: 'image' as const,
+              refRole: 'opening_subject' as const,
+              name: 'Last frame',
+            },
+            ...prev.filter((r) => r.kind !== 'audio' && !r.useAsFirstFrame).slice(0, MAX_REFERENCE_IMAGES - 1),
+          ])
+        return next.slice(0, MAX_REFERENCE_IMAGES + MAX_REFERENCE_AUDIO)
+      })
+      setMotionModeState((m) => (m === 'guide' ? 'lock_start' : m))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not extract last frame')
+    } finally {
+      setExtractingLastFrame(false)
+    }
+  }
+
+  const applyContinuityChip = (kind: 'same_look' | 'animate_still') => {
+    if (kind === 'same_look') {
+      setMotionMode('guide')
+      setIdentityStrength('locked')
+      if (!brief.trim()) {
+        setBrief('Same talent and wardrobe, new camera angle, luxury hip-hop polish, locked identity.')
+      }
+    } else {
+      setMotionMode('animate_ab')
+      setIdentityStrength('locked')
+      const images = references.filter((r) => r.kind !== 'audio')
+      if (images.length >= 2) {
+        setReferences((prev) => {
+          let firstSet = false
+          let lastSet = false
+          return prev.map((r) => {
+            if (r.kind === 'audio') return r
+            if (!firstSet) {
+              firstSet = true
+              return { ...r, useAsFirstFrame: true, useAsLastFrame: false, refRole: 'opening_subject' }
+            }
+            if (!lastSet) {
+              lastSet = true
+              return { ...r, useAsFirstFrame: false, useAsLastFrame: true, refRole: 'appears_later' }
+            }
+            return { ...r, useAsFirstFrame: false, useAsLastFrame: false }
+          })
+        })
+      }
+      if (!brief.trim()) {
+        setBrief('Animate from the Start still to the End still with smooth cinematic motion.')
+      }
+    }
+  }
+
   const cycleRefRole = (index: number) => {
     setReferences((prev) => {
       if (prev[index]?.kind === 'audio') return prev
@@ -826,6 +1064,17 @@ export function useAdStudio(initialBrief = '') {
   }
 
   const savePreset = async (name?: string) => {
+    const refMeta = references
+      .filter((r) => r.kind !== 'audio')
+      .map((r) => {
+        const role = r.useAsFirstFrame
+          ? 'start'
+          : r.useAsLastFrame
+            ? 'end'
+            : r.refRole || 'identity'
+        return `${r.url}|${role}|${r.useAsFirstFrame ? '1' : '0'}|${r.useAsLastFrame ? '1' : '0'}`
+      })
+      .join(';;')
     const res = await fetch('/api/video/presets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -836,8 +1085,15 @@ export function useAdStudio(initialBrief = '') {
         aspect_ratio: aspectRatio,
         model: modelKey,
         duration_seconds: duration,
-        look_ref_urls: references.map((r) => r.url),
+        look_ref_urls: references.filter((r) => r.kind !== 'audio').map((r) => r.url),
         look_character_id: lookCharacterId,
+        motion_mode: motionMode,
+        identity_strength: identityStrength,
+        physics_preset: physicsPreset,
+        generate_audio: generateAudio,
+        resolution,
+        variations,
+        ref_meta: refMeta,
       }),
     })
     const data = await res.json()
@@ -852,6 +1108,13 @@ export function useAdStudio(initialBrief = '') {
       const rest = { ...preset.creative }
       delete rest.lookRefUrls
       delete rest.lookCharacterId
+      delete rest.motionMode
+      delete rest.identityStrength
+      delete rest.physicsPreset
+      delete rest.generateAudio
+      delete rest.resolution
+      delete rest.variations
+      delete rest.refMeta
       setCreative({ ...DEFAULT_CREATIVE_SELECTIONS, ...rest })
     }
     if (preset.aspect_ratio) setAspectRatio(preset.aspect_ratio)
@@ -859,17 +1122,58 @@ export function useAdStudio(initialBrief = '') {
     if (preset.duration_seconds) {
       setDuration(preset.duration_seconds || 6)
     }
+    setMotionModeState(parseMotionMode(preset.motion_mode || preset.creative?.motionMode))
+    setIdentityStrength(
+      parseIdentityStrength(preset.identity_strength || preset.creative?.identityStrength)
+    )
+    const phys = preset.physics_preset || preset.creative?.physicsPreset
+    if (phys === 'walking' || phys === 'product' || phys === 'default') {
+      setPhysicsPreset(phys)
+    }
+    if (preset.generate_audio || preset.creative?.generateAudio === '1') {
+      setGenerateAudio(true)
+    }
+    if (preset.resolution === '720p' || preset.resolution === '480p') {
+      setResolutionState(preset.resolution)
+    } else if (preset.creative?.resolution === '720p' || preset.creative?.resolution === '480p') {
+      setResolutionState(preset.creative.resolution)
+    }
+    const vars = preset.variations ?? Number(preset.creative?.variations || 0)
+    if (vars === 1 || vars === 2) setVariations(vars)
+
+    const meta = preset.ref_meta || preset.creative?.refMeta || ''
     const urls = preset.look_ref_urls?.length
       ? preset.look_ref_urls
       : preset.creative?.lookRefUrls
         ? preset.creative.lookRefUrls.split('|').filter(Boolean)
         : []
-    if (urls.length) {
-      setReferences(urls.slice(0, MAX_REFERENCE_IMAGES).map((url) => ({
-        url,
-        useAsFirstFrame: false,
-        useAsLastFrame: false,
-      })))
+    if (meta) {
+      const parsed = meta.split(';;').filter(Boolean).map((chunk) => {
+        const [url, role, first, last] = chunk.split('|')
+        return {
+          url,
+          useAsFirstFrame: first === '1' || role === 'start',
+          useAsLastFrame: last === '1' || role === 'end',
+          kind: 'image' as const,
+          refRole:
+            role === 'opening_subject' || role === 'appears_later' || role === 'identity'
+              ? role
+              : role === 'start'
+                ? ('opening_subject' as const)
+                : role === 'end'
+                  ? ('appears_later' as const)
+                  : ('identity' as const),
+        }
+      })
+      if (parsed.length) setReferences(parsed.slice(0, MAX_REFERENCE_IMAGES))
+    } else if (urls.length) {
+      setReferences(
+        urls.slice(0, MAX_REFERENCE_IMAGES).map((url) => ({
+          url,
+          useAsFirstFrame: false,
+          useAsLastFrame: false,
+        }))
+      )
     }
     setLookCharacterId(preset.look_character_id || preset.creative?.lookCharacterId || null)
   }
@@ -927,9 +1231,22 @@ export function useAdStudio(initialBrief = '') {
 
   const canGenerate =
     mode === 'single'
-      ? Boolean(brief.trim()) ||
-        references.some((r) => r.kind !== 'audio' && r.url.startsWith('http'))
+      ? (Boolean(brief.trim()) ||
+          references.some((r) => r.kind !== 'audio' && r.url.startsWith('http'))) &&
+        (motionMode !== 'animate_ab' ||
+          (references.some((r) => r.useAsFirstFrame) && references.some((r) => r.useAsLastFrame))) &&
+        (motionMode !== 'lock_start' || references.some((r) => r.useAsFirstFrame))
       : sceneBriefs.every((b) => b.trim()) && sceneBriefs.length >= 2
+
+  const applyPhysicsToBrief = (text: string) => {
+    if (physicsPreset === 'walking') {
+      return appendStoryboardContinuity(text, { walking: true })
+    }
+    if (physicsPreset === 'product') {
+      return `${text.trim()} ${STORYBOARD_PHYSICS_SUFFIX} Product stays solid in hand/frame; no clipping through body or props.`
+    }
+    return appendStoryboardContinuity(text)
+  }
 
   const generate = async () => {
     if (!canGenerate || generating) return
@@ -957,6 +1274,14 @@ export function useAdStudio(initialBrief = '') {
     setPreviewUrls([])
     setActivePreviewIndex(0)
     setProgressStep(1)
+    trackAdStudioGenerate(mode, modelKey)
+    if (mode === 'storyboard') {
+      setSceneStatuses(sceneBriefs.map((_, i) => (i === 0 ? 'generating' : 'queued')))
+      setCurrentSceneIndex(0)
+    } else {
+      setSceneStatuses([])
+      setCurrentSceneIndex(0)
+    }
     const jobId = crypto.randomUUID()
     setQueue((prev) => [
       {
@@ -982,7 +1307,7 @@ export function useAdStudio(initialBrief = '') {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            scenes: sceneBriefs.map((b) => ({ brief: b })),
+            scenes: sceneBriefs.map((b) => ({ brief: applyPhysicsToBrief(b) })),
             creative,
             enhance,
             duration_seconds: duration,
@@ -991,13 +1316,15 @@ export function useAdStudio(initialBrief = '') {
               url: r.url,
               kind: r.kind,
               name: r.name,
-              useAsFirstFrame: false,
-              useAsLastFrame: false,
+              useAsFirstFrame: r.useAsFirstFrame,
+              useAsLastFrame: r.useAsLastFrame,
               refRole: r.refRole || 'identity',
             })),
             model: modelKey,
             generate_audio: generateAudio || references.some((r) => r.kind === 'audio'),
             resolution,
+            motion_mode: motionMode,
+            identity_strength: identityStrength,
           }),
           signal: controller.signal,
         })
@@ -1008,6 +1335,7 @@ export function useAdStudio(initialBrief = '') {
         }
 
         const storyboardId = startData.storyboardId as string
+        setLastStoryboardId(storyboardId)
         const completedUrls: string[] = []
         let lastFrame: string | null = null
         const scenesState: StoryboardScene[] = sceneBriefs.map((b) => ({
@@ -1016,6 +1344,13 @@ export function useAdStudio(initialBrief = '') {
         }))
 
         for (let i = 0; i < sceneBriefs.length; i++) {
+          setCurrentSceneIndex(i)
+          setSceneStatuses((prev) => {
+            const next = [...prev]
+            while (next.length < sceneBriefs.length) next.push('queued')
+            next[i] = 'generating'
+            return next
+          })
           setStatusText(`Scene ${i + 1} of ${sceneBriefs.length} · Rendering…`)
           setProgressStep(Math.min(4, 1 + Math.floor((i / sceneBriefs.length) * 3)))
 
@@ -1044,6 +1379,11 @@ export function useAdStudio(initialBrief = '') {
             })
             const contData = await contRes.json()
             if (!contRes.ok) {
+              setSceneStatuses((prev) => {
+                const next = [...prev]
+                next[i] = 'failed'
+                return next
+              })
               throw new Error(contData.details || contData.error || 'Failed to continue storyboard')
             }
             jobId = contData.jobId
@@ -1051,7 +1391,14 @@ export function useAdStudio(initialBrief = '') {
 
           const polled = await pollJob(jobId, controller.signal, storyboardId)
 
-          if (!polled.videoUrl) throw new Error('No video URL returned')
+          if (!polled.videoUrl) {
+            setSceneStatuses((prev) => {
+              const next = [...prev]
+              next[i] = 'failed'
+              return next
+            })
+            throw new Error('No video URL returned')
+          }
 
           completedUrls.push(polled.videoUrl)
           scenesState[i] = {
@@ -1062,6 +1409,12 @@ export function useAdStudio(initialBrief = '') {
           }
           setPreviewUrls([...completedUrls])
           setActivePreviewIndex(i)
+          trackStoryboardSceneComplete(i)
+          setSceneStatuses((prev) => {
+            const next = [...prev]
+            next[i] = 'completed'
+            return next
+          })
 
           await fetch('/api/video/library', {
             method: 'POST',
@@ -1078,9 +1431,19 @@ export function useAdStudio(initialBrief = '') {
           })
 
           if (i < sceneBriefs.length - 1) {
+            setSceneStatuses((prev) => {
+              const next = [...prev]
+              next[i] = 'continuity'
+              return next
+            })
             setStatusText(`Scene ${i + 1} done · Starting scene ${i + 2}…`)
             // Never block scene N+1 on last-frame success — null still continues.
             lastFrame = await captureLastFrameHttps(polled.videoUrl, storyboardId)
+            setSceneStatuses((prev) => {
+              const next = [...prev]
+              next[i] = 'completed'
+              return next
+            })
           }
         }
 
@@ -1164,6 +1527,8 @@ export function useAdStudio(initialBrief = '') {
             generate_audio: generateAudio || references.some((r) => r.kind === 'audio'),
             enhancedPrompt: enhance && enhancedPreview ? enhancedPreview : null,
             resolution,
+            motion_mode: motionMode,
+            identity_strength: identityStrength,
           }),
           signal: controller.signal,
         })
@@ -1225,6 +1590,15 @@ export function useAdStudio(initialBrief = '') {
         setError('Generation cancelled.')
       } else {
         setError(err instanceof Error ? err.message : 'Failed to generate')
+        setSceneStatuses((prev) => {
+          if (!prev.length) return prev
+          const next = [...prev]
+          const idx = Math.min(currentSceneIndex, next.length - 1)
+          if (next[idx] === 'generating' || next[idx] === 'continuity' || next[idx] === 'queued') {
+            next[idx] = 'failed'
+          }
+          return next
+        })
       }
       setStatusText(null)
       setProgressStep(0)
@@ -1238,6 +1612,11 @@ export function useAdStudio(initialBrief = '') {
       abortRef.current = null
       queueBusyRef.current = false
     }
+  }
+
+  const retryStoryboardScene = (_index?: number) => {
+    if (generating) return
+    void generate()
   }
 
   generateRef.current = () => {
@@ -1302,6 +1681,7 @@ export function useAdStudio(initialBrief = '') {
     splitEnhancedToScenes,
     previewEnhance,
     applyTemplate,
+    applyStoryboardTemplate,
     addReferenceFromUrl,
     duration,
     setDuration,
@@ -1353,6 +1733,20 @@ export function useAdStudio(initialBrief = '') {
     startStoryboardFromStill,
     queue,
     progressStep,
+    sceneStatuses,
+    currentSceneIndex,
+    physicsPreset,
+    setPhysicsPreset,
+    motionMode,
+    setMotionMode,
+    identityStrength,
+    setIdentityStrength,
+    setRefRole,
+    useLastFrameAsStart,
+    extractingLastFrame,
+    applyContinuityChip,
+    retryStoryboardScene,
+    lastStoryboardId,
   }
 }
 

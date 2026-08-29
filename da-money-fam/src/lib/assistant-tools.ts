@@ -200,14 +200,15 @@ export const ASSISTANT_TOOLS: OpenAiTool[] = [
     function: {
       name: 'attachLibraryRef',
       description:
-        'Attach an image URL as an Ad Studio identity reference (living subject in motion). Always pass asFirstFrame=false — never lock user stills as frozen first/last frames.',
+        'Attach an image URL as an Ad Studio reference. Default asFirstFrame=false for Guide/identity. Set asFirstFrame=true only when the user wants Lock start or Animate A→B Start frame.',
       parameters: {
         type: 'object',
         properties: {
           url: { type: 'string' },
           asFirstFrame: {
             type: 'boolean',
-            description: 'Must be false. Identity-only attachment.',
+            description:
+              'false = identity/Guide. true = Start frame for Lock start or Animate A→B.',
           },
         },
         required: ['url'],
@@ -476,7 +477,7 @@ export function clientToolToAction(
         ? {
             type: 'attachLibraryRef',
             url: args.url,
-            asFirstFrame: false,
+            asFirstFrame: args.asFirstFrame === true,
           }
         : null
     case 'continueStoryboard':

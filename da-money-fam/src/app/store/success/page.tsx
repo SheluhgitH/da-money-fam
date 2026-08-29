@@ -129,6 +129,28 @@ function SuccessContent() {
                 </div>
               </div>
             )}
+            <div className="border-t border-white/10 pt-6 mt-2 mb-6">
+              <p className="text-gold text-[10px] font-bold uppercase tracking-wider mb-2">
+                Make a video for this drop
+              </p>
+              <p className="text-gray-400 text-sm mb-4">
+                Open Ad Studio and turn the vibe into a clip. Buy Coinz anytime from your wallet.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link
+                  href="/ad-studio?brief=Promo%20clip%20for%20my%20new%20DMF%20track"
+                  className="inline-block bg-gold text-black font-bold px-8 py-3 rounded-full uppercase tracking-wider text-xs hover:bg-white transition-colors"
+                >
+                  Open Ad Studio
+                </Link>
+                <Link
+                  href="/coin-wallet"
+                  className="inline-block border border-gold/40 text-gold font-bold px-8 py-3 rounded-full uppercase tracking-wider text-xs hover:bg-gold hover:text-black transition-colors"
+                >
+                  Get Coinz
+                </Link>
+              </div>
+            </div>
             <div className="border-t border-white/10 pt-6 mt-2">
               <p className="text-gold text-[10px] font-bold uppercase tracking-wider mb-2">
                 Complete the fit

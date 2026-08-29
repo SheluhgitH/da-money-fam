@@ -25,7 +25,7 @@ export const SEEDANCE_MODELS: Record<SeedanceModelKey, SeedanceModelConfig> = {
     resolutions: ['480p'],
     durations: [6, 8, 10],
     supportsAudio: true,
-    supportsLastFrame: false,
+    supportsLastFrame: true,
   },
   mini: {
     key: 'mini',

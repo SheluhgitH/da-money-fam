@@ -33,6 +33,13 @@ function mapPreset(row: Record<string, unknown>): AdStudioPreset {
       typeof row.look_character_id === 'string'
         ? row.look_character_id
         : creative?.lookCharacterId || null,
+    motion_mode: creative?.motionMode || null,
+    identity_strength: creative?.identityStrength || null,
+    physics_preset: creative?.physicsPreset || null,
+    generate_audio: creative?.generateAudio === '1',
+    resolution: creative?.resolution || null,
+    variations: creative?.variations ? Number(creative.variations) : null,
+    ref_meta: creative?.refMeta || null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   }
@@ -72,11 +79,27 @@ export async function POST(req: Request) {
     : []
   const lookCharacterId =
     typeof body.look_character_id === 'string' ? body.look_character_id.slice(0, 80) : ''
-  const creativePayload = {
-    ...(body.creative && typeof body.creative === 'object' ? body.creative : {}),
+  const creativePayload: Record<string, string> = {
+    ...(body.creative && typeof body.creative === 'object'
+      ? Object.fromEntries(
+          Object.entries(body.creative as Record<string, unknown>).map(([k, v]) => [
+            k,
+            String(v ?? ''),
+          ])
+        )
+      : {}),
     ...(lookRefUrls.length ? { lookRefUrls: lookRefUrls.join('|') } : {}),
     ...(lookCharacterId ? { lookCharacterId } : {}),
   }
+  if (typeof body.motion_mode === 'string') creativePayload.motionMode = body.motion_mode
+  if (typeof body.identity_strength === 'string') {
+    creativePayload.identityStrength = body.identity_strength
+  }
+  if (typeof body.physics_preset === 'string') creativePayload.physicsPreset = body.physics_preset
+  if (body.generate_audio === true) creativePayload.generateAudio = '1'
+  if (typeof body.resolution === 'string') creativePayload.resolution = body.resolution
+  if (body.variations != null) creativePayload.variations = String(body.variations)
+  if (typeof body.ref_meta === 'string') creativePayload.refMeta = body.ref_meta
 
   const { data, error } = await supabase
     .from('ad_studio_presets')

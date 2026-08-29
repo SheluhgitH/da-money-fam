@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAdStudio } from '@/hooks/useAdStudio'
@@ -12,9 +13,11 @@ import ImageStudioPanel from './ImageStudioPanel'
 import ImageLibrary from './ImageLibrary'
 import GtaStylePanel from './GtaStylePanel'
 import CharacterStudioPanel from './CharacterStudioPanel'
+import AdStudioOnboarding from './AdStudioOnboarding'
 import { COIN_PACKAGES, packAdCopy, type CoinPackage } from '@/lib/coin-packages'
 import { packsFromSettings } from '@/lib/site-settings'
 import { GTA_MARKETING_SAMPLES } from '@/lib/gta-marketing-samples'
+import { trackCoinzCheckout } from '@/lib/analytics'
 
 export default function AdStudioShell({
   initialBrief = '',
@@ -38,7 +41,14 @@ export default function AdStudioShell({
   const [toast, setToast] = useState<string | null>(null)
   const [showImageTip, setShowImageTip] = useState(false)
   const [showGtaTip, setShowGtaTip] = useState(false)
+  /** Assume onboarding open until AdStudioOnboarding reports otherwise — blocks GTA tip stack. */
+  const [onboardingOpen, setOnboardingOpen] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [portalReady, setPortalReady] = useState(false)
+
+  useEffect(() => {
+    setPortalReady(true)
+  }, [])
 
   useEffect(() => {
     fetch('/api/site-settings')
@@ -48,6 +58,7 @@ export default function AdStudioShell({
   }, [])
 
   useEffect(() => {
+    if (onboardingOpen) return
     try {
       if (sessionStorage.getItem('dmf-gta-style-tip-v2') === '1') {
         if (sessionStorage.getItem('dmf-image-studio-tip') !== '1') {
@@ -59,7 +70,7 @@ export default function AdStudioShell({
     } catch {
       setShowGtaTip(true)
     }
-  }, [])
+  }, [onboardingOpen])
 
   useEffect(() => {
     if (checkoutStatus !== 'success') return
@@ -109,6 +120,7 @@ export default function AdStudioShell({
 
   const buyPack = async (packageId: string) => {
     setBuyingId(packageId)
+    trackCoinzCheckout(packageId, 'ad_studio_shell')
     try {
       const res = await fetch('/api/coinz/create', {
         method: 'POST',
@@ -138,9 +150,20 @@ export default function AdStudioShell({
       : studio.pricing?.balance
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-[#050505] text-white overflow-hidden">
+    <div
+      className="flex flex-col w-full max-w-[100vw] bg-[#050505] text-white overflow-hidden"
+      style={{
+        /* svh only — never grow into large viewport while mobile browser chrome still covers the bottom */
+        height: '100svh',
+        paddingBottom: 'var(--dmf-safe-bottom)',
+      }}
+    >
+      <AdStudioOnboarding onOpenChange={setOnboardingOpen} />
       <div className="pointer-events-none fixed inset-0 opacity-40 bg-[radial-gradient(ellipse_at_top,_rgba(255,215,0,0.08),_transparent_50%)]" />
-      <header className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gold/15 bg-black/70 backdrop-blur-md relative z-30 flex-nowrap">
+      <header
+        className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gold/15 bg-black/70 backdrop-blur-md relative z-30 flex-nowrap"
+        style={{ paddingTop: 'max(0.5rem, var(--dmf-safe-top))' }}
+      >
         <Link href="/" className="text-gold font-serif text-sm tracking-[0.15em] uppercase shrink-0">
           DMF
         </Link>
@@ -241,6 +264,41 @@ export default function AdStudioShell({
           <span className="block max-w-[90vw] text-center text-[10px] uppercase tracking-widest text-black bg-gold px-3 py-1.5 rounded-full shadow-lg">
             {toast}
           </span>
+        </div>
+      )}
+
+      {studio.queue.some((j) => j.status === 'running' || j.status === 'queued') && (
+        <div className="shrink-0 border-b border-gold/15 bg-black/80 px-3 py-2 relative z-10">
+          <p className="text-[9px] uppercase tracking-[0.2em] text-gold/50 mb-1.5">Job queue</p>
+          <div className="flex gap-2 overflow-x-auto studio-scroll">
+            {studio.queue.slice(0, 5).map((job) => (
+              <div
+                key={job.id}
+                className={`shrink-0 min-w-[9rem] rounded-lg border px-2.5 py-1.5 ${
+                  job.status === 'running'
+                    ? 'border-gold/40 bg-gold/10'
+                    : job.status === 'failed'
+                      ? 'border-red-500/30 bg-red-500/10'
+                      : 'border-white/10 bg-white/5'
+                }`}
+              >
+                <p className="text-[10px] text-white/80 truncate">{job.label}</p>
+                <p className="text-[8px] uppercase tracking-wider text-gold/60 mt-0.5">
+                  {job.status}
+                  {job.status === 'running' && studio.statusText ? ` · ${studio.statusText}` : ''}
+                </p>
+                {job.status === 'running' && (
+                  <button
+                    type="button"
+                    onClick={studio.cancelGenerate}
+                    className="mt-1 text-[8px] uppercase tracking-wider text-red-300"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -408,7 +466,7 @@ export default function AdStudioShell({
 
           <div className="flex-1 flex flex-col min-w-0 min-h-0">
             <PreviewCanvas studio={studio} />
-            <div className="shrink-0 border-t border-gold/20 bg-black/80 backdrop-blur-xl shadow-[0_-20px_60px_rgba(0,0,0,0.6)]">
+            <div className="shrink-0 border-t border-gold/20 bg-black/80 backdrop-blur-xl shadow-[0_-20px_60px_rgba(0,0,0,0.6)] max-h-[min(48svh,480px)] overflow-y-auto overflow-x-visible overscroll-contain">
               <PromptDock studio={studio} />
             </div>
           </div>
@@ -461,88 +519,95 @@ export default function AdStudioShell({
         </div>
       )}
 
-      <AnimatePresence>
-        {showGtaTip && (
-          <motion.div
-            className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <button
-              type="button"
-              aria-label="Dismiss"
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-              onClick={dismissGtaTip}
-            />
-            <motion.div
-              role="dialog"
-              aria-labelledby="gta-tip-title"
-              initial={{ opacity: 0, y: 24, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-              className="relative w-full max-w-sm rounded-2xl border border-gold/30 bg-[#0c0c0c] p-6 shadow-[0_0_60px_rgba(255,215,0,0.12)]"
-            >
+      {portalReady &&
+        createPortal(
+          <AnimatePresence>
+            {showGtaTip && !onboardingOpen && (
               <div
-                className="pointer-events-none absolute inset-0 rounded-2xl opacity-40"
+                className="fixed inset-0 z-[60] flex items-center justify-center box-border"
                 style={{
-                  background:
-                    'radial-gradient(ellipse at top, rgba(255,45,149,0.18), transparent 55%), radial-gradient(ellipse at bottom right, rgba(0,229,192,0.12), transparent 50%)',
+                  width: '100vw',
+                  maxWidth: '100%',
+                  paddingLeft: 'max(1rem, env(safe-area-inset-left, 0px))',
+                  paddingRight: 'max(1rem, env(safe-area-inset-right, 0px))',
+                  paddingTop: 'max(1rem, var(--dmf-safe-top))',
+                  paddingBottom: 'max(1rem, var(--dmf-safe-bottom))',
                 }}
-              />
-              <div className="relative">
-                <p className="text-[10px] uppercase tracking-[0.3em] text-gold/60 mb-2">New mode</p>
-                <h2 id="gta-tip-title" className="font-serif text-2xl text-gold mb-2">
-                  GTA Style Mode
-                </h2>
-                <p className="text-sm text-white/55 leading-relaxed mb-4">
-                  Turn any photo into every Rockstar era — from pixel GTA 1 to neon GTA VI. From 4 Coinz.
-                </p>
-                <div className="flex gap-2 mb-5 overflow-hidden">
-                  {GTA_MARKETING_SAMPLES.map((sample, i) => (
-                    <motion.div
-                      key={sample.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.12 + i * 0.08 }}
-                      className="relative flex-1 aspect-[3/4] rounded-lg overflow-hidden border border-gold/25"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={sample.url}
-                        alt={sample.label}
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
-                      <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1 pb-1 pt-4">
-                        <span className="block text-[8px] uppercase tracking-wider text-gold truncate text-center">
-                          {sample.label}
-                        </span>
-                      </span>
-                    </motion.div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={openGtaMode}
-                    className="flex-1 py-2.5 rounded-full bg-gold text-black text-[11px] font-bold uppercase tracking-widest hover:bg-white transition-colors"
-                  >
-                    Try it
-                  </button>
-                  <button
-                    type="button"
-                    onClick={dismissGtaTip}
-                    className="px-4 py-2.5 rounded-full border border-white/15 text-[11px] uppercase tracking-widest text-white/50 hover:text-gold hover:border-gold/40 transition-colors"
-                  >
-                    Not now
-                  </button>
-                </div>
+              >
+                <button
+                  type="button"
+                  aria-label="Dismiss"
+                  className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+                  onClick={dismissGtaTip}
+                />
+                <motion.div
+                  role="dialog"
+                  aria-labelledby="gta-tip-title"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="relative z-10 w-full mx-auto rounded-2xl border border-gold/30 bg-[#0c0c0c] p-6 shadow-[0_0_60px_rgba(255,215,0,0.12)]"
+                  style={{ maxWidth: 'min(24rem, calc(100vw - 2rem))' }}
+                >
+                  <div
+                    className="pointer-events-none absolute inset-0 rounded-2xl opacity-40"
+                    style={{
+                      background:
+                        'radial-gradient(ellipse at top, rgba(255,45,149,0.18), transparent 55%), radial-gradient(ellipse at bottom right, rgba(0,229,192,0.12), transparent 50%)',
+                    }}
+                  />
+                  <div className="relative">
+                    <p className="text-[10px] uppercase tracking-[0.3em] text-gold/60 mb-2">New mode</p>
+                    <h2 id="gta-tip-title" className="font-serif text-2xl text-gold mb-2">
+                      GTA Style Mode
+                    </h2>
+                    <p className="text-sm text-white/55 leading-relaxed mb-4">
+                      Turn any photo into every Rockstar era — from pixel GTA 1 to neon GTA VI. From 4 Coinz.
+                    </p>
+                    <div className="flex gap-2 mb-5 overflow-hidden">
+                      {GTA_MARKETING_SAMPLES.map((sample) => (
+                        <div
+                          key={sample.id}
+                          className="relative flex-1 aspect-[3/4] rounded-lg overflow-hidden border border-gold/25"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={sample.url}
+                            alt={sample.label}
+                            className="absolute inset-0 w-full h-full object-cover"
+                          />
+                          <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1 pb-1 pt-4">
+                            <span className="block text-[8px] uppercase tracking-wider text-gold truncate text-center">
+                              {sample.label}
+                            </span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={openGtaMode}
+                        className="flex-1 min-w-0 py-2.5 rounded-full bg-gold text-black text-[11px] font-bold uppercase tracking-widest hover:bg-white transition-colors"
+                      >
+                        Try it
+                      </button>
+                      <button
+                        type="button"
+                        onClick={dismissGtaTip}
+                        className="shrink-0 px-4 py-2.5 rounded-full border border-white/15 text-[11px] uppercase tracking-widest text-white/50 hover:text-gold hover:border-gold/40 transition-colors"
+                      >
+                        Not now
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
               </div>
-            </motion.div>
-          </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body
         )}
-      </AnimatePresence>
     </div>
   )
 }

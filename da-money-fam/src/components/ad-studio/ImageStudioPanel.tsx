@@ -68,7 +68,7 @@ export default function ImageStudioPanel({
           </div>
       </div>
 
-      <div className="shrink-0 border-t border-gold/15 bg-black/80 p-3 space-y-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="shrink-0 border-t border-gold/15 bg-black/80 p-3 space-y-3 pb-3">
         <div className="flex items-center gap-2 overflow-x-auto studio-scroll flex-nowrap">
           <button
             type="button"

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { Song } from '@/types/store'
 import SongAiFields from '@/components/admin/SongAiFields'
 import PreviewRegionPicker from '@/components/admin/PreviewRegionPicker'
+import ArtistShareUrlHint from '@/components/admin/ArtistShareUrlHint'
 
 const inputClass =
   'w-full bg-black/50 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500'
@@ -101,6 +102,7 @@ export default function EditSongForm({ song, onSaved, onCancel }: EditSongFormPr
         placeholder="Artist"
         className={inputClass}
       />
+      <ArtistShareUrlHint artistName={artist} />
       <input
         name="price"
         type="number"

@@ -2,22 +2,27 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { AdStudioController } from '@/hooks/useAdStudio'
-import LookDrawer from './LookDrawer'
 import StoryboardTimeline from './StoryboardTimeline'
 import CoinzPriceCut from './CoinzPriceCut'
 import StudioTemplateChips from './StudioTemplateChips'
+import StudioSetupStrip from './StudioSetupStrip'
+import StudioInlinePicker from './StudioInlinePicker'
 import { COIN_PACKAGES, packAdCopy, type CoinPackage } from '@/lib/coin-packages'
 import { packsFromSettings } from '@/lib/site-settings'
-import { SEEDANCE_MODELS, audioAddonCoins } from '@/lib/seedance-models'
+import { SEEDANCE_MODELS } from '@/lib/seedance-models'
+import { MOTION_MODES } from '@/lib/ad-studio-motion'
 import { legacyVideoPrice } from '@/lib/ad-studio-legacy-prices'
-
-import { ASSISTANT_OPEN_EVENT } from '@/lib/assistant-visibility'
 
 export default function PromptDock({ studio }: { studio: AdStudioController }) {
   const fileRef = useRef<HTMLInputElement>(null)
   const [buyingId, setBuyingId] = useState<string | null>(null)
   const [packs, setPacks] = useState<CoinPackage[]>(COIN_PACKAGES)
-  const [optionsOpen, setOptionsOpen] = useState(false)
+  const [shotsOpen, setShotsOpen] = useState(false)
+  const [refRoleIndex, setRefRoleIndex] = useState<number | null>(null)
+  /** When set, next still tap assigns Start or End for A→B / Lock start. */
+  const [assignSlot, setAssignSlot] = useState<'start' | 'end' | null>(null)
+  const frameAttachSlot = useRef<'start' | 'end' | null>(null)
+  const prevRefCount = useRef(studio.references.length)
 
   useEffect(() => {
     fetch('/api/site-settings')
@@ -26,43 +31,41 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
       .catch(() => {})
   }, [])
 
+  // After attaching a photo for a Start/End slot, mark the newest still
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 768px)')
-    const sync = () => setOptionsOpen(mq.matches)
-    sync()
-    mq.addEventListener('change', sync)
-    return () => mq.removeEventListener('change', sync)
-  }, [])
+    const slot = frameAttachSlot.current
+    const grew = studio.references.length > prevRefCount.current
+    prevRefCount.current = studio.references.length
+    if (!slot || !grew) return
+    const lastImg = [...studio.references]
+      .map((r, i) => ({ r, i }))
+      .reverse()
+      .find(({ r }) => r.kind !== 'audio' && r.url.startsWith('http'))
+    if (!lastImg) return
+    frameAttachSlot.current = null
+    studio.setRefRole(lastImg.i, slot)
+    setAssignSlot(null)
+  }, [studio.references, studio])
+
   const price =
     studio.pricing?.totalPriceCoins ??
     studio.pricing?.priceCoins ??
     SEEDANCE_MODELS.mini.baseCoins
   const perClip = studio.pricing?.priceCoins ?? SEEDANCE_MODELS.mini.baseCoins
-  const units =
-    studio.mode === 'storyboard'
-      ? studio.sceneBriefs.length
-      : studio.variations
+  const units = studio.mode === 'storyboard' ? studio.sceneBriefs.length : studio.variations
   const showBreakdown = units > 1 && studio.pricing?.totalPriceCoins != null
   const canAfford = studio.pricing?.canAfford !== false
   const showBuy = studio.pricing?.isAuthenticated && !canAfford && !studio.generating
-
-  const lite = studio.pricing?.modelPrices?.lite
-  const mini = studio.pricing?.modelPrices?.mini
-  const fast = studio.pricing?.modelPrices?.fast
-  const durationPrices = studio.pricing?.durationPrices
-  const modelCfg = SEEDANCE_MODELS[studio.modelKey]
-  const legacyLite = legacyVideoPrice('lite', studio.duration)
-  const legacyFast = legacyVideoPrice('fast', studio.duration)
   const legacyPerClip = legacyVideoPrice(studio.modelKey, studio.duration)
   const legacyTotal = legacyPerClip != null ? legacyPerClip * units : null
-  const audioAddon =
-    studio.pricing?.audioAddonCoins ??
-    (modelCfg.supportsAudio ? audioAddonCoins(modelCfg.baseCoins) : 0)
+  const motionMeta = MOTION_MODES.find((m) => m.id === studio.motionMode)
 
   const buyPack = async (packageId: string) => {
     setBuyingId(packageId)
     studio.setError(null)
     try {
+      const { trackCoinzCheckout } = await import('@/lib/analytics')
+      trackCoinzCheckout(packageId, 'prompt_dock')
       const res = await fetch('/api/coinz/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -77,8 +80,52 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
     }
   }
 
+  const startRef = studio.references.find((r) => r.kind !== 'audio' && r.useAsFirstFrame)
+  const endRef = studio.references.find((r) => r.kind !== 'audio' && r.useAsLastFrame)
+  const needsFrames =
+    studio.motionMode === 'animate_ab' || studio.motionMode === 'lock_start'
+
+  const assignStillToSlot = (index: number, slot: 'start' | 'end') => {
+    studio.setRefRole(index, slot)
+    setAssignSlot(null)
+  }
+
+  const onFrameSlotAttach = (slot: 'start' | 'end') => {
+    frameAttachSlot.current = slot
+    fileRef.current?.click()
+  }
+
+  const refRoleLabel = (index: number) => {
+    const ref = studio.references[index]
+    if (!ref || ref.kind === 'audio') return ''
+    if (ref.useAsFirstFrame) return 'Start'
+    if (ref.useAsLastFrame) return 'End'
+    if (ref.refRole === 'opening_subject') return 'Opens'
+    if (ref.refRole === 'appears_later') return 'Later'
+    return 'Identity'
+  }
+
+  const refRoleValue =
+    refRoleIndex != null
+      ? (() => {
+          const ref = studio.references[refRoleIndex]
+          if (!ref) return 'identity'
+          if (ref.useAsFirstFrame) return 'start'
+          if (ref.useAsLastFrame) return 'end'
+          return ref.refRole || 'identity'
+        })()
+      : 'identity'
+
+  const refRoleOptions = [
+    { id: 'opening_subject', label: 'Opens', hint: 'Appears early' },
+    { id: 'appears_later', label: 'Later', hint: 'Mid / end reveal' },
+    { id: 'identity', label: 'Identity', hint: 'Likeness only' },
+    { id: 'start', label: 'Start', hint: 'Frozen first frame' },
+    { id: 'end', label: 'End', hint: 'Frozen last frame' },
+  ]
+
   return (
-    <div className="bg-transparent pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <div className="bg-transparent pb-3">
       {studio.error && (
         <div className="px-3 pt-3">
           <div className="flex items-start justify-between gap-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2">
@@ -107,9 +154,7 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
             type="button"
             onClick={() => studio.setMode('single')}
             className={`shrink-0 text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full border ${
-              studio.mode === 'single'
-                ? 'bg-gold text-black border-gold'
-                : 'border-gold/25 text-gold/70'
+              studio.mode === 'single' ? 'bg-gold text-black border-gold' : 'border-gold/25 text-gold/70'
             }`}
           >
             Single
@@ -125,259 +170,30 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
           >
             Storyboard
           </button>
-          <button
-            type="button"
-            onClick={() => setOptionsOpen((o) => !o)}
-            className={`shrink-0 text-[10px] uppercase tracking-widest px-3 py-1.5 rounded-full border ${
-              optionsOpen ? 'border-gold text-gold' : 'border-white/15 text-white/60'
-            }`}
-          >
-            Options
-          </button>
         </div>
 
         {studio.mode === 'storyboard' && <StoryboardTimeline studio={studio} />}
 
-        <div className="flex flex-wrap gap-1.5">
-          {(
-            [
-              ['Write my prompt', 'Write a video prompt for this look. Give 2 options then wait.'],
-              ['Make it 3 scenes', 'Split this into 3 scenes. Keep wardrobe and character consistent.'],
-              ['Keep this character', 'Keep this character in every scene. Use their name if I have one.'],
-            ] as const
-          ).map(([label, seed]) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() =>
-                window.dispatchEvent(
-                  new CustomEvent(ASSISTANT_OPEN_EVENT, { detail: { askBar: true, seed } })
-                )
-              }
-              className="text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-gold/30 text-gold/80"
-            >
-              Help · {label}
-            </button>
-          ))}
+        <StudioSetupStrip studio={studio} />
+
+        <div>
+          <button
+            type="button"
+            onClick={() => setShotsOpen((o) => !o)}
+            className="text-[10px] uppercase tracking-wider text-white/40 hover:text-gold"
+          >
+            {shotsOpen ? 'Hide shot ideas' : 'Shot ideas'}
+          </button>
+          {shotsOpen && (
+            <div className="mt-2">
+              <StudioTemplateChips
+                storyboardMode={studio.mode === 'storyboard'}
+                onPick={(t) => studio.applyTemplate(t.video, t.creative)}
+                onPickStoryboard={(t) => studio.applyStoryboardTemplate(t.scenes, t.creative)}
+              />
+            </div>
+          )}
         </div>
-
-        {optionsOpen && (
-          <div className="space-y-2.5 max-h-[36vh] md:max-h-[42vh] overflow-y-auto studio-scroll pr-0.5">
-            <div className="flex gap-1.5 overflow-x-auto studio-scroll flex-nowrap">
-              {(
-                [
-                  ['hook', '15s hook'],
-                  ['hero', 'Product hero'],
-                  ['end', 'End card'],
-                  ['storyboard', 'Storyboard 3-shot'],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => studio.applyJobChip(id)}
-                  className="shrink-0 text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-gold/25 text-gold/80"
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {studio.mode === 'single' && (
-              <StudioTemplateChips onPick={(t) => studio.applyTemplate(t.video, t.creative)} />
-            )}
-
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => studio.setModelKey('lite')}
-                className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
-                  studio.modelKey === 'lite'
-                    ? 'bg-gold text-black border-gold'
-                    : 'border-white/15 text-white/60'
-                }`}
-                title="Seedance 1.5 Pro"
-              >
-                Lite ·{' '}
-                <CoinzPriceCut
-                  current={lite?.priceCoins ?? SEEDANCE_MODELS.lite.baseCoins}
-                  legacy={legacyLite}
-                />
-              </button>
-              <button
-                type="button"
-                onClick={() => studio.setModelKey('mini')}
-                className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
-                  studio.modelKey === 'mini'
-                    ? 'bg-gold text-black border-gold'
-                    : 'border-white/15 text-white/60'
-                }`}
-                title="Seedance 2.0 Mini"
-              >
-                Mini · {mini?.priceCoins ?? SEEDANCE_MODELS.mini.baseCoins}
-              </button>
-              <button
-                type="button"
-                onClick={() => studio.setModelKey('fast')}
-                className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
-                  studio.modelKey === 'fast'
-                    ? 'bg-gold text-black border-gold'
-                    : 'border-white/15 text-white/60'
-                }`}
-                title="Seedance 2.0 Fast"
-              >
-                Fast ·{' '}
-                <CoinzPriceCut
-                  current={fast?.priceCoins ?? SEEDANCE_MODELS.fast.baseCoins}
-                  legacy={legacyFast}
-                />
-              </button>
-              {modelCfg.durations.map((d) => {
-                const dp = durationPrices?.[d]
-                const current = dp?.priceCoins
-                const legacy = legacyVideoPrice(studio.modelKey, d)
-                return (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => studio.setDuration(d)}
-                    className={`text-[10px] font-mono px-2.5 py-1.5 min-h-[28px] rounded-md border ${
-                      studio.duration === d
-                        ? 'bg-gold text-black border-gold'
-                        : 'border-white/15 text-white/60'
-                    }`}
-                  >
-                    {d}s ·{' '}
-                    {current != null ? (
-                      <CoinzPriceCut current={current} legacy={legacy} />
-                    ) : (
-                      'â€”'
-                    )}
-                  </button>
-                )
-              })}
-              {modelCfg.supportsAudio && (
-                <button
-                  type="button"
-                  onClick={() => studio.setGenerateAudio(!studio.generateAudio)}
-                  className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
-                    studio.generateAudio
-                      ? 'bg-gold text-black border-gold'
-                      : 'border-white/15 text-white/60'
-                  }`}
-                >
-                  Sound {studio.generateAudio ? 'on' : 'off'}
-                  {!studio.generateAudio && audioAddon > 0 ? ` · +${audioAddon}` : ''}
-                </button>
-              )}
-              {modelCfg.resolutions.includes('720p') && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => studio.setResolution('480p')}
-                    className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
-                      studio.resolution === '480p'
-                        ? 'bg-gold text-black border-gold'
-                        : 'border-white/15 text-white/60'
-                    }`}
-                  >
-                    480
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => studio.setResolution('720p')}
-                    className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
-                      studio.resolution === '720p'
-                        ? 'bg-gold text-black border-gold'
-                        : 'border-white/15 text-white/60'
-                    }`}
-                  >
-                    720
-                  </button>
-                </>
-              )}
-              <select
-                value={studio.aspectRatio}
-                onChange={(e) => studio.setAspectRatio(e.target.value)}
-                className="bg-black border border-white/15 rounded-md px-2 py-1.5 min-h-[28px] text-[10px] text-white outline-none"
-              >
-                <option value="9:16">9:16</option>
-                <option value="1:1">1:1</option>
-                <option value="16:9">16:9</option>
-              </select>
-              {studio.mode === 'single' && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => studio.setVariations(1)}
-                    className={`text-[10px] px-2.5 py-1.5 min-h-[28px] rounded-md border ${
-                      studio.variations === 1
-                        ? 'bg-gold text-black border-gold'
-                        : 'border-white/15 text-white/60'
-                    }`}
-                  >
-                    1x
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => studio.setVariations(2)}
-                    className={`text-[10px] px-2.5 py-1.5 min-h-[28px] rounded-md border ${
-                      studio.variations === 2
-                        ? 'bg-gold text-black border-gold'
-                        : 'border-white/15 text-white/60'
-                    }`}
-                  >
-                    2x
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={() => studio.setLookOpen(!studio.lookOpen)}
-                className={`text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border ${
-                  studio.lookOpen ? 'border-gold text-gold' : 'border-white/15 text-white/60'
-                }`}
-              >
-                Look
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    await studio.savePreset()
-                  } catch (err) {
-                    studio.setError(err instanceof Error ? err.message : 'Failed to save look')
-                  }
-                }}
-                className="text-[10px] uppercase tracking-wider px-2.5 py-1.5 min-h-[28px] rounded-md border border-gold/30 text-gold/80"
-              >
-                Save look
-              </button>
-            </div>
-
-            {studio.presets.length > 0 && (
-              <div className="flex gap-1.5 overflow-x-auto studio-scroll flex-nowrap">
-                {studio.presets.slice(0, 8).map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => studio.applyPreset(p)}
-                    onContextMenu={(e) => {
-                      e.preventDefault()
-                      studio.deletePreset(p.id)
-                    }}
-                    className="shrink-0 text-[9px] uppercase tracking-wider px-2.5 py-1 rounded-full border border-gold/20 text-gold/70"
-                    title="Click to apply · right-click to delete"
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <LookDrawer studio={studio} />
-          </div>
-        )}
 
         <input
           ref={fileRef}
@@ -386,10 +202,148 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
           multiple
           className="hidden"
           onChange={(e) => {
-            studio.addReferenceFiles(e.target.files)
+            const files = e.target.files
+            studio.addReferenceFiles(files)
             e.target.value = ''
+            // frameAttachSlot kept until refs update (see effect)
+            if (!frameAttachSlot.current && assignSlot) {
+              frameAttachSlot.current = assignSlot
+            }
           }}
         />
+
+        {needsFrames && (
+          <div className="rounded-xl border border-gold/30 bg-gold/5 p-3 space-y-2">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-gold font-bold">
+              {studio.motionMode === 'animate_ab' ? 'Start → End frames' : 'Start frame'}
+            </p>
+            <p className="text-[10px] text-white/45">
+              {assignSlot
+                ? `Tap a still below to set ${assignSlot === 'start' ? 'Start' : 'End'}, or attach a new photo.`
+                : studio.motionMode === 'animate_ab'
+                  ? 'Pick the opening still and the ending still. Seedance animates between them.'
+                  : 'Pick the still that locks the first frame.'}
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const hasStills = studio.references.some((r) => r.kind !== 'audio')
+                  if (startRef) {
+                    setAssignSlot((s) => (s === 'start' ? null : 'start'))
+                  } else if (hasStills) {
+                    setAssignSlot('start')
+                  } else {
+                    setAssignSlot('start')
+                    onFrameSlotAttach('start')
+                  }
+                }}
+                className={`flex-1 min-h-[4.5rem] rounded-xl border overflow-hidden text-left ${
+                  assignSlot === 'start'
+                    ? 'border-gold ring-1 ring-gold'
+                    : startRef
+                      ? 'border-gold/40'
+                      : 'border-dashed border-gold/35'
+                }`}
+              >
+                {startRef ? (
+                  <div className="relative h-full min-h-[4.5rem]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={startRef.url} alt="Start" className="absolute inset-0 w-full h-full object-cover" />
+                    <span className="absolute inset-x-0 bottom-0 bg-black/75 px-2 py-1 text-[9px] uppercase tracking-wider text-gold">
+                      Start · tap to change
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full min-h-[4.5rem] gap-1 px-2">
+                    <span className="text-[10px] uppercase tracking-wider text-gold">Start</span>
+                    <span className="text-[9px] text-white/40 text-center">Attach or tap a still</span>
+                  </div>
+                )}
+              </button>
+              {studio.motionMode === 'animate_ab' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const hasStills = studio.references.some((r) => r.kind !== 'audio')
+                    if (endRef) {
+                      setAssignSlot((s) => (s === 'end' ? null : 'end'))
+                    } else if (hasStills) {
+                      setAssignSlot('end')
+                    } else {
+                      setAssignSlot('end')
+                      onFrameSlotAttach('end')
+                    }
+                  }}
+                  className={`flex-1 min-h-[4.5rem] rounded-xl border overflow-hidden text-left ${
+                    assignSlot === 'end'
+                      ? 'border-gold ring-1 ring-gold'
+                      : endRef
+                        ? 'border-gold/40'
+                        : 'border-dashed border-gold/35'
+                  }`}
+                >
+                  {endRef ? (
+                    <div className="relative h-full min-h-[4.5rem]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={endRef.url} alt="End" className="absolute inset-0 w-full h-full object-cover" />
+                      <span className="absolute inset-x-0 bottom-0 bg-black/75 px-2 py-1 text-[9px] uppercase tracking-wider text-gold">
+                        End · tap to change
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center h-full min-h-[4.5rem] gap-1 px-2">
+                      <span className="text-[10px] uppercase tracking-wider text-gold">End</span>
+                      <span className="text-[9px] text-white/40 text-center">Attach or tap a still</span>
+                    </div>
+                  )}
+                </button>
+              )}
+            </div>
+            {(startRef || endRef) && (
+              <div className="flex gap-2">
+                {!startRef && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssignSlot('start')
+                    }}
+                    className="text-[9px] uppercase tracking-wider text-gold/80 underline"
+                  >
+                    Choose Start from stills
+                  </button>
+                )}
+                {studio.motionMode === 'animate_ab' && !endRef && (
+                  <button
+                    type="button"
+                    onClick={() => setAssignSlot('end')}
+                    className="text-[9px] uppercase tracking-wider text-gold/80 underline"
+                  >
+                    Choose End from stills
+                  </button>
+                )}
+                {startRef && (
+                  <button
+                    type="button"
+                    onClick={() => onFrameSlotAttach('start')}
+                    className="text-[9px] uppercase tracking-wider text-white/40 hover:text-gold"
+                  >
+                    New Start photo
+                  </button>
+                )}
+                {studio.motionMode === 'animate_ab' && endRef && (
+                  <button
+                    type="button"
+                    onClick={() => onFrameSlotAttach('end')}
+                    className="text-[9px] uppercase tracking-wider text-white/40 hover:text-gold"
+                  >
+                    New End photo
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {studio.mode === 'single' && (
           <div className="flex gap-2 items-end">
@@ -397,111 +351,117 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
               rows={2}
               value={studio.brief}
               onChange={(e) => studio.setBrief(e.target.value)}
-              placeholder="Optional — add a still and Generate, or pick a shot…"
+              placeholder="Describe the ad — or attach stills and Generate…"
               className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-2xl p-3 text-white text-sm outline-none focus:border-gold resize-none"
             />
-            <div className="flex flex-col gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  void navigator.clipboard.writeText(studio.brief).catch(() => {})
-                }}
-                className="h-8 px-3 rounded-xl border border-gold/30 text-gold text-[10px] uppercase tracking-wider"
-              >
-                Copy
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  window.dispatchEvent(
-                    new CustomEvent(ASSISTANT_OPEN_EVENT, {
-                      detail: { askBar: true, seed: 'Help write this video prompt.' },
-                    })
-                  )
-                }
-                className="h-8 px-3 rounded-xl border border-gold/30 text-gold text-[10px] uppercase tracking-wider"
-              >
-                Help write
-              </button>
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="h-11 px-3 rounded-2xl border border-gold/30 text-gold text-[10px] uppercase tracking-wider"
-                title="Add stills or MP3/WAV"
-              >
-                Attach
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="shrink-0 h-11 px-3 rounded-2xl border border-gold/30 text-gold text-[10px] uppercase tracking-wider"
+            >
+              Attach
+            </button>
           </div>
         )}
 
         {studio.mode === 'storyboard' && (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="shrink-0 text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold/25 text-gold/80"
-            >
-              Attach refs
-            </button>
-            <span className="text-[10px] text-white/35 hidden sm:inline">
-              Scenes share stills and one MP3/WAV
-            </span>
-          </div>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="text-[10px] uppercase tracking-wider px-3 py-1.5 rounded-full border border-gold/25 text-gold/80"
+          >
+            Attach refs
+          </button>
         )}
 
         {studio.references.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto studio-scroll flex-nowrap pb-0.5">
-            {studio.references.map((ref, index) => (
-              <div key={`${index}-${ref.url.slice(0, 24)}`} className="w-[4.5rem] shrink-0 flex flex-col gap-1">
+          <div className="relative">
+            <div className="flex gap-2 overflow-x-auto studio-scroll flex-nowrap pb-0.5">
+              {studio.references.map((ref, index) => (
                 <div
-                  className={`relative w-full h-14 rounded-lg overflow-hidden border ${
-                    ref.kind === 'audio' ? 'border-gold/40 bg-black/60' : 'border-gold/25'
-                  }`}
+                  key={`${index}-${ref.url.slice(0, 24)}`}
+                  className="w-[4.5rem] shrink-0 flex flex-col gap-1 relative"
                 >
-                  {ref.kind === 'audio' ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center px-1">
-                      <span className="text-gold text-[9px] uppercase tracking-wider">MP3</span>
-                      <span className="text-white/50 text-[8px] truncate w-full text-center">
-                        {ref.name || 'audio'}
-                      </span>
-                    </div>
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={ref.url} alt="" className="w-full h-full object-cover" />
-                  )}
                   <button
                     type="button"
-                    onClick={() => studio.removeReference(index)}
-                    className="absolute top-0.5 right-0.5 w-6 h-6 rounded bg-black/80 text-white text-xs"
+                    onClick={() => {
+                      if (ref.kind === 'audio') return
+                      if (assignSlot) {
+                        assignStillToSlot(index, assignSlot)
+                        return
+                      }
+                      setRefRoleIndex((cur) => (cur === index ? null : index))
+                    }}
+                    className={`relative w-full h-14 rounded-lg overflow-hidden border text-left ${
+                      ref.kind === 'audio'
+                        ? 'border-gold/40 bg-black/60'
+                        : assignSlot
+                          ? 'border-gold ring-1 ring-gold'
+                          : ref.useAsFirstFrame || ref.useAsLastFrame
+                            ? 'border-gold'
+                            : 'border-gold/25'
+                    }`}
+                  >
+                    {ref.kind === 'audio' ? (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center px-1">
+                        <span className="text-gold text-[9px] uppercase tracking-wider">MP3</span>
+                      </div>
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={ref.url}
+                        alt={ref.name || `Reference ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      studio.removeReference(index)
+                    }}
+                    className="absolute top-0.5 right-0.5 w-6 h-6 rounded bg-black/80 text-white text-xs z-10"
                   >
                     x
                   </button>
+                  {ref.kind !== 'audio' && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRefRoleIndex((cur) => (cur === index ? null : index))
+                      }
+                      className="text-[8px] uppercase tracking-wider text-gold/80 border border-gold/20 rounded-full py-0.5 hover:bg-gold/10"
+                    >
+                      {refRoleLabel(index)}
+                    </button>
+                  )}
                 </div>
-                {ref.kind !== 'audio' && (
-                  <button
-                    type="button"
-                    onClick={() => studio.cycleRefRole(index)}
-                    className="text-[8px] uppercase tracking-wider text-gold/80 border border-gold/20 rounded-full py-0.5 hover:bg-gold/10"
-                    title="Tap to cycle: Opens → Later → Identity"
-                  >
-                    {ref.refRole === 'opening_subject'
-                      ? 'Opens'
-                      : ref.refRole === 'appears_later'
-                        ? 'Later'
-                        : 'Identity'}
-                  </button>
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
+            {refRoleIndex != null && (
+              <StudioInlinePicker
+                label="Role"
+                tip="How this still is used in the shot."
+                value={refRoleValue}
+                options={refRoleOptions}
+                onChange={(id) => {
+                  studio.setRefRole(
+                    refRoleIndex,
+                    id as 'opening_subject' | 'appears_later' | 'identity' | 'start' | 'end'
+                  )
+                  setRefRoleIndex(null)
+                }}
+              />
+            )}
+            <p className="text-[10px] text-white/40 mt-1">
+              {assignSlot
+                ? `Selecting ${assignSlot === 'start' ? 'Start' : 'End'} frame — tap a still.`
+                : needsFrames
+                  ? 'Start / End slots above · or tap a still badge.'
+                  : `Tap a badge for Opens / Later / Identity. Motion · ${motionMeta?.label}.`}
+            </p>
           </div>
-        )}
-
-        {studio.references.some((r) => r.kind !== 'audio') && (
-          <p className="text-[10px] text-white/40">
-            Stills guide identity and timing—they are not frozen start/end frames. Tap a badge to
-            override (Opens / Later / Identity).
-          </p>
         )}
 
         {showBreakdown && (
@@ -511,51 +471,50 @@ export default function PromptDock({ studio }: { studio: AdStudioController }) {
           </p>
         )}
 
-        {showBuy && (
-          <div className="rounded-xl border border-gold/25 bg-gold/5 p-3 space-y-2">
-            <p className="text-[10px] uppercase tracking-widest text-gold/80">
-              Need more Coinz · {studio.pricing?.balance ?? 0} on hand · {price} required
-            </p>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              {packs.map((pkg) => (
-                <button
-                  key={pkg.id}
-                  type="button"
-                  disabled={buyingId !== null}
-                  onClick={() => buyPack(pkg.id)}
-                  className="flex-1 text-left px-3 py-2 rounded-lg border border-gold/30 hover:bg-gold hover:text-black transition-colors disabled:opacity-50"
-                >
-                  <span className="block text-[10px] font-bold uppercase tracking-wider">
-                    {buyingId === pkg.id ? 'Redirecting...' : packAdCopy(pkg)}
-                  </span>
-                  <span className="block text-[9px] opacity-70 mt-0.5">
-                    {pkg.amount} Coinz · ${pkg.price}
-                  </span>
-                </button>
-              ))}
+        {!studio.generating && studio.canGenerate && (
+          <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-widest text-white/45">Cost preview</p>
+              <p className="text-xs text-white font-mono">
+                <CoinzPriceCut current={price} legacy={legacyTotal} suffix=" Coinz" />
+                {showBreakdown ? ` · ${units} clips` : ''}
+              </p>
             </div>
+            <p className="text-[10px] text-white/40">
+              {SEEDANCE_MODELS[studio.modelKey].label} · {studio.duration}s · {studio.motionMode}
+            </p>
           </div>
         )}
 
-        {studio.generating ? (
-          <button
-            type="button"
-            onClick={studio.cancelGenerate}
-            className="w-full py-3 rounded-full border border-red-400/50 text-red-300 text-xs font-bold uppercase tracking-widest"
-          >
-            Cancel
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={studio.generate}
-            disabled={!studio.canGenerate || !canAfford}
-            className="w-full py-3 rounded-full bg-gold text-black text-xs font-bold uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Generate ·{' '}
-            <CoinzPriceCut current={price} legacy={legacyTotal} suffix=" Coinz" />
-          </button>
+        {showBuy && (
+          <div className="flex flex-wrap gap-2">
+            {packs.slice(0, 3).map((pkg) => (
+              <button
+                key={pkg.id}
+                type="button"
+                disabled={buyingId !== null}
+                onClick={() => buyPack(pkg.id)}
+                className="px-3 py-2 rounded-lg border border-gold/30 text-left hover:bg-gold hover:text-black transition-colors disabled:opacity-50"
+              >
+                <span className="block text-[10px] font-bold uppercase tracking-wider">
+                  {buyingId === pkg.id ? 'Redirecting…' : packAdCopy(pkg)}
+                </span>
+                <span className="block text-[9px] opacity-70">
+                  {pkg.amount} Coinz · ${pkg.price}
+                </span>
+              </button>
+            ))}
+          </div>
         )}
+
+        <button
+          type="button"
+          disabled={!studio.canGenerate || studio.generating || !canAfford}
+          onClick={() => void studio.generate()}
+          className="w-full py-3 rounded-full bg-gold text-black text-xs font-bold uppercase tracking-[0.2em] disabled:opacity-40"
+        >
+          {studio.generating ? studio.statusText || 'Generating…' : `Generate · ${price}c`}
+        </button>
       </div>
     </div>
   )

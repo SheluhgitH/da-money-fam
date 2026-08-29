@@ -4,7 +4,7 @@ import { getAdVideoCoinPrice } from '@/lib/ad-studio-pricing'
 import { debitUserCoins, creditUserCoins } from '@/lib/user-store'
 import { isActiveFanClubMember } from '@/lib/fan-club'
 import type { CreativeSelections } from '@/lib/ad-creative-presets'
-import { normalizeDuration, submitSeedanceJob } from '@/lib/seedance-submit'
+import { normalizeDuration, submitSeedanceJob, toInputReferences } from '@/lib/seedance-submit'
 import { createAdStudioGeneration } from '@/lib/ad-studio-jobs'
 import { resolveSeedanceModel, resolveSubmitResolution } from '@/lib/seedance-models'
 import { FROM_STILL_VIDEO } from '@/lib/studio-templates'
@@ -14,7 +14,11 @@ import {
   openingSubjectUrls,
   type ReferenceRoleKind,
 } from '@/lib/classify-reference-roles'
-import { toInputReferences } from '@/lib/seedance-submit'
+import {
+  framesFromReferences,
+  parseIdentityStrength,
+  parseMotionMode,
+} from '@/lib/ad-studio-motion'
 
 function refOverridesFromSource(refSource: unknown): Record<string, ReferenceRoleKind> {
   const out: Record<string, ReferenceRoleKind> = {}
@@ -58,13 +62,19 @@ export async function POST(req: Request) {
     model: modelInput,
     enhancedPrompt,
     resolution: resolutionInput,
+    motion_mode: motionModeInput,
+    identity_strength: identityStrengthInput,
   } = body
+
+  const motionMode = parseMotionMode(motionModeInput)
+  const identityStrength = parseIdentityStrength(identityStrengthInput)
 
   const refSource =
     Array.isArray(reference_images) && reference_images.length
       ? reference_images
       : reference_image_urls
   const hasRefs = Array.isArray(refSource) && refSource.length > 0
+  const { firstUrl: lockedFirst, lastUrl: lockedLast } = framesFromReferences(refSource)
 
   let userBrief =
     typeof brief === 'string' && brief.trim()
@@ -79,6 +89,19 @@ export async function POST(req: Request) {
 
   if (!userBrief) {
     return NextResponse.json({ error: 'Brief is required' }, { status: 400 })
+  }
+
+  if (motionMode === 'animate_ab' && (!lockedFirst || !lockedLast)) {
+    return NextResponse.json(
+      { error: 'Animate A→B needs two stills marked Start and End.' },
+      { status: 400 }
+    )
+  }
+  if (motionMode === 'lock_start' && !lockedFirst) {
+    return NextResponse.json(
+      { error: 'Lock start needs one still marked Start.' },
+      { status: 400 }
+    )
   }
 
   const wantsEnhance = enhance === true
@@ -97,6 +120,7 @@ export async function POST(req: Request) {
   const variationCount = Math.min(2, Math.max(1, Number(variations) || 1))
   const wantsAudio = generate_audio === true
   const resolution = resolveSubmitResolution(model, resolutionInput)
+  const lockFrames = motionMode === 'lock_start' || motionMode === 'animate_ab'
 
   let debited = false
   let priceCoins = 0
@@ -123,25 +147,35 @@ export async function POST(req: Request) {
             : undefined
         )
       : []
-    const classified = hasRefs
-      ? await classifyReferenceRoles({
-          brief: userBrief,
-          urls: refUrls,
-          names: refNames,
-          overrides: refOverridesFromSource(refSource),
-        })
-      : { roles: [], shotPlan: '' }
+    const classified =
+      hasRefs && !lockFrames
+        ? await classifyReferenceRoles({
+            brief: userBrief,
+            urls: refUrls,
+            names: refNames,
+            overrides: refOverridesFromSource(refSource),
+          })
+        : { roles: [], shotPlan: '' }
     const openUrls = openingSubjectUrls(classified.roles)
 
-    const composedFirst = hasRefs
-      ? await composeVideoFirstFrame({
-          userId: user.id,
-          brief: userBrief,
-          aspectRatio: typeof aspect_ratio === 'string' ? aspect_ratio : '9:16',
-          referenceImages: refSource,
-          openingRefUrls: openUrls.length ? openUrls : undefined,
-        })
-      : null
+    const composedFirst =
+      hasRefs && !lockFrames
+        ? await composeVideoFirstFrame({
+            userId: user.id,
+            brief: userBrief,
+            aspectRatio: typeof aspect_ratio === 'string' ? aspect_ratio : '9:16',
+            referenceImages: refSource,
+            openingRefUrls: openUrls.length ? openUrls : undefined,
+          })
+        : null
+
+    const firstFrame = lockFrames ? lockedFirst : composedFirst
+    const lastFrame =
+      lockFrames && model.supportsLastFrame
+        ? lockedLast
+        : model.supportsLastFrame
+          ? lockedLast
+          : null
 
     for (let i = 0; i < variationCount; i++) {
       try {
@@ -156,13 +190,14 @@ export async function POST(req: Request) {
           duration,
           aspect_ratio,
           reference_images: refSource,
-          first_frame_image: composedFirst,
-          last_frame_image: null,
+          first_frame_image: firstFrame,
+          last_frame_image: lastFrame,
           generate_audio: wantsAudio,
           model: model.key,
           resolution,
-          ignoreRefFrames: true,
+          ignoreRefFrames: lockFrames || Boolean(composedFirst),
           shotPlan: classified.shotPlan || null,
+          identityStrength,
         })
         jobs.push({ jobId: result.jobId, variationIndex: i })
       } catch (err) {
@@ -213,6 +248,7 @@ export async function POST(req: Request) {
       variations: jobs.length,
       coinzSpent: totalPrice,
       model: model.key,
+      motionMode,
     })
   } catch (error: unknown) {
     console.error('Video API Error:', error)

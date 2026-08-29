@@ -6,7 +6,9 @@ function getResend() {
   return new Resend(key)
 }
 
-const FROM = 'DMF Store <onboarding@resend.dev>'
+const FROM =
+  process.env.RESEND_FROM_EMAIL?.trim() ||
+  'DMF Store <store@damoneyfam.com>'
 
 export async function sendMerchOrderConfirmation(input: {
   buyerEmail: string

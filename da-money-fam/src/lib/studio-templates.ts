@@ -175,6 +175,57 @@ export const STUDIO_TEMPLATES: StudioTemplate[] = [
   },
 ]
 
+export interface StoryboardTemplate {
+  id: string
+  label: string
+  tagline: string
+  scenes: string[]
+  creative?: Partial<CreativeSelections>
+}
+
+/** Curated multi-scene packs for storyboard mode. */
+export const STORYBOARD_TEMPLATES: StoryboardTemplate[] = [
+  {
+    id: 'artist-promo-15',
+    label: 'Artist promo',
+    tagline: '3-scene 15s promo',
+    scenes: [
+      'Open on the artist from the Opens still, gold rim, black void, subtle breath, locked identity.',
+      'Walk with natural gait past set pieces without clipping; camera tracks, same wardrobe and face.',
+      'End hold: product or title-safe space appears later; artist settles, premium close.',
+    ],
+    creative: { camera: 'orbit', lighting: 'gold-rim', mood: 'luxury', pace: 'medium', motion: 'walk' },
+  },
+  {
+    id: 'merch-drop-story',
+    label: 'Merch drop',
+    tagline: 'Talent opens, product ends',
+    scenes: [
+      'Character from Opens still fills frame, luxury vibe, no product yet.',
+      'Hands reach toward the drop; environment stays solid; no limb clipping.',
+      'Product reveal: Later still enters cleanly as hero, end card hold.',
+    ],
+    creative: {
+      camera: 'push-in',
+      lighting: 'soft-studio',
+      mood: 'clean-product',
+      pace: 'medium',
+      motion: 'product-spin',
+    },
+  },
+  {
+    id: 'lyric-visual',
+    label: 'Lyric visual',
+    tagline: 'Mood → energy → sting',
+    scenes: [
+      'Moody wide: artist identity locked, soft fog, gold accents, slow push.',
+      'Mid energy: rhythmic motion, same look, neon flashes, keep feet on ground.',
+      'Sting: freeze on the Opens subject, space for lyric text later, no readable words.',
+    ],
+    creative: { camera: 'push-in', lighting: 'neon-night', mood: 'hype', pace: 'fast', motion: 'locked-subject' },
+  },
+]
+
 /** @deprecated Use STUDIO_TEMPLATES */
 export type AdPromptTemplate = StudioTemplate
 export const AD_PROMPT_TEMPLATES = STUDIO_TEMPLATES

@@ -15,6 +15,11 @@ import {
   openingSubjectUrls,
   type ReferenceRoleKind,
 } from '@/lib/classify-reference-roles'
+import {
+  framesFromReferences,
+  parseIdentityStrength,
+  parseMotionMode,
+} from '@/lib/ad-studio-motion'
 
 function refOverridesFromSource(refSource: unknown): Record<string, ReferenceRoleKind> {
   const out: Record<string, ReferenceRoleKind> = {}
@@ -57,7 +62,14 @@ export async function POST(req: Request) {
     model: modelInput,
     generate_audio,
     resolution: resolutionInput,
+    motion_mode: motionModeInput,
+    identity_strength: identityStrengthInput,
   } = body
+
+  const motionMode = parseMotionMode(motionModeInput)
+  const identityStrength = parseIdentityStrength(identityStrengthInput)
+  const { firstUrl: lockedFirst, lastUrl: lockedLast } = framesFromReferences(reference_images)
+  const lockFrames = motionMode === 'lock_start' || motionMode === 'animate_ab'
 
   if (!Array.isArray(rawScenes) || rawScenes.length < 2 || rawScenes.length > 5) {
     return NextResponse.json({ error: 'Storyboard requires 2 to 5 scenes' }, { status: 400 })
@@ -117,27 +129,31 @@ export async function POST(req: Request) {
             : undefined
         )
       : []
-    const classified = hasStills
-      ? await classifyReferenceRoles({
-          brief: sceneBriefs.join(' / '),
-          urls: refUrls,
-          names: refNames,
-          overrides: refOverridesFromSource(reference_images),
-        })
-      : { roles: [], shotPlan: '' }
+    const classified =
+      hasStills && !lockFrames
+        ? await classifyReferenceRoles({
+            brief: sceneBriefs.join(' / '),
+            urls: refUrls,
+            names: refNames,
+            overrides: refOverridesFromSource(reference_images),
+          })
+        : { roles: [], shotPlan: '' }
     const openUrls = openingSubjectUrls(classified.roles)
     const scene1Brief = classified.shotPlan
       ? `${continuityBrief} ${classified.shotPlan}`
       : continuityBrief
-    const composedFirst = hasStills
-      ? await composeVideoFirstFrame({
-          userId: user.id,
-          brief: scene1Brief,
-          aspectRatio: typeof aspect_ratio === 'string' ? aspect_ratio : '9:16',
-          referenceImages: reference_images,
-          openingRefUrls: openUrls.length ? openUrls : undefined,
-        })
-      : null
+    const composedFirst =
+      hasStills && !lockFrames
+        ? await composeVideoFirstFrame({
+            userId: user.id,
+            brief: scene1Brief,
+            aspectRatio: typeof aspect_ratio === 'string' ? aspect_ratio : '9:16',
+            referenceImages: reference_images,
+            openingRefUrls: openUrls.length ? openUrls : undefined,
+          })
+        : null
+    const firstFrame = lockFrames ? lockedFirst : composedFirst
+    const lastFrame = model.supportsLastFrame ? lockedLast : null
     const result = await submitSeedanceJob({
       brief: scene1Brief,
       creative: creativeSel,
@@ -145,14 +161,15 @@ export async function POST(req: Request) {
       duration,
       aspect_ratio,
       reference_images,
-      first_frame_image: composedFirst,
-      last_frame_image: null,
+      first_frame_image: firstFrame,
+      last_frame_image: lastFrame,
       generate_audio: wantsAudio,
       model: model.key,
       resolution,
       storyboardMode: true,
-      ignoreRefFrames: true,
+      ignoreRefFrames: lockFrames || Boolean(composedFirst),
       shotPlan: classified.shotPlan || null,
+      identityStrength,
     })
 
     const scenes: StoryboardScene[] = sceneBriefs.map((brief, i) => ({

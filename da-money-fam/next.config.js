@@ -34,21 +34,85 @@ const nextConfig = {
       { protocol: 'https', hostname: 'images.kick.com' },
       { protocol: 'https', hostname: 'files.kick.com' },
       { protocol: 'https', hostname: 'ismptoxqzpmgssursgzl.supabase.co' },
+      { protocol: 'https', hostname: 'res.cloudinary.com' },
     ],
-    unoptimized: true,
+    unoptimized: false,
   },
   async headers() {
     return [
       {
-        source: '/((?!_next/static|_next/image|favicon.ico|api/).*)',
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        source: '/images/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+      {
+        source: '/videos/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+      {
+        source: '/store/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=3600, stale-while-revalidate=86400',
+          },
+        ],
+      },
+      {
+        source: '/((?!_next/static|_next/image|favicon.ico|api/|account|admin|library).*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, s-maxage=60, stale-while-revalidate=300',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'microphone=(self)',
+          },
+        ],
+      },
+      {
+        source: '/account/:path*',
         headers: [
           {
             key: 'Cache-Control',
             value: 'private, no-cache, no-store, max-age=0, must-revalidate',
           },
+        ],
+      },
+      {
+        source: '/admin/:path*',
+        headers: [
           {
-            key: 'Permissions-Policy',
-            value: 'microphone=(self)',
+            key: 'Cache-Control',
+            value: 'private, no-cache, no-store, max-age=0, must-revalidate',
+          },
+        ],
+      },
+      {
+        source: '/library',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'private, no-cache, no-store, max-age=0, must-revalidate',
           },
         ],
       },

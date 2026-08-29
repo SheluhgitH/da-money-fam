@@ -105,6 +105,15 @@ export interface AdStudioPreset {
   duration_seconds: number
   look_ref_urls?: string[]
   look_character_id?: string | null
+  /** Extra setup stored inside creative JSON for round-trip. */
+  motion_mode?: string | null
+  identity_strength?: string | null
+  physics_preset?: string | null
+  generate_audio?: boolean
+  resolution?: string | null
+  variations?: number | null
+  /** Serialized ref roles: url|role|first|last per entry, joined by ;; */
+  ref_meta?: string | null
   created_at: string
   updated_at: string
 }

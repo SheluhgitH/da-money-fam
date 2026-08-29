@@ -3,6 +3,10 @@ import type { CreativeSelections } from '@/lib/ad-creative-presets'
 import { markImageUrlsForSeedance } from '@/lib/character-sheet-markup'
 import { mapSeedanceUserError } from '@/lib/seedance-errors'
 import {
+  identityStrengthSuffix,
+  parseIdentityStrength,
+} from '@/lib/ad-studio-motion'
+import {
   DEFAULT_SEEDANCE_MODEL,
   resolveSeedanceModel,
   resolveSubmitResolution,
@@ -126,6 +130,8 @@ export async function submitSeedanceJob(input: {
   storyboardMode?: boolean
   /** Timing plan from reference role classifier (appended to prompt). */
   shotPlan?: string | null
+  /** Face/wardrobe consistency pressure. */
+  identityStrength?: 'loose' | 'balanced' | 'locked' | null
 }): Promise<{ jobId: string; pollingUrl?: string; modelId: string }> {
   const openRouterApiKey = process.env.OPENROUTER_API_KEY
   if (!openRouterApiKey || openRouterApiKey === 'your_openrouter_key_here') {
@@ -200,6 +206,11 @@ export async function submitSeedanceJob(input: {
 
   if (typeof input.shotPlan === 'string' && input.shotPlan.trim()) {
     finalPrompt = `${finalPrompt} Shot timing: ${input.shotPlan.trim()}`
+  }
+
+  const strength = parseIdentityStrength(input.identityStrength)
+  if (inputReferences.length > 0 || frame_images.length > 0) {
+    finalPrompt = `${finalPrompt} ${identityStrengthSuffix(strength)}`
   }
 
   if (audioReferences.length > 0) {

@@ -71,6 +71,14 @@ export default function PreviewPlayer({
           if (!endedFiredRef.current) {
             endedFiredRef.current = true
             previewCtx.openUpsell()
+            try {
+              window.dispatchEvent(new CustomEvent('dmf-preview-ended', { detail: { songId } }))
+            } catch {
+              /* ignore */
+            }
+            void import('@/lib/analytics').then(({ trackPreviewEnded }) =>
+              trackPreviewEnded(songId)
+            )
           }
         } else if (previewCtx && title && !endedFiredRef.current) {
           endedFiredRef.current = true
@@ -86,6 +94,14 @@ export default function PreviewPlayer({
           previewCtx.setIsPlaying(false)
           previewCtx.setPreviewEnded(true)
           previewCtx.openUpsell()
+          try {
+            window.dispatchEvent(new CustomEvent('dmf-preview-ended', { detail: { songId } }))
+          } catch {
+            /* ignore */
+          }
+          void import('@/lib/analytics').then(({ trackPreviewEnded }) =>
+            trackPreviewEnded(songId)
+          )
         }
       }
       const max = owned ? audio.duration || 1 : previewDurationSec

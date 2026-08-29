@@ -5,6 +5,11 @@
 :root {
   --font-playfair-display: 'Playfair Display', serif;
   --font-inter: 'Inter', sans-serif;
+  /* iPhone 16+ safe areas + fixed bottom chrome stacking */
+  --dmf-safe-top: env(safe-area-inset-top, 0px);
+  --dmf-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --dmf-fab-clearance: 4.5rem; /* chat FAB width + gap */
+  --dmf-shop-bar: 4rem;
 }
 
 * {
@@ -38,10 +43,11 @@
 body {
   background-color: #000000;
   color: #ffffff;
-  overflow-x: hidden;
+  /* overflow-x: hidden; */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  /* Safe-bottom is applied on fixed chrome / page shells — not body —
+     so 100svh layouts (Ad Studio) are not clipped under the home indicator. */
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -59,7 +65,7 @@ html {
 section[id],
 [id='contact'],
 .homepage-tab-content {
-  scroll-margin-top: 9rem;
+  scroll-margin-top: calc(9rem + var(--dmf-safe-top));
 }
 
 .scrollbar-none,

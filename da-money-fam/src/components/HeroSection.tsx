@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import BackgroundVideo from './BackgroundVideo'
 import MagneticButton from './MagneticButton'
 import { asHeroSettings, type HomepageHeroSettings } from '@/lib/site-settings'
+import { useSiteSettings } from '@/contexts/SiteSettingsProvider'
 
 interface TakeoverConfig {
   artistName: string
@@ -25,15 +26,16 @@ const HEADLINE = 'DA MONEY FAM'
 
 export default function HeroSection() {
   const [hero, setHero] = useState<HomepageHeroSettings>(asHeroSettings(null))
+  const { showAnimations } = useSiteSettings()
   const isTakeover = activeTakeover.active
   const sectionRef = useRef<HTMLElement>(null)
   const mouseX = useMotionValue(0)
   const mouseY = useMotionValue(0)
   const springX = useSpring(mouseX, { stiffness: 60, damping: 18 })
   const springY = useSpring(mouseY, { stiffness: 60, damping: 18 })
-  const rotateY = useTransform(springX, [-0.5, 0.5], [-8, 8])
-  const rotateX = useTransform(springY, [-0.5, 0.5], [6, -6])
-  const parallaxX = useTransform(springX, [-0.5, 0.5], [24, -24])
+  const rotateY = useTransform(springX, [-0.5, 0.5], showAnimations ? [-8, 8] : [0, 0])
+  const rotateX = useTransform(springY, [-0.5, 0.5], showAnimations ? [6, -6] : [0, 0])
+  const parallaxX = useTransform(springX, [-0.5, 0.5], showAnimations ? [24, -24] : [0, 0])
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -46,6 +48,7 @@ export default function HeroSection() {
   const filter = useTransform(contentBlur, (v) => `blur(${v}px)`)
 
   const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    if (!showAnimations) return
     const rect = e.currentTarget.getBoundingClientRect()
     mouseX.set((e.clientX - rect.left) / rect.width - 0.5)
     mouseY.set((e.clientY - rect.top) / rect.height - 0.5)
@@ -148,26 +151,23 @@ export default function HeroSection() {
           transition={{ duration: 1, delay: 1 }}
           className="text-gray-400 text-base sm:text-lg md:text-xl max-w-2xl mx-auto mb-8 px-2"
         >
-          {isTakeover
-            ? activeTakeover.tagline
-            : hero.tagline}
+          {isTakeover ? activeTakeover.tagline : hero.tagline}
         </motion.p>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 1, delay: 1.2 }}
-          className="flex flex-col sm:flex-row gap-4 justify-center items-center"
+          className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center"
         >
           <MagneticButton>
-            <a
-              href="https://youtu.be/3OHv8ZYsVb8?si=zVxqZL2KLAMHVKN-"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full sm:w-auto px-8 py-4 bg-gold text-matte-black font-bold uppercase tracking-widest text-sm hover:bg-gold-light transition-colors duration-300 neon-border text-center"
+            <button
+              type="button"
+              onClick={() => navigateHomepageSection('music')}
+              className="w-full sm:w-auto px-8 py-4 bg-gold text-matte-black font-bold uppercase tracking-widest text-sm hover:bg-gold-light transition-colors duration-300 neon-border text-center"
             >
-              {hero.primaryCta}
-            </a>
+              Listen
+            </button>
           </MagneticButton>
 
           <MagneticButton>
@@ -176,8 +176,17 @@ export default function HeroSection() {
               onClick={() => navigateHomepageSection('store')}
               className="w-full sm:w-auto px-8 py-4 glass text-white font-bold uppercase tracking-widest text-sm hover:bg-white/10 transition-colors duration-300 border border-gold/50"
             >
-              {hero.secondaryCta}
+              Shop drop
             </button>
+          </MagneticButton>
+
+          <MagneticButton>
+            <a
+              href="/ad-studio"
+              className="block w-full sm:w-auto px-8 py-4 border border-gold/40 text-gold font-bold uppercase tracking-widest text-sm hover:bg-gold/10 transition-colors duration-300 text-center"
+            >
+              Make a video
+            </a>
           </MagneticButton>
         </motion.div>
       </motion.div>
@@ -188,10 +197,11 @@ export default function HeroSection() {
         animate={{ opacity: 1 }}
         transition={{ duration: 1, delay: 1.5, ease: 'easeOut' }}
         onClick={() => navigateHomepageSection('streams')}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 px-5 py-2.5 rounded-full glass-gold border border-gold/40 text-gold text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-gold/10 transition-colors"
+        className="absolute left-1/2 -translate-x-1/2 z-20 px-5 py-2.5 rounded-full glass-gold border border-gold/40 text-gold text-[10px] font-bold uppercase tracking-[0.3em] hover:bg-gold/10 transition-colors"
+        style={{ bottom: 'max(2rem, calc(var(--dmf-safe-bottom) + 1rem))' }}
       >
         <motion.span
-          animate={{ y: [0, 4, 0] }}
+          animate={showAnimations ? { y: [0, 4, 0] } : undefined}
           transition={{ duration: 2, repeat: Infinity }}
           className="inline-flex items-center gap-2"
         >
@@ -251,6 +261,7 @@ function ParticleConstellation({
   mouseX: ReturnType<typeof useMotionValue<number>>
   mouseY: ReturnType<typeof useMotionValue<number>>
 }) {
+  const { showAnimations } = useSiteSettings()
   const [mounted, setMounted] = useState(false)
   const particles = useMemo(
     () =>
@@ -266,7 +277,7 @@ function ParticleConstellation({
   )
 
   useEffect(() => setMounted(true), [])
-  if (!mounted) return null
+  if (!mounted || !showAnimations) return null
 
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden z-[5]">

@@ -9,6 +9,21 @@ export type CatalogArtist = {
   songs: PublicSong[]
 }
 
+/** URL slug from artist name: "Vlone Tr3" → "vlone-tr3" */
+export function slugifyArtistName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+export function artistSharePath(name: string): string {
+  return `/artist/${slugifyArtistName(name)}`
+}
+
 export function groupCatalogArtists(songs: PublicSong[]): CatalogArtist[] {
   const groups = new Map<string, PublicSong[]>()
   for (const song of songs) {
@@ -41,4 +56,14 @@ export function groupCatalogArtists(songs: PublicSong[]): CatalogArtist[] {
   return result.sort(
     (a, b) => b.songs.length - a.songs.length || a.name.localeCompare(b.name)
   )
+}
+
+export function resolveArtistBySlug(
+  slug: string,
+  songs: PublicSong[]
+): CatalogArtist | null {
+  const normalized = slugifyArtistName(decodeURIComponent(slug))
+  if (!normalized) return null
+  const artists = groupCatalogArtists(songs)
+  return artists.find((a) => slugifyArtistName(a.name) === normalized) || null
 }

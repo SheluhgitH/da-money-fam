@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthProvider'
 
+import { trackFanClubCta } from '@/lib/analytics'
+
 export default function AccountPage() {
   return (
     <Suspense
@@ -304,12 +306,26 @@ function AccountPageContent() {
                     ? 'Your membership ended. Rejoin for extended previews.'
                     : '$9/mo — 60s previews & member perks'}
                 </p>
-                <Link
-                  href="/#reputation"
-                  className="block text-center py-2.5 bg-purple-600/40 border border-purple-400/40 text-purple-100 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-purple-600/60"
+                <button
+                  type="button"
+                  disabled={portalLoading}
+                  onClick={async () => {
+                    trackFanClubCta('account_page')
+                    setPortalLoading(true)
+                    try {
+                      const res = await fetch('/api/checkout/subscribe', { method: 'POST' })
+                      const data = await res.json()
+                      if (!res.ok) throw new Error(data.error || 'Checkout failed')
+                      window.location.href = data.url
+                    } catch (err) {
+                      setMessage(err instanceof Error ? err.message : 'Checkout failed')
+                      setPortalLoading(false)
+                    }
+                  }}
+                  className="w-full py-2.5 bg-purple-600/40 border border-purple-400/40 text-purple-100 rounded-full text-xs font-bold uppercase tracking-wider hover:bg-purple-600/60 disabled:opacity-50"
                 >
-                  Join Fan Club
-                </Link>
+                  {portalLoading ? 'Redirecting…' : 'Join Fan Club'}
+                </button>
               </>
             )}
           </div>

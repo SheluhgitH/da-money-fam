@@ -271,7 +271,7 @@ export default function GtaStylePanel({
         </AnimatePresence>
       </div>
 
-      <div className="shrink-0 border-t border-gold/15 bg-black/85 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center justify-between gap-3">
+      <div className="shrink-0 border-t border-gold/15 bg-black/85 px-4 py-3 pb-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
           {images.error ? (
             <p className="text-xs text-red-300 truncate">{images.error}</p>

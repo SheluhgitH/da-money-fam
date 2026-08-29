@@ -80,14 +80,12 @@ export default function Navigation() {
   }, [user])
 
   const navLinks = [
-    { name: 'Home', section: 'home' },
-    { name: 'Store', section: 'store' },
-    { name: 'Listen', section: 'music' },
-    { name: 'Blog', href: '/blog', isRoute: true },
+    { name: 'Discover', section: 'about' },
+    { name: 'Music', section: 'store' },
     { name: 'Artists', section: 'artists' },
-    { name: 'Streams', section: 'streams' },
-    { name: 'Merch', section: 'merch' },
-    { name: 'Services', section: 'video-editing' },
+    { name: 'Shop', section: 'merch' },
+    { name: 'Blog', href: '/blog', isRoute: true },
+    { name: 'Services', section: 'ad-studio' },
     { name: 'Contact', section: 'contact' },
   ] as const
 
@@ -105,7 +103,11 @@ export default function Navigation() {
           initial={{ y: -40, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: -40, opacity: 0 }}
-          className="liquid-glass-promo fixed top-0 left-0 right-0 z-[110] text-center text-[10px] sm:text-xs font-semibold uppercase tracking-[0.22em] py-2.5 px-10"
+          className="liquid-glass-promo fixed top-0 left-0 right-0 z-[110] text-center text-[10px] sm:text-xs font-semibold uppercase tracking-[0.18em] sm:tracking-[0.22em] px-4 pr-10 leading-snug"
+          style={{
+            paddingTop: 'max(0.5rem, var(--dmf-safe-top))',
+            paddingBottom: '0.625rem',
+          }}
         >
           <Link
             href={isHome ? '/#store' : '/#store'}
@@ -126,7 +128,8 @@ export default function Navigation() {
               setShowPromo(false)
               sessionStorage.setItem('dmf-promo-dismissed', '1')
             }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 z-[1] w-6 h-6 rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-colors text-sm leading-none"
+            className="absolute right-3 z-[1] w-6 h-6 rounded-full text-white/50 hover:text-white hover:bg-white/10 transition-colors text-sm leading-none"
+            style={{ top: 'max(0.35rem, calc(var(--dmf-safe-top) * 0.35 + 0.35rem))' }}
           >
             ×
           </button>
@@ -138,10 +141,13 @@ export default function Navigation() {
       animate={{ y: 0 }}
       transition={{ duration: 0.8, ease: 'easeOut' }}
       className={`fixed left-0 right-0 z-[100] pointer-events-auto transition-all duration-500 ${
-        showPromo ? 'top-8' : 'top-0'
-      } ${
         isScrolled ? 'glass py-3 md:py-4' : 'bg-transparent py-4 md:py-6'
       }`}
+      style={{
+        top: showPromo
+          ? 'calc(var(--dmf-safe-top) + 2.25rem)'
+          : 'var(--dmf-safe-top)',
+      }}
     >
       <div className="max-w-7xl mx-auto px-4 md:px-8 flex justify-between items-center">
         <Link
@@ -261,7 +267,7 @@ export default function Navigation() {
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3 }}
-            className="md:hidden glass mt-4"
+            className="md:hidden glass mt-4 max-h-[min(70dvh,calc(100dvh-8rem))] overflow-y-auto overscroll-contain"
           >
             <div className="flex flex-col space-y-4 p-8">
               {navLinks.map((link) =>

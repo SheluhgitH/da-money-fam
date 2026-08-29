@@ -12,8 +12,29 @@ export default function EmailCaptureModal({ hold = false }: { hold?: boolean }) 
   useEffect(() => {
     const dismissed = localStorage.getItem('dmf-email-capture')
     if (dismissed === '1' || hold) return
-    const timer = window.setTimeout(() => setOpen(true), 18000)
-    return () => window.clearTimeout(timer)
+
+    const openCapture = () => {
+      if (localStorage.getItem('dmf-email-capture') === '1') return
+      setOpen(true)
+    }
+
+    const onPreviewEnded = () => openCapture()
+    window.addEventListener('dmf-preview-ended', onPreviewEnded)
+
+    // Fallback: after first meaningful scroll past hero (not a fixed 18s interrupt)
+    let opened = false
+    const onScroll = () => {
+      if (opened) return
+      if (window.scrollY < window.innerHeight * 1.2) return
+      opened = true
+      window.setTimeout(openCapture, 800)
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+
+    return () => {
+      window.removeEventListener('dmf-preview-ended', onPreviewEnded)
+      window.removeEventListener('scroll', onScroll)
+    }
   }, [hold])
 
   const close = () => {

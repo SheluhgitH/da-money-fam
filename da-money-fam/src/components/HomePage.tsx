@@ -9,6 +9,7 @@ import MusicPlayer from '@/components/MusicPlayer'
 import Footer from '@/components/Footer'
 import FloatingShapes from '@/components/FloatingShapes'
 import SongStore from '@/components/store/SongStore'
+import StoreValueStrip from '@/components/store/StoreValueStrip'
 import AboutFamSection from '@/components/AboutFamSection'
 import HomepageTabBar from '@/components/HomepageTabBar'
 import { scrollToSection } from '@/utils/scrollToSection'
@@ -32,6 +33,7 @@ import {
   getVisibleTabs,
   hashToScrollTarget,
   HOMEPAGE_NAV_EVENT,
+  HOMEPAGE_TABS,
   resolveTabFromUrl,
   sectionToTab,
   type HomepageNavDetail,
@@ -80,6 +82,7 @@ function renderSection(id: HomepageSectionId) {
     case 'songs':
       return (
         <SectionShell>
+          <StoreValueStrip />
           <SongStore />
         </SectionShell>
       )
@@ -232,6 +235,12 @@ export default function HomePage() {
     (tab: HomepageTabId, scrollTarget?: string | null, options?: { scrollToTop?: boolean }) => {
       pendingScrollRef.current = scrollTarget || null
       setActiveTab(tab)
+      try {
+        sessionStorage.setItem('dmf-homepage-tab', tab)
+        window.dispatchEvent(new Event('dmf-homepage-tab-change'))
+      } catch {
+        /* ignore */
+      }
 
       const url = new URL(window.location.href)
       url.searchParams.delete('tab')
@@ -273,20 +282,44 @@ export default function HomePage() {
     return () => window.clearTimeout(timer)
   }, [activeTab, tabSections])
 
-  // Initial URL: ?tab=, ?section=, #hash
+  // Initial URL: ?tab=, ?section=, #hash, or sessionStorage
   useEffect(() => {
     if (initialUrlHandled.current) return
     initialUrlHandled.current = true
 
     const params = new URLSearchParams(window.location.search)
+    const artistParam = params.get('artist')
+    const hasUrlHint = Boolean(
+      params.get('tab') ||
+        params.get('section') ||
+        artistParam ||
+        window.location.hash.replace('#', '')
+    )
     const { tab, scrollTarget } = resolveTabFromUrl({
       tabParam: params.get('tab'),
-      sectionParam: params.get('section'),
-      hash: window.location.hash,
+      sectionParam: params.get('section') || (artistParam ? 'artist-music' : null),
+      hash: artistParam ? '#artist-music' : window.location.hash,
     })
 
+    let resolvedTab = tab
+    if (!hasUrlHint) {
+      try {
+        const saved = sessionStorage.getItem('dmf-homepage-tab') as HomepageTabId | null
+        if (saved && HOMEPAGE_TABS.some((t) => t.id === saved)) {
+          resolvedTab = saved
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
     pendingScrollRef.current = scrollTarget
-    setActiveTab(tab)
+    setActiveTab(resolvedTab)
+    try {
+      sessionStorage.setItem('dmf-homepage-tab', resolvedTab)
+    } catch {
+      /* ignore */
+    }
 
     if (params.get('from') === 'stripe' || params.has('section')) {
       const url = new URL(window.location.href)
@@ -353,7 +386,7 @@ export default function HomePage() {
     <ScrollSkewProvider />
     <EmailCaptureModal hold={livePopupOpen} />
     <LiveNowPopup onOpenChange={setLivePopupOpen} />
-    <main className="min-h-screen bg-matte-black pb-24 md:pb-12">
+    <main className="min-h-screen bg-matte-black pb-[calc(10rem+var(--dmf-safe-bottom))] md:pb-12">
       <Navigation />
       <FloatingShapes />
 

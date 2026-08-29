@@ -2,8 +2,7 @@ import type { Metadata } from 'next'
 import { getSongById } from '@/lib/store'
 import HomePage from '@/components/HomePage'
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+export const revalidate = 60
 
 type PageProps = {
   searchParams: Promise<{ song?: string }>

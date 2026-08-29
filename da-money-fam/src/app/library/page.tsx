@@ -101,6 +101,31 @@ export default function LibraryPage() {
           </div>
         )}
 
+        <div className="mt-12 glass-gold rounded-2xl border border-gold/25 p-6 md:p-8">
+          <p className="text-gold text-[10px] font-bold uppercase tracking-[0.25em] mb-2">
+            My stuff
+          </p>
+          <h2 className="font-serif text-2xl text-white mb-2">Ad Studio generations</h2>
+          <p className="text-gray-400 text-sm mb-5">
+            Videos and stills you generate live in Ad Studio. Open the library drawer there to
+            download, share, or remix.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Link
+              href="/ad-studio"
+              className="inline-block text-center bg-gold text-black font-bold px-6 py-3 rounded-full uppercase tracking-wider text-xs hover:bg-white transition-colors"
+            >
+              Open Ad Studio
+            </Link>
+            <Link
+              href="/coin-wallet"
+              className="inline-block text-center border border-gold/40 text-gold font-bold px-6 py-3 rounded-full uppercase tracking-wider text-xs hover:bg-gold/10 transition-colors"
+            >
+              Buy Coinz
+            </Link>
+          </div>
+        </div>
+
         <p className="text-center mt-8">
           <Link href="/" className="text-gold text-sm hover:underline">
             Back to home
